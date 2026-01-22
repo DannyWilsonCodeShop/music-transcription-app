@@ -37,6 +37,9 @@ function App() {
       const result = await uploadData({
         key: `audio-files/${Date.now()}-${file.name}`,
         data: file,
+        options: {
+          accessLevel: 'guest'
+        }
       }).result;
 
       // Create transcription job
