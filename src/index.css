@@ -87,6 +87,13 @@ input[type="file"] {
   box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
+/* Feature card hover effects */
+.feature-card:hover {
+  transform: translateY(-2px);
+  background-color: rgba(0, 191, 196, 0.02) !important;
+  border-color: rgba(0, 191, 196, 0.3) !important;
+}
+
 /* Responsive design */
 @media (max-width: 768px) {
   .container {

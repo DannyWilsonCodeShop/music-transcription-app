@@ -36,10 +36,7 @@ function App() {
       // Upload file to S3
       const result = await uploadData({
         path: `audio-files/${Date.now()}-${file.name}`,
-        data: file,
-        options: {
-          accessLevel: 'guest'
-        }
+        data: file
       }).result;
 
       // Create transcription job
@@ -229,6 +226,48 @@ function App() {
       textAlign: 'center' as const,
       padding: '3rem 1rem',
       color: '#9e9e9e'
+    },
+    comingSoonGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+      gap: '1.5rem'
+    },
+    featureCard: {
+      backgroundColor: '#e5e5e5',
+      borderRadius: '12px',
+      padding: '1.5rem',
+      textAlign: 'center' as const,
+      position: 'relative' as const,
+      transition: 'all 0.2s ease',
+      border: '1px solid rgba(158, 158, 158, 0.2)'
+    },
+    featureIcon: {
+      fontSize: '2.5rem',
+      marginBottom: '1rem',
+      display: 'block'
+    },
+    featureTitle: {
+      fontSize: '1.1rem',
+      fontWeight: '600',
+      margin: '0 0 0.5rem 0',
+      color: '#3f3f3f'
+    },
+    featureDescription: {
+      fontSize: '0.9rem',
+      color: '#9e9e9e',
+      margin: '0 0 1rem 0',
+      lineHeight: '1.4'
+    },
+    comingSoonBadge: {
+      display: 'inline-block',
+      backgroundColor: '#ffe600',
+      color: '#3f3f3f',
+      padding: '0.25rem 0.75rem',
+      borderRadius: '20px',
+      fontSize: '0.75rem',
+      fontWeight: '600',
+      textTransform: 'uppercase' as const,
+      letterSpacing: '0.5px'
     }
   };
 
@@ -385,6 +424,91 @@ function App() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* Coming Soon Features */}
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>🎸 Transcription & Analysis</h2>
+          <div style={styles.comingSoonGrid}>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>🎵</div>
+              <h3 style={styles.featureTitle}>Transcribe Chords</h3>
+              <p style={styles.featureDescription}>Advanced AI chord detection from any audio</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>🎤</div>
+              <h3 style={styles.featureTitle}>Transcribe Lyrics</h3>
+              <p style={styles.featureDescription}>Accurate lyric transcription with timing</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>🔄</div>
+              <h3 style={styles.featureTitle}>Transpose Chords</h3>
+              <p style={styles.featureDescription}>Change the key of any song instantly</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>📚 Learning & Training</h2>
+          <div style={styles.comingSoonGrid}>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>🔢</div>
+              <h3 style={styles.featureTitle}>Nashville Number System</h3>
+              <p style={styles.featureDescription}>Interactive training on professional chord notation</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>🎓</div>
+              <h3 style={styles.featureTitle}>Music Theory Lessons</h3>
+              <p style={styles.featureDescription}>Comprehensive theory from basics to advanced</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>📊</div>
+              <h3 style={styles.featureTitle}>Chord Charts & Fingerings</h3>
+              <p style={styles.featureDescription}>Visual charts for guitar, piano, and more</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>🎶 Practice & Performance</h2>
+          <div style={styles.comingSoonGrid}>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>🎼</div>
+              <h3 style={styles.featureTitle}>Backing Tracks</h3>
+              <p style={styles.featureDescription}>Professional quality tracks for practice & gigs</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>📖</div>
+              <h3 style={styles.featureTitle}>Song Database</h3>
+              <p style={styles.featureDescription}>Searchable library with chords, lyrics & tabs</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={styles.card}>
+          <h2 style={styles.cardTitle}>👥 Community & Collaboration</h2>
+          <div style={styles.comingSoonGrid}>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>🤝</div>
+              <h3 style={styles.featureTitle}>Connect with Musicians</h3>
+              <p style={styles.featureDescription}>Find collaborators, bandmates, and music friends</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+            <div style={styles.featureCard} className="feature-card">
+              <div style={styles.featureIcon}>📹</div>
+              <h3 style={styles.featureTitle}>Share Your Music</h3>
+              <p style={styles.featureDescription}>Upload videos and get feedback from the community</p>
+              <div style={styles.comingSoonBadge}>Coming Soon</div>
+            </div>
+          </div>
         </div>
       </main>
     </div>
