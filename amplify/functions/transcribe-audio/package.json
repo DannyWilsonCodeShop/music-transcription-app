@@ -1,0 +1,10 @@
+{
+  "name": "transcribe-audio",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "openai": "^4.0.0",
+    "ytdl-core": "^4.11.5",
+    "aws-sdk": "^2.1691.0"
+  }
+}
