@@ -35,7 +35,7 @@ function App() {
     try {
       // Upload file to S3
       const result = await uploadData({
-        key: `audio-files/${Date.now()}-${file.name}`,
+        path: `audio-files/${Date.now()}-${file.name}`,
         data: file,
         options: {
           accessLevel: 'guest'
@@ -45,7 +45,7 @@ function App() {
       // Create transcription job
       await client.models.TranscriptionJob.create({
         status: 'pending',
-        audioUrl: result.key,
+        audioUrl: result.path,
         title: file.name,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -242,90 +242,100 @@ function App() {
       <main style={styles.main}>
         <div style={styles.card}>
           <h2 style={styles.cardTitle}>Upload Audio File</h2>
-          <div 
-            style={{
-              ...styles.fileInput,
-              ...(file ? { borderColor: '#00bfc4', backgroundColor: 'rgba(0, 191, 196, 0.05)' } : {})
-            }}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.currentTarget.style.borderColor = '#00bfc4';
-              e.currentTarget.style.backgroundColor = 'rgba(0, 191, 196, 0.05)';
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              e.currentTarget.style.borderColor = '#00bfc4';
-              e.currentTarget.style.backgroundColor = 'rgba(0, 191, 196, 0.02)';
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const files = e.dataTransfer.files;
-              if (files.length > 0 && files[0].type.startsWith('audio/')) {
-                setFile(files[0]);
-              }
-              e.currentTarget.style.borderColor = '#00bfc4';
-              e.currentTarget.style.backgroundColor = 'rgba(0, 191, 196, 0.02)';
-            }}
-          >
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              style={{ display: 'none' }}
-              id="file-upload"
-            />
-            <label htmlFor="file-upload" style={{ cursor: 'pointer', display: 'block' }}>
-              {file ? (
-                <div>
-                  <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🎵</div>
-                  <div style={{ fontWeight: '500', color: '#00bfc4' }}>{file.name}</div>
-                  <div style={{ fontSize: '0.875rem', color: '#9e9e9e', marginTop: '0.25rem' }}>
-                    {(file.size / 1024 / 1024).toFixed(1)} MB • Click to change
+          <form onSubmit={(e) => { e.preventDefault(); handleFileUpload(); }}>
+            <div 
+              style={{
+                ...styles.fileInput,
+                ...(file ? { borderColor: '#00bfc4', backgroundColor: 'rgba(0, 191, 196, 0.05)' } : {})
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.currentTarget.style.borderColor = '#00bfc4';
+                e.currentTarget.style.backgroundColor = 'rgba(0, 191, 196, 0.05)';
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                e.currentTarget.style.borderColor = '#00bfc4';
+                e.currentTarget.style.backgroundColor = 'rgba(0, 191, 196, 0.02)';
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const files = e.dataTransfer.files;
+                if (files.length > 0 && files[0].type.startsWith('audio/')) {
+                  setFile(files[0]);
+                }
+                e.currentTarget.style.borderColor = '#00bfc4';
+                e.currentTarget.style.backgroundColor = 'rgba(0, 191, 196, 0.02)';
+              }}
+            >
+              <input
+                type="file"
+                accept="audio/*"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+                style={{ display: 'none' }}
+                id="file-upload"
+                name="audioFile"
+                aria-label="Upload audio file for transcription"
+              />
+              <label htmlFor="file-upload" style={{ cursor: 'pointer', display: 'block' }}>
+                {file ? (
+                  <div>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>🎵</div>
+                    <div style={{ fontWeight: '500', color: '#00bfc4' }}>{file.name}</div>
+                    <div style={{ fontSize: '0.875rem', color: '#9e9e9e', marginTop: '0.25rem' }}>
+                      {(file.size / 1024 / 1024).toFixed(1)} MB • Click to change
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <div>
-                  <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📤</div>
-                  <div style={{ fontWeight: '500' }}>Drop your audio file here</div>
-                  <div style={{ fontSize: '0.875rem', color: '#9e9e9e', marginTop: '0.25rem' }}>
-                    Supports MP3, WAV, M4A, and more
+                ) : (
+                  <div>
+                    <div style={{ fontSize: '1.5rem', marginBottom: '0.5rem' }}>📤</div>
+                    <div style={{ fontWeight: '500' }}>Drop your audio file here</div>
+                    <div style={{ fontSize: '0.875rem', color: '#9e9e9e', marginTop: '0.25rem' }}>
+                      Supports MP3, WAV, M4A, and more
+                    </div>
                   </div>
-                </div>
-              )}
-            </label>
-          </div>
-          <button 
-            onClick={handleFileUpload} 
-            disabled={!file || loading}
-            style={{
-              ...styles.button,
-              ...((!file || loading) ? styles.buttonDisabled : {}),
-              ...(loading ? { className: 'loading' } : {})
-            }}
-          >
-            {loading ? '🎵 Processing...' : '🚀 Transcribe Audio'}
-          </button>
+                )}
+              </label>
+            </div>
+            <button 
+              type="submit"
+              disabled={!file || loading}
+              style={{
+                ...styles.button,
+                ...((!file || loading) ? styles.buttonDisabled : {}),
+                ...(loading ? { className: 'loading' } : {})
+              }}
+            >
+              {loading ? '🎵 Processing...' : '🚀 Transcribe Audio'}
+            </button>
+          </form>
         </div>
 
         <div style={styles.card}>
           <h2 style={styles.cardTitle}>YouTube Video</h2>
-          <input
-            type="url"
-            placeholder="Paste YouTube URL here..."
-            value={youtubeUrl}
-            onChange={(e) => setYoutubeUrl(e.target.value)}
-            style={styles.input}
-          />
-          <button 
-            onClick={handleYouTubeSubmit} 
-            disabled={!youtubeUrl || loading}
-            style={{
-              ...styles.buttonSecondary,
-              ...((!youtubeUrl || loading) ? styles.buttonDisabled : {})
-            }}
-          >
-            {loading ? 'Processing...' : 'Transcribe from YouTube'}
-          </button>
+          <form onSubmit={(e) => { e.preventDefault(); handleYouTubeSubmit(); }}>
+            <input
+              type="url"
+              placeholder="Paste YouTube URL here..."
+              value={youtubeUrl}
+              onChange={(e) => setYoutubeUrl(e.target.value)}
+              style={styles.input}
+              id="youtube-url"
+              name="youtubeUrl"
+              aria-label="YouTube video URL for transcription"
+              autoComplete="url"
+            />
+            <button 
+              type="submit"
+              disabled={!youtubeUrl || loading}
+              style={{
+                ...styles.buttonSecondary,
+                ...((!youtubeUrl || loading) ? styles.buttonDisabled : {})
+              }}
+            >
+              {loading ? 'Processing...' : 'Transcribe from YouTube'}
+            </button>
+          </form>
         </div>
 
         <div style={styles.card}>
