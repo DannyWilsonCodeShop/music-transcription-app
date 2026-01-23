@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Amplify } from 'aws-amplify';
 import outputs from '../amplify_outputs.json';
 import DashboardHeader from './components/DashboardHeader';
-import { AcademicCapIcon } from '@heroicons/react/24/outline';
 
 Amplify.configure(outputs);
 
