@@ -16,13 +16,11 @@ export default function UploadSection() {
     
     setLoading(true);
     try {
-      // Upload file to S3
       const result = await uploadData({
         path: `audio-files/${Date.now()}-${file.name}`,
         data: file
       }).result;
 
-      // Create transcription job
       await client.models.TranscriptionJob.create({
         status: 'pending',
         audioUrl: result.path,
@@ -65,31 +63,39 @@ export default function UploadSection() {
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 border border-blue-200">
-      <h2 className="text-xl font-semibold text-[#3f3f3f] mb-4">Upload Audio</h2>
+    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border border-blue-200 p-4">
+      {/* Header with Avatar and Tabs */}
+      <div className="flex items-center gap-3 mb-4">
+        {/* Avatar */}
+        <img
+          src="https://api.dicebear.com/7.x/avataaars/svg?seed=user"
+          alt="User avatar"
+          className="w-10 h-10 rounded-full"
+        />
 
-      {/* Tabs */}
-      <div className="flex gap-2 mb-4">
-        <button
-          onClick={() => setActiveTab('file')}
-          className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-            activeTab === 'file'
-              ? 'bg-[#00bfc4] text-white shadow-md'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          📁 Upload File
-        </button>
-        <button
-          onClick={() => setActiveTab('youtube')}
-          className={`flex-1 py-2 px-4 rounded-lg font-medium transition-all ${
-            activeTab === 'youtube'
-              ? 'bg-[#00bfc4] text-white shadow-md'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-          }`}
-        >
-          🎬 YouTube Link
-        </button>
+        {/* Tab Buttons */}
+        <div className="flex-1 flex gap-2">
+          <button
+            onClick={() => setActiveTab('file')}
+            className={`flex-1 py-2 px-4 rounded-full font-medium transition-all ${
+              activeTab === 'file'
+                ? 'bg-gradient-to-r from-white to-blue-50 shadow-md text-[#3f3f3f]'
+                : 'bg-white/50 text-gray-600 hover:bg-white/70'
+            }`}
+          >
+            📁 Upload File
+          </button>
+          <button
+            onClick={() => setActiveTab('youtube')}
+            className={`flex-1 py-2 px-4 rounded-full font-medium transition-all ${
+              activeTab === 'youtube'
+                ? 'bg-gradient-to-r from-white to-blue-50 shadow-md text-[#3f3f3f]'
+                : 'bg-white/50 text-gray-600 hover:bg-white/70'
+            }`}
+          >
+            🎬 YouTube Link
+          </button>
+        </div>
       </div>
 
       {/* File Upload Tab */}
@@ -98,17 +104,17 @@ export default function UploadSection() {
           <div
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
               file
-                ? 'border-[#00bfc4] bg-[#00bfc4]/5'
-                : 'border-gray-300 hover:border-[#00bfc4] hover:bg-gray-50'
+                ? 'border-[#00bfc4] bg-white/80'
+                : 'border-gray-300 bg-white/50 hover:border-[#00bfc4] hover:bg-white/70'
             }`}
             onDragOver={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.add('border-[#00bfc4]', 'bg-[#00bfc4]/5');
+              e.currentTarget.classList.add('border-[#00bfc4]', 'bg-white/80');
             }}
             onDragLeave={(e) => {
               e.preventDefault();
               if (!file) {
-                e.currentTarget.classList.remove('border-[#00bfc4]', 'bg-[#00bfc4]/5');
+                e.currentTarget.classList.remove('border-[#00bfc4]', 'bg-white/80');
               }
             }}
             onDrop={(e) => {
@@ -152,7 +158,7 @@ export default function UploadSection() {
           <button
             onClick={handleFileUpload}
             disabled={!file || loading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-[#00bfc4] to-[#0089c6] text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 px-6 bg-gradient-to-r from-[#00bfc4] to-[#0089c6] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? '🎵 Processing...' : '🚀 Upload & Transcribe'}
           </button>
@@ -162,13 +168,13 @@ export default function UploadSection() {
       {/* YouTube Tab */}
       {activeTab === 'youtube' && (
         <div className="space-y-4">
-          <div>
+          <div className="bg-white/80 rounded-xl p-4">
             <input
               type="url"
               placeholder="https://www.youtube.com/watch?v=..."
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#00bfc4] focus:outline-none transition-colors"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-[#00bfc4] focus:outline-none transition-colors bg-white"
             />
             <p className="text-xs text-gray-500 mt-2">
               Paste a YouTube music video URL to transcribe
@@ -178,7 +184,7 @@ export default function UploadSection() {
           <button
             onClick={handleYouTubeSubmit}
             disabled={!youtubeUrl || loading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#00bfc4] text-white font-semibold rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#00bfc4] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Processing...' : '🎬 Transcribe YouTube Video'}
           </button>

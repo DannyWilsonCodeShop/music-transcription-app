@@ -23,7 +23,7 @@ function App() {
       <div className="max-w-[1600px] mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Left Column - Upload & Transcriptions (3/4 width) */}
-          <div className="lg:col-span-3 space-y-6">
+          <div className="lg:col-span-3 flex flex-col gap-6">
             {/* Upload Section */}
             <UploadSection />
 
@@ -35,7 +35,7 @@ function App() {
           </div>
 
           {/* Right Sidebar (1/4 width) */}
-          <div className="lg:col-span-1 space-y-4">
+          <div className="space-y-4">
             <RippedSongsWidget />
             <BackingTracksWidget />
             <StudyModulesWidget />

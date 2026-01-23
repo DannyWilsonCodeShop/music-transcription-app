@@ -33,16 +33,18 @@ export default function RippedSongsWidget() {
   ];
 
   return (
-    <div className="bg-white rounded-xl shadow-md p-4 border border-blue-200">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-[#3f3f3f] flex items-center gap-2">
           🎵 Ripped Songs Database
         </h3>
-        <a href="#" className="text-xs text-[#00bfc4] hover:underline">
+        <a href="#" className="text-xs text-[#00bfc4] hover:underline font-medium">
           View All
         </a>
       </div>
 
+      {/* Songs List */}
       <div className="space-y-3">
         {songs.map((song) => (
           <div

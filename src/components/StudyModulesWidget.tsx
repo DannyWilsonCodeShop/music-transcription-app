@@ -1,13 +1,15 @@
 export default function StudyModulesWidget() {
   return (
-    <div className="bg-white rounded-xl shadow-md p-4 border border-blue-200">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <h3 className="font-semibold text-[#3f3f3f] flex items-center gap-2">
           🎓 Study Modules
         </h3>
       </div>
 
-      <div className="space-y-3">
+      {/* Modules List */}
+      <div className="space-y-2">
         <div className="p-4 bg-gradient-to-br from-blue-50 to-purple-50 rounded-lg border border-blue-100 hover:shadow-md transition-shadow cursor-pointer">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
