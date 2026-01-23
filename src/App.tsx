@@ -33,9 +33,10 @@ function App() {
                     console.error('Logo load error:', e);
                     e.currentTarget.src = '/chord-scout-logo.png';
                   }}
-                  onLoad={() => {
+                  onLoad={(e) => {
                     console.log('Logo loaded successfully!');
-                    console.log('Logo dimensions:', e.target.naturalWidth, 'x', e.target.naturalHeight);
+                    const img = e.target as HTMLImageElement;
+                    console.log('Logo dimensions:', img.naturalWidth, 'x', img.naturalHeight);
                   }}
                 />
                 <div className="bg-blue-200 p-2 mt-4">
