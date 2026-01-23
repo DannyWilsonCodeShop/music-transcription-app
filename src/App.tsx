@@ -20,26 +20,32 @@ function App() {
             <div className="lg:col-span-3 flex flex-col">
               
               {/* Logo Display */}
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border border-blue-200 p-8 mb-6 text-center">
+              <div className="bg-red-100 border-4 border-red-500 rounded-xl shadow-lg p-8 mb-6 text-center">
+                <div className="bg-yellow-200 p-4 mb-4">
+                  <p className="text-black font-bold">LOGO SHOULD BE HERE</p>
+                </div>
                 <img 
-                  src="/chord-scout-logo.png" 
+                  src="/Chord Scout Logo 1.png" 
                   alt="ChordScout Logo" 
-                  className="h-32 w-auto mx-auto mb-4"
+                  className="h-48 w-auto mx-auto border-4 border-green-500"
                   onError={(e) => {
-                    console.log('PNG logo failed to load, trying SVG fallback');
-                    e.currentTarget.src = '/chord-scout-logo.svg';
+                    console.log('PNG logo failed to load, trying fallback');
+                    console.error('Logo load error:', e);
+                    e.currentTarget.src = '/chord-scout-logo.png';
                   }}
-                  onLoad={() => console.log('Logo loaded successfully!')}
+                  onLoad={() => {
+                    console.log('Logo loaded successfully!');
+                    console.log('Logo dimensions:', e.target.naturalWidth, 'x', e.target.naturalHeight);
+                  }}
                 />
-                <div className="bg-white rounded-lg p-4 inline-block shadow-md">
-                  <h1 className="text-2xl font-bold text-gray-800">ChordScout</h1>
-                  <p className="text-sm text-gray-600">Music Transcription Platform</p>
+                <div className="bg-blue-200 p-2 mt-4">
+                  <p className="text-black text-sm">Logo container end</p>
                 </div>
               </div>
             </div>
 
             {/* RIGHT COLUMN - Sidebar (25% width) */}
-            <div className="space-y-4 max-h-screen overflow-y-auto">
+            <div className="space-y-4 h-[calc(100vh-200px)] overflow-y-auto">
               
               {/* Widget 1 - Ripped Songs */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
@@ -47,7 +53,7 @@ function App() {
                   <h3 className="text-base font-bold text-gray-900">🎵 Ripped Songs</h3>
                   <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">View All</button>
                 </div>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
+                <div className="space-y-3 max-h-40 overflow-y-auto">
                   {[
                     { name: 'Hotel California', key: 'Bm', hasLyrics: true, hasPiano: true, hasGuitar: true, date: '2 days ago' },
                     { name: 'Wonderwall', key: 'Em', hasLyrics: true, hasGuitar: true, date: '3 days ago' },
@@ -80,7 +86,7 @@ function App() {
                   <h3 className="text-base font-bold text-gray-900">🎼 Backing Tracks</h3>
                   <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">View All</button>
                 </div>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
+                <div className="space-y-3 max-h-40 overflow-y-auto">
                   {[
                     { name: 'Blues in A', genre: 'Blues', key: 'A', instruments: ['Drums', 'Bass'], color: 'bg-blue-500' },
                     { name: 'Jazz Swing', genre: 'Jazz', key: 'Bb', instruments: ['Drums', 'Piano'], color: 'bg-purple-500' },
@@ -113,7 +119,7 @@ function App() {
               {/* Widget 3 - Study Modules */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                 <h3 className="text-base font-bold text-gray-900 mb-4">📚 Study Modules</h3>
-                <div className="space-y-3 max-h-48 overflow-y-auto">
+                <div className="space-y-3 max-h-40 overflow-y-auto">
                   {[
                     { title: 'Chord Progressions', progress: 75, lessons: 12, completed: 9 },
                     { title: 'Scale Theory', progress: 45, lessons: 8, completed: 4 },
