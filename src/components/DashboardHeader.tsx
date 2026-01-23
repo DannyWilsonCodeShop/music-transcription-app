@@ -15,7 +15,7 @@ export default function DashboardHeader({ userName }: DashboardHeaderProps) {
   }, []);
 
   return (
-    <header className="bg-[#3f3f3f] text-white py-6 px-4 shadow-lg">
+    <header className="bg-primary text-white py-6 px-4 shadow-lg">
       <div className="max-w-[1600px] mx-auto">
         <h1 className="text-3xl font-bold mb-1">
           {greeting}, {userName}! 👋
