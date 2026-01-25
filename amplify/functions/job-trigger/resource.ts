@@ -4,5 +4,8 @@ export const jobTrigger = defineFunction({
   name: 'job-trigger',
   entry: './handler.ts',
   timeoutSeconds: 60,
-  memoryMB: 256
+  memoryMB: 256,
+  bundling: {
+    externalModules: ['@aws-sdk/client-sfn']
+  }
 });

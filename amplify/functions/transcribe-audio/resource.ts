@@ -8,5 +8,12 @@ export const transcribeAudio = defineFunction({
     YOUTUBE_API_KEY_SECRET: 'music-transcription/youtube-key'
   },
   timeoutSeconds: 300, // 5 minutes for audio processing
-  memoryMB: 1024
+  memoryMB: 1024,
+  bundling: {
+    externalModules: [
+      '@aws-sdk/client-sfn',
+      '@aws-sdk/client-dynamodb',
+      '@aws-sdk/lib-dynamodb'
+    ]
+  }
 });
