@@ -5,12 +5,10 @@
       "Effect": "Allow",
       "Action": [
         "states:StartExecution",
-        "states:DescribeExecution"
+        "states:DescribeExecution",
+        "states:ListExecutions"
       ],
-      "Resource": [
-        "arn:aws:states:us-east-1:090130568474:stateMachine:ChordScout-Transcription-dev",
-        "arn:aws:states:us-east-1:090130568474:execution:ChordScout-Transcription-dev:*"
-      ]
+      "Resource": "arn:aws:states:us-east-1:090130568474:stateMachine:ChordScout-Transcription-dev*"
     },
     {
       "Effect": "Allow",
