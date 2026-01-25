@@ -1,0 +1,11 @@
+{
+  "name": "chordscout-api-proxy",
+  "version": "1.0.0",
+  "description": "API proxy for ChordScout frontend",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sfn": "^3.700.0",
+    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/lib-dynamodb": "^3.700.0"
+  }
+}
