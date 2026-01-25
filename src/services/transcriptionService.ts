@@ -7,7 +7,7 @@ import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 const AWS_REGION = 'us-east-1';
 const STATE_MACHINE_ARN = 'arn:aws:states:us-east-1:090130568474:stateMachine:ChordScout-Transcription-dev';
 const JOBS_TABLE_NAME = 'ChordScout-TranscriptionJobs-dev';
-const IDENTITY_POOL_ID = 'us-east-1:781b986b-cc62-418d-8b14-70292d1f773e';
+const IDENTITY_POOL_ID = 'us-east-1:d52c4b11-5f3f-449c-88c2-ae6245d474a0';
 
 // Initialize AWS clients with Cognito credentials
 const credentials = fromCognitoIdentityPool({
