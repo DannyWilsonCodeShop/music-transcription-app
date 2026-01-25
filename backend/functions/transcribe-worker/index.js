@@ -51,18 +51,18 @@ exports.handler = async (event) => {
       // Transcribe lyrics
       const lyrics = await transcribeLyrics(audioFilePath);
       
-      // Detect chords (placeholder - implement actual chord detection)
-      const chords = await detectChords(audioFilePath);
+      // Detect chords using Basic Pitch ML model
+      const chordsData = await detectChords(audioFilePath, jobId);
       
       // Save results to S3
-      await saveResults(jobId, lyrics, chords);
+      await saveResults(jobId, lyrics, chordsData);
       
       // Cleanup temp file
       await fs.unlink(audioFilePath).catch(err => 
         console.log('Cleanup error:', err)
       );
       
-      await updateJobStatus(jobId, 'completed', { lyrics, chords });
+      await updateJobStatus(jobId, 'completed', { lyrics, chords: chordsData });
       
     } catch (error) {
       console.error(`Error processing job ${jobId}:`, error);
@@ -138,15 +138,61 @@ async function transcribeLyrics(audioFilePath) {
   }
 }
 
-async function detectChords(audioFilePath) {
-  // Placeholder for chord detection
-  // In production, integrate with a chord detection service or ML model
-  return [
-    { name: 'C', timestamp: 0 },
-    { name: 'G', timestamp: 4 },
-    { name: 'Am', timestamp: 8 },
-    { name: 'F', timestamp: 12 }
-  ];
+async function detectChords(audioFilePath, jobId) {
+  // Invoke Basic Pitch Lambda for chord detection
+  const lambda = new AWS.Lambda();
+  
+  try {
+    // Upload audio to S3 if not already there
+    const audioKey = `audio/${jobId}${path.extname(audioFilePath)}`;
+    const audioBuffer = await fs.readFile(audioFilePath);
+    
+    await s3.putObject({
+      Bucket: BUCKET_NAME,
+      Key: audioKey,
+      Body: audioBuffer,
+      ContentType: 'audio/mpeg'
+    }).promise();
+    
+    console.log(`Audio uploaded to s3://${BUCKET_NAME}/${audioKey}`);
+    
+    // Invoke chord detection Lambda
+    const response = await lambda.invoke({
+      FunctionName: process.env.CHORD_DETECTOR_FUNCTION_ARN,
+      InvocationType: 'RequestResponse',
+      Payload: JSON.stringify({
+        bucket: BUCKET_NAME,
+        key: audioKey,
+        jobId: jobId
+      })
+    }).promise();
+    
+    const result = JSON.parse(response.Payload);
+    
+    if (result.statusCode === 200) {
+      const body = JSON.parse(result.body);
+      console.log(`Chord detection completed: ${body.totalChords} chords found`);
+      console.log(`Key: ${body.key} ${body.mode}`);
+      return body;
+    } else {
+      console.error('Chord detection failed:', result);
+      throw new Error('Chord detection failed');
+    }
+  } catch (error) {
+    console.error('Error in chord detection:', error);
+    // Return fallback chords
+    return {
+      key: 'C',
+      mode: 'major',
+      chords: [
+        { name: 'C', timestamp: 0, confidence: 0.5, duration: 4 },
+        { name: 'G', timestamp: 4, confidence: 0.5, duration: 4 },
+        { name: 'Am', timestamp: 8, confidence: 0.5, duration: 4 },
+        { name: 'F', timestamp: 12, confidence: 0.5, duration: 4 }
+      ],
+      chordProgressionText: 'Fallback chords (detection failed)'
+    };
+  }
 }
 
 async function saveResults(jobId, lyrics, chords) {
