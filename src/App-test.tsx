@@ -77,15 +77,11 @@ function App() {
       <aside className="w-64 bg-primary text-white flex-shrink-0 flex flex-col">
         {/* Logo Section */}
         <div className="p-6 border-b border-gray-700">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-secondary rounded-lg flex items-center justify-center text-white font-bold text-xl">
-              🎵
-            </div>
-            <div>
-              <h1 className="text-xl font-bold">ChordScout</h1>
-              <p className="text-xs text-gray-400">Music Transcription</p>
-            </div>
-          </div>
+          <img 
+            src="/Chord Scout Logo 1.png" 
+            alt="ChordScout Logo" 
+            className="w-full h-auto"
+          />
         </div>
 
         {/* Navigation */}
@@ -134,21 +130,6 @@ function App() {
             </a>
           </div>
         </nav>
-
-        {/* User Profile at Bottom */}
-        <div className="p-4 border-t border-gray-700">
-          <div className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-700 cursor-pointer transition-colors">
-            <img
-              src="https://api.dicebear.com/7.x/avataaars/svg?seed=Danny"
-              alt="User avatar"
-              className="w-10 h-10 rounded-full ring-2 ring-secondary"
-            />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white truncate">Danny Wilson</p>
-              <p className="text-xs text-gray-400 truncate">danny@example.com</p>
-            </div>
-          </div>
-        </div>
       </aside>
 
       {/* MAIN CONTENT AREA */}
@@ -167,6 +148,18 @@ function App() {
               <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                 <span className="text-xl">💬</span>
               </button>
+              {/* User Profile */}
+              <div className="flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors">
+                <img
+                  src="https://api.dicebear.com/7.x/avataaars/svg?seed=Danny"
+                  alt="User avatar"
+                  className="w-10 h-10 rounded-full ring-2 ring-secondary"
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">Danny Wilson</p>
+                  <p className="text-xs text-gray-600 truncate">danny@example.com</p>
+                </div>
+              </div>
             </div>
           </div>
         </header>
