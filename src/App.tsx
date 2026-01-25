@@ -2,11 +2,25 @@ import { useState } from 'react';
 import { Amplify } from 'aws-amplify';
 import outputs from '../amplify_outputs.json';
 import DashboardHeader from './components/DashboardHeader';
+import UploadInterface from './components/UploadInterface';
+import TranscriptionProgress from './components/TranscriptionProgress';
+import { TranscriptionJob } from './services/transcriptionService';
 
 Amplify.configure(outputs);
 
 function App() {
   const [userName] = useState('Danny');
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [completedJobs, setCompletedJobs] = useState<TranscriptionJob[]>([]);
+
+  const handleUploadStart = (jobId: string) => {
+    setActiveJobId(jobId);
+  };
+
+  const handleJobComplete = (job: TranscriptionJob) => {
+    setCompletedJobs(prev => [job, ...prev]);
+    setActiveJobId(null);
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -16,33 +30,83 @@ function App() {
         <div className="pb-8">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
-            {/* LEFT COLUMN - Logo Section (75% width) */}
-            <div className="lg:col-span-3 flex flex-col">
+            {/* LEFT COLUMN - Main Content (75% width) */}
+            <div className="lg:col-span-3 flex flex-col space-y-6">
               
-              {/* Logo Display */}
-              <div className="bg-red-100 border-4 border-red-500 rounded-xl shadow-lg p-8 mb-6 text-center">
-                <div className="bg-yellow-200 p-4 mb-4">
-                  <p className="text-black font-bold">LOGO SHOULD BE HERE</p>
-                </div>
-                <img 
-                  src="/Chord Scout Logo 1.png" 
-                  alt="ChordScout Logo" 
-                  className="h-48 w-auto mx-auto border-4 border-green-500"
-                  onError={(e) => {
-                    console.log('PNG logo failed to load, trying fallback');
-                    console.error('Logo load error:', e);
-                    e.currentTarget.src = '/chord-scout-logo.png';
-                  }}
-                  onLoad={(e) => {
-                    console.log('Logo loaded successfully!');
-                    const img = e.target as HTMLImageElement;
-                    console.log('Logo dimensions:', img.naturalWidth, 'x', img.naturalHeight);
-                  }}
+              {/* Upload Interface */}
+              <UploadInterface onUploadStart={handleUploadStart} />
+
+              {/* Active Job Progress */}
+              {activeJobId && (
+                <TranscriptionProgress 
+                  jobId={activeJobId} 
+                  onComplete={handleJobComplete}
                 />
-                <div className="bg-blue-200 p-2 mt-4">
-                  <p className="text-black text-sm">Logo container end</p>
+              )}
+
+              {/* Completed Jobs */}
+              {completedJobs.length > 0 && (
+                <div className="space-y-4">
+                  <h2 className="text-xl font-bold text-gray-900">Recent Transcriptions</h2>
+                  {completedJobs.map(job => (
+                    <div key={job.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                      <div className="flex items-start justify-between mb-4">
+                        <div>
+                          <h3 className="text-lg font-bold text-gray-900">{job.title}</h3>
+                          <p className="text-sm text-gray-600">{new Date(job.createdAt).toLocaleString()}</p>
+                        </div>
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                          ✅ COMPLETED
+                        </span>
+                      </div>
+                      
+                      {job.lyrics && (
+                        <div className="mb-4">
+                          <h4 className="font-semibold text-gray-900 mb-2">Lyrics</h4>
+                          <div className="bg-gray-50 rounded-lg p-4 max-h-40 overflow-y-auto">
+                            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{job.lyrics}</pre>
+                          </div>
+                        </div>
+                      )}
+
+                      {job.chords && (
+                        <div className="mb-4">
+                          <h4 className="font-semibold text-gray-900 mb-2">Chords</h4>
+                          <div className="bg-gray-50 rounded-lg p-4">
+                            <p className="text-sm text-gray-700 mb-2">
+                              Key: <span className="font-medium">{job.chords.key} {job.chords.mode}</span>
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {job.chords.chords?.map((chord: any, idx: number) => (
+                                <span 
+                                  key={idx}
+                                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium"
+                                >
+                                  {chord.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {job.sheetMusicUrl && (
+                        <div>
+                          <a 
+                            href={job.sheetMusicUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                          >
+                            <span>🎼</span>
+                            View Sheet Music
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </div>
+              )}
             </div>
 
             {/* RIGHT COLUMN - Sidebar (25% width) */}

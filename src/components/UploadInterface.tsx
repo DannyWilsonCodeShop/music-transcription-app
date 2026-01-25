@@ -1,14 +1,5 @@
 import { useState } from 'react';
-import { Amplify } from 'aws-amplify';
-import { uploadData } from 'aws-amplify/storage';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../amplify/data/resource';
-import outputs from '../../amplify_outputs.json';
-
-// Configure Amplify
-Amplify.configure(outputs);
-
-const client = generateClient<Schema>();
+import { startTranscription } from '../services/transcriptionService';
 
 interface UploadInterfaceProps {
   onUploadStart: (jobId: string) => void;
@@ -30,33 +21,9 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
     setError('');
     
     try {
-      // Generate job ID
-      const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      
-      // Upload file to S3
-      const result = await uploadData({
-        path: `audio-files/${jobId}-${file.name}`,
-        data: file
-      }).result;
-
-      // Create job record in DynamoDB
-      await client.models.TranscriptionJob.create({
-        id: jobId,
-        status: 'pending',
-        audioUrl: result.path,
-        title: title || file.name,
-        artist: artist || 'Unknown Artist',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      onUploadStart(jobId);
-      
-      // Reset form
-      setFile(null);
-      setTitle('');
-      setArtist('');
-      setYoutubeUrl('');
+      // TODO: Implement file upload to S3 and transcription
+      // For now, show error that file upload is not yet implemented
+      setError('File upload coming soon! Please use YouTube URL for now.');
     } catch (err) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Upload failed');
@@ -72,19 +39,11 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
     setError('');
     
     try {
-      // Generate job ID
-      const jobId = `job-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-      
-      // Create job record in DynamoDB
-      await client.models.TranscriptionJob.create({
-        id: jobId,
-        status: 'pending',
+      // Start transcription via Step Functions
+      const jobId = await startTranscription(
         youtubeUrl,
-        title: title || 'YouTube Video',
-        artist: artist || 'Unknown Artist',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
+        title || 'YouTube Video'
+      );
 
       onUploadStart(jobId);
       

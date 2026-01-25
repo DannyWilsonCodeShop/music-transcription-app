@@ -1,21 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Amplify } from 'aws-amplify';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../amplify/data/resource';
-import outputs from '../../amplify_outputs.json';
-
-// Configure Amplify
-Amplify.configure(outputs);
-
-const client = generateClient<Schema>();
+import { getJobStatus, TranscriptionJob } from '../services/transcriptionService';
 
 interface TranscriptionProgressProps {
   jobId: string;
-  onComplete: (job: any) => void;
+  onComplete: (job: TranscriptionJob) => void;
 }
 
 export default function TranscriptionProgress({ jobId, onComplete }: TranscriptionProgressProps) {
-  const [job, setJob] = useState<any>(null);
+  const [job, setJob] = useState<TranscriptionJob | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -24,18 +16,18 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
 
     const fetchJobStatus = async () => {
       try {
-        const { data } = await client.models.TranscriptionJob.get({ id: jobId });
+        const data = await getJobStatus(jobId);
         
         if (data) {
           setJob(data);
           setLoading(false);
 
-          if (data.status === 'completed') {
+          if (data.status === 'COMPLETED') {
             clearInterval(interval);
             onComplete(data);
-          } else if (data.status === 'failed') {
+          } else if (data.status === 'FAILED') {
             clearInterval(interval);
-            setError('Transcription failed. Please try again.');
+            setError(data.error || 'Transcription failed. Please try again.');
           }
         }
       } catch (err) {
@@ -55,13 +47,13 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'pending':
+      case 'PENDING':
         return 'bg-yellow-100 text-yellow-700 border-yellow-200';
-      case 'processing':
+      case 'PROCESSING':
         return 'bg-blue-100 text-blue-700 border-blue-200';
-      case 'completed':
+      case 'COMPLETED':
         return 'bg-green-100 text-green-700 border-green-200';
-      case 'failed':
+      case 'FAILED':
         return 'bg-red-100 text-red-700 border-red-200';
       default:
         return 'bg-gray-100 text-gray-700 border-gray-200';
@@ -70,13 +62,13 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'pending':
+      case 'PENDING':
         return '⏳';
-      case 'processing':
+      case 'PROCESSING':
         return '⚙️';
-      case 'completed':
+      case 'COMPLETED':
         return '✅';
-      case 'failed':
+      case 'FAILED':
         return '❌';
       default:
         return '📝';
@@ -85,13 +77,13 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
 
   const getProgressPercentage = (status: string) => {
     switch (status) {
-      case 'pending':
+      case 'PENDING':
         return 10;
-      case 'processing':
+      case 'PROCESSING':
         return 50;
-      case 'completed':
+      case 'COMPLETED':
         return 100;
-      case 'failed':
+      case 'FAILED':
         return 0;
       default:
         return 0;
@@ -131,10 +123,12 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="text-lg font-bold text-gray-900">{job.title}</h3>
-          <p className="text-sm text-gray-600">{job.artist}</p>
+          {job.youtubeUrl && (
+            <p className="text-sm text-gray-600 truncate">{job.youtubeUrl}</p>
+          )}
         </div>
         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusColor(job.status)}`}>
-          {getStatusIcon(job.status)} {job.status.toUpperCase()}
+          {getStatusIcon(job.status)} {job.status}
         </span>
       </div>
 
@@ -143,42 +137,42 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
         <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
           <div
             className={`h-full transition-all duration-500 ${
-              job.status === 'completed' ? 'bg-green-500' :
-              job.status === 'processing' ? 'bg-blue-500 animate-pulse' :
-              job.status === 'failed' ? 'bg-red-500' :
+              job.status === 'COMPLETED' ? 'bg-green-500' :
+              job.status === 'PROCESSING' ? 'bg-blue-500 animate-pulse' :
+              job.status === 'FAILED' ? 'bg-red-500' :
               'bg-yellow-500'
             }`}
             style={{ width: `${getProgressPercentage(job.status)}%` }}
           ></div>
         </div>
         <p className="text-xs text-gray-500 mt-2">
-          {job.status === 'pending' && 'Waiting to start...'}
-          {job.status === 'processing' && 'Processing audio and detecting chords...'}
-          {job.status === 'completed' && 'Transcription complete!'}
-          {job.status === 'failed' && 'Transcription failed'}
+          {job.status === 'PENDING' && 'Waiting to start...'}
+          {job.status === 'PROCESSING' && 'Processing audio and detecting chords...'}
+          {job.status === 'COMPLETED' && 'Transcription complete!'}
+          {job.status === 'FAILED' && 'Transcription failed'}
         </p>
       </div>
 
       {/* Processing Steps */}
-      {(job.status === 'processing' || job.status === 'completed') && (
+      {(job.status === 'PROCESSING' || job.status === 'COMPLETED') && (
         <div className="space-y-2 mb-4">
           <div className="flex items-center space-x-3 text-sm">
             <span className="text-green-600">✓</span>
             <span className="text-gray-700">Audio downloaded</span>
           </div>
           <div className="flex items-center space-x-3 text-sm">
-            <span className={job.status === 'completed' ? 'text-green-600' : 'text-blue-600 animate-pulse'}>
-              {job.status === 'completed' ? '✓' : '⚙️'}
+            <span className={job.status === 'COMPLETED' ? 'text-green-600' : 'text-blue-600 animate-pulse'}>
+              {job.status === 'COMPLETED' ? '✓' : '⚙️'}
             </span>
             <span className="text-gray-700">Transcribing lyrics</span>
           </div>
           <div className="flex items-center space-x-3 text-sm">
-            <span className={job.status === 'completed' ? 'text-green-600' : 'text-blue-600 animate-pulse'}>
-              {job.status === 'completed' ? '✓' : '⚙️'}
+            <span className={job.status === 'COMPLETED' ? 'text-green-600' : 'text-blue-600 animate-pulse'}>
+              {job.status === 'COMPLETED' ? '✓' : '⚙️'}
             </span>
             <span className="text-gray-700">Detecting chords</span>
           </div>
-          {job.status === 'completed' && (
+          {job.status === 'COMPLETED' && (
             <div className="flex items-center space-x-3 text-sm">
               <span className="text-green-600">✓</span>
               <span className="text-gray-700">Generating sheet music</span>
