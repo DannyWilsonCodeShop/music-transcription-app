@@ -1,0 +1,245 @@
+{
+  "Comment": "ChordScout Music Transcription Workflow",
+  "StartAt": "ValidateInput",
+  "States": {
+    "ValidateInput": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${ValidateInputFunctionArn}",
+        "Payload": {
+          "jobId.$": "$.jobId",
+          "audioUrl.$": "$.audioUrl",
+          "youtubeUrl.$": "$.youtubeUrl",
+          "title.$": "$.title"
+        }
+      },
+      "ResultPath": "$.validation",
+      "Next": "CheckInputType",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateJobFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    
+    "CheckInputType": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.youtubeUrl",
+          "IsPresent": true,
+          "Next": "DownloadYouTubeAudio"
+        }
+      ],
+      "Default": "DownloadFromS3"
+    },
+    
+    "DownloadYouTubeAudio": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${YouTubeDownloaderFunctionArn}",
+        "Payload": {
+          "jobId.$": "$.jobId",
+          "youtubeUrl.$": "$.youtubeUrl"
+        }
+      },
+      "ResultPath": "$.download",
+      "Next": "ParallelProcessing",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateJobFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    
+    "DownloadFromS3": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${S3DownloaderFunctionArn}",
+        "Payload": {
+          "jobId.$": "$.jobId",
+          "audioUrl.$": "$.audioUrl"
+        }
+      },
+      "ResultPath": "$.download",
+      "Next": "ParallelProcessing",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateJobFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    
+    "ParallelProcessing": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "TranscribeLyrics",
+          "States": {
+            "TranscribeLyrics": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${WhisperTranscribeFunctionArn}",
+                "Payload": {
+                  "jobId.$": "$.jobId",
+                  "audioPath.$": "$.download.Payload.audioPath",
+                  "bucket.$": "$.download.Payload.bucket",
+                  "key.$": "$.download.Payload.key"
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "DetectChords",
+          "States": {
+            "DetectChords": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${ChordDetectorFunctionArn}",
+                "Payload": {
+                  "jobId.$": "$.jobId",
+                  "bucket.$": "$.download.Payload.bucket",
+                  "key.$": "$.download.Payload.key"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.processing",
+      "Next": "CombineResults",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateJobFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    
+    "CombineResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${CombineResultsFunctionArn}",
+        "Payload": {
+          "jobId.$": "$.jobId",
+          "lyrics.$": "$.processing[0].Payload.body",
+          "chords.$": "$.processing[1].Payload.body"
+        }
+      },
+      "ResultPath": "$.combined",
+      "Next": "GenerateSheetMusic",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateJobFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    
+    "GenerateSheetMusic": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${SheetMusicGeneratorFunctionArn}",
+        "Payload": {
+          "jobId.$": "$.jobId",
+          "chords.$": "$.combined.Payload.chords",
+          "title.$": "$.title"
+        }
+      },
+      "ResultPath": "$.sheetMusic",
+      "Next": "UpdateJobCompleted",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateJobFailed",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    
+    "UpdateJobCompleted": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${DynamoDBTableName}",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, lyrics = :lyrics, chords = :chords, sheetMusicUrl = :sheetMusic, updatedAt = :updatedAt, completedAt = :completedAt",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "completed"
+          },
+          ":lyrics": {
+            "S.$": "$.combined.Payload.lyrics"
+          },
+          ":chords": {
+            "S.$": "States.JsonToString($.combined.Payload.chords)"
+          },
+          ":sheetMusic": {
+            "S.$": "$.sheetMusic.Payload.url"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          },
+          ":completedAt": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "End": true
+    },
+    
+    "UpdateJobFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "${DynamoDBTableName}",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, errorMessage = :error, updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#status": "status"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "failed"
+          },
+          ":error": {
+            "S.$": "States.JsonToString($.error)"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "End": true
+    }
+  }
+}

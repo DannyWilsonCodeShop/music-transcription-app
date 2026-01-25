@@ -1,0 +1,459 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ChordScout Music Transcription Pipeline'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - prod
+    Description: Environment name
+  
+  OpenAISecretArn:
+    Type: String
+    Description: ARN of the Secrets Manager secret containing OpenAI API key
+  
+  ChordDetectorImageUri:
+    Type: String
+    Description: ECR image URI for the chord detector Lambda
+
+Resources:
+  # S3 Bucket for audio files and results
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'chordscout-audio-${Environment}-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldAudio
+            Status: Enabled
+            ExpirationInDays: 30
+          - Id: TransitionToIA
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 7
+                StorageClass: STANDARD_IA
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, DELETE, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  # DynamoDB Table for transcription jobs
+  TranscriptionJobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ChordScout-TranscriptionJobs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+  # IAM Role for Lambda functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ChordScout-Lambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ChordScoutLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${AudioBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt TranscriptionJobsTable.Arn
+                  - !Sub '${TranscriptionJobsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref OpenAISecretArn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: '*'
+
+  # YouTube Downloader Lambda
+  YouTubeDownloaderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-youtube-downloader-${Environment}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref AudioBucket
+          ENVIRONMENT: !Ref Environment
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import subprocess
+          import os
+          
+          s3 = boto3.client('s3')
+          
+          def lambda_handler(event, context):
+              job_id = event['jobId']
+              youtube_url = event['youtubeUrl']
+              bucket = os.environ['BUCKET_NAME']
+              
+              # Download audio using yt-dlp
+              output_path = f'/tmp/{job_id}.mp3'
+              key = f'audio/{job_id}.mp3'
+              
+              try:
+                  subprocess.run([
+                      'yt-dlp',
+                      '-x',
+                      '--audio-format', 'mp3',
+                      '-o', output_path,
+                      youtube_url
+                  ], check=True)
+                  
+                  # Upload to S3
+                  s3.upload_file(output_path, bucket, key)
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': {
+                          'bucket': bucket,
+                          'key': key,
+                          'audioPath': output_path
+                      }
+                  }
+              except Exception as e:
+                  return {
+                      'statusCode': 500,
+                      'body': {'error': str(e)}
+                  }
+      Layers:
+        - !Ref YtDlpLayer
+
+  # yt-dlp Lambda Layer
+  YtDlpLayer:
+    Type: AWS::Lambda::LayerVersion
+    Properties:
+      LayerName: !Sub 'yt-dlp-${Environment}'
+      Description: yt-dlp for YouTube audio download
+      Content:
+        S3Bucket: !Ref AudioBucket
+        S3Key: layers/yt-dlp.zip
+      CompatibleRuntimes:
+        - python3.11
+
+  # Whisper Transcribe Lambda
+  WhisperTranscribeFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-whisper-transcribe-${Environment}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 3008
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref AudioBucket
+          OPENAI_SECRET_ARN: !Ref OpenAISecretArn
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import requests
+          
+          s3 = boto3.client('s3')
+          secrets = boto3.client('secretsmanager')
+          
+          def lambda_handler(event, context):
+              job_id = event['jobId']
+              bucket = event['bucket']
+              key = event['key']
+              
+              # Get OpenAI API key
+              secret = secrets.get_secret_value(SecretId=os.environ['OPENAI_SECRET_ARN'])
+              api_key = json.loads(secret['SecretString'])['OPENAI_API_KEY']
+              
+              # Download audio
+              audio_path = f'/tmp/{job_id}.mp3'
+              s3.download_file(bucket, key, audio_path)
+              
+              # Transcribe with Whisper
+              with open(audio_path, 'rb') as audio_file:
+                  response = requests.post(
+                      'https://api.openai.com/v1/audio/transcriptions',
+                      headers={'Authorization': f'Bearer {api_key}'},
+                      files={'file': audio_file},
+                      data={'model': 'whisper-1', 'response_format': 'verbose_json'}
+                  )
+              
+              lyrics = response.json()
+              
+              return {
+                  'statusCode': 200,
+                  'body': json.dumps(lyrics)
+              }
+
+  # Chord Detector Lambda (Container)
+  ChordDetectorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-chord-detector-${Environment}'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ChordDetectorImageUri
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 3008
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref AudioBucket
+
+  # Combine Results Lambda
+  CombineResultsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-combine-results-${Environment}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 512
+      Code:
+        ZipFile: |
+          import json
+          
+          def lambda_handler(event, context):
+              lyrics_data = json.loads(event['lyrics'])
+              chords_data = json.loads(event['chords'])
+              
+              return {
+                  'statusCode': 200,
+                  'body': {
+                      'lyrics': lyrics_data.get('text', ''),
+                      'chords': chords_data
+                  }
+              }
+
+  # Sheet Music Generator Lambda
+  SheetMusicGeneratorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-sheet-music-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 1024
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref AudioBucket
+      Code:
+        ZipFile: |
+          const AWS = require('aws-sdk');
+          const s3 = new AWS.S3();
+          
+          exports.handler = async (event) => {
+              const { jobId, chords, title } = event;
+              const bucket = process.env.BUCKET_NAME;
+              
+              // Generate ABC notation
+              const abc = generateABC(chords, title);
+              
+              // Save to S3
+              const key = `sheet-music/${jobId}.abc`;
+              await s3.putObject({
+                  Bucket: bucket,
+                  Key: key,
+                  Body: abc,
+                  ContentType: 'text/plain'
+              }).promise();
+              
+              return {
+                  statusCode: 200,
+                  body: {
+                      url: `s3://${bucket}/${key}`
+                  }
+              };
+          };
+          
+          function generateABC(chords, title) {
+              let abc = `X:1\nT:${title}\nM:4/4\nL:1/4\nK:${chords.key}\n`;
+              chords.chords.forEach(chord => {
+                  abc += `"${chord.name}"z4|`;
+              });
+              return abc;
+          }
+
+  # Step Functions State Machine Role
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ChordScout-StepFunctions-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource:
+                  - !GetAtt YouTubeDownloaderFunction.Arn
+                  - !GetAtt WhisperTranscribeFunction.Arn
+                  - !GetAtt ChordDetectorFunction.Arn
+                  - !GetAtt CombineResultsFunction.Arn
+                  - !GetAtt SheetMusicGeneratorFunction.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt TranscriptionJobsTable.Arn
+
+  # Step Functions State Machine
+  TranscriptionStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub 'ChordScout-Transcription-${Environment}'
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "ChordScout Music Transcription Workflow",
+          "StartAt": "CheckInputType",
+          "States": {
+            "CheckInputType": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.youtubeUrl",
+                  "IsPresent": true,
+                  "Next": "DownloadYouTubeAudio"
+                }
+              ],
+              "Default": "ParallelProcessing"
+            },
+            "DownloadYouTubeAudio": {
+              "Type": "Task",
+              "Resource": "${YouTubeDownloaderFunction.Arn}",
+              "ResultPath": "$.download",
+              "Next": "ParallelProcessing"
+            },
+            "ParallelProcessing": {
+              "Type": "Parallel",
+              "Branches": [
+                {
+                  "StartAt": "TranscribeLyrics",
+                  "States": {
+                    "TranscribeLyrics": {
+                      "Type": "Task",
+                      "Resource": "${WhisperTranscribeFunction.Arn}",
+                      "End": true
+                    }
+                  }
+                },
+                {
+                  "StartAt": "DetectChords",
+                  "States": {
+                    "DetectChords": {
+                      "Type": "Task",
+                      "Resource": "${ChordDetectorFunction.Arn}",
+                      "End": true
+                    }
+                  }
+                }
+              ],
+              "ResultPath": "$.processing",
+              "Next": "CombineResults"
+            },
+            "CombineResults": {
+              "Type": "Task",
+              "Resource": "${CombineResultsFunction.Arn}",
+              "ResultPath": "$.combined",
+              "Next": "GenerateSheetMusic"
+            },
+            "GenerateSheetMusic": {
+              "Type": "Task",
+              "Resource": "${SheetMusicGeneratorFunction.Arn}",
+              "End": true
+            }
+          }
+        }
+
+Outputs:
+  AudioBucketName:
+    Description: S3 bucket for audio files
+    Value: !Ref AudioBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AudioBucket'
+  
+  TranscriptionJobsTableName:
+    Description: DynamoDB table for transcription jobs
+    Value: !Ref TranscriptionJobsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-JobsTable'
+  
+  StateMachineArn:
+    Description: Step Functions state machine ARN
+    Value: !Ref TranscriptionStateMachine
+    Export:
+      Name: !Sub '${AWS::StackName}-StateMachine'
+  
+  LambdaExecutionRoleArn:
+    Description: IAM role for Lambda functions
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaRole'
