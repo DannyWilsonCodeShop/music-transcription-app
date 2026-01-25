@@ -31,7 +31,6 @@ export default function SheetMusicViewer({
 }: SheetMusicViewerProps) {
   const notationRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLDivElement>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [abcNotation, setAbcNotation] = useState('');
   const synthControlRef = useRef<any>(null);
 

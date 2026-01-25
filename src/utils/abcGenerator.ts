@@ -135,7 +135,6 @@ export function generateABCFromMIDI(
   // Group notes by time
   const sortedNotes = [...midiNotes].sort((a, b) => a.start - b.start);
   
-  let currentTime = 0;
   let measureContent: string[] = [];
   
   for (const note of sortedNotes) {
