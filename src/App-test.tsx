@@ -1,5 +1,16 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { Amplify } from 'aws-amplify';
+import { generateClient } from 'aws-amplify/data';
+import type { Schema } from '../amplify/data/resource';
+import outputs from '../amplify_outputs.json';
 import SheetMusicModal from './components/SheetMusicModal';
+import UploadInterface from './components/UploadInterface';
+import TranscriptionProgress from './components/TranscriptionProgress';
+
+// Configure Amplify
+Amplify.configure(outputs);
+
+const client = generateClient<Schema>();
 
 // Mock chord data for testing
 const mockChordData = {
@@ -21,6 +32,37 @@ const mockChordData = {
 function App() {
   const [showSheetMusic, setShowSheetMusic] = useState(false);
   const [selectedSong, setSelectedSong] = useState<any>(null);
+  const [activeJobs, setActiveJobs] = useState<string[]>([]);
+  const [completedJobs, setCompletedJobs] = useState<any[]>([]);
+  const [showUpload, setShowUpload] = useState(true);
+
+  // Load completed transcriptions on mount
+  useEffect(() => {
+    loadCompletedTranscriptions();
+  }, []);
+
+  const loadCompletedTranscriptions = async () => {
+    try {
+      const { data } = await client.models.TranscriptionJob.list({
+        filter: { status: { eq: 'completed' } }
+      });
+      if (data) {
+        setCompletedJobs(data);
+      }
+    } catch (error) {
+      console.error('Error loading transcriptions:', error);
+    }
+  };
+
+  const handleUploadStart = (jobId: string) => {
+    setActiveJobs(prev => [...prev, jobId]);
+    setShowUpload(false);
+  };
+
+  const handleJobComplete = (job: any) => {
+    setActiveJobs(prev => prev.filter(id => id !== job.id));
+    setCompletedJobs(prev => [job, ...prev]);
+  };
 
   const handleViewSheetMusic = (song: any) => {
     setSelectedSong(song);
@@ -135,27 +177,41 @@ function App() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               
               {/* MIDDLE COLUMN - Main Content (2/3 width) */}
-              <div className="lg:col-span-2 flex flex-col">
+              <div className="lg:col-span-2 flex flex-col space-y-6">
                 
-                {/* Top Action Bar */}
-                <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border border-blue-200 p-4 mb-6">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-bold">
-                      🎵
+                {/* Upload Interface */}
+                {showUpload ? (
+                  <UploadInterface onUploadStart={handleUploadStart} />
+                ) : (
+                  <button
+                    onClick={() => setShowUpload(true)}
+                    className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border border-blue-200 p-4 hover:from-blue-100 hover:to-purple-100 transition-all"
+                  >
+                    <div className="flex items-center justify-center space-x-3">
+                      <span className="text-2xl">➕</span>
+                      <span className="font-semibold text-gray-900">Upload New Song</span>
                     </div>
-                    <button className="flex-1 px-4 py-3 bg-gradient-to-r from-white to-blue-50 rounded-full text-left text-sm border-2 border-blue-200 hover:from-blue-50 hover:to-purple-50 transition-all">
-                      ✨ What song are you learning right now?
-                    </button>
-                    <label className="flex items-center space-x-2 text-sm bg-white px-3 py-2 rounded-full border border-blue-200 cursor-pointer hover:bg-blue-50 transition-colors">
-                      <input type="checkbox" className="w-4 h-4" />
-                      <span className="font-medium text-blue-700 flex items-center">
-                        🔥 Explore
-                      </span>
-                    </label>
-                  </div>
-                </div>
+                  </button>
+                )}
 
-                {/* Main Content Container */}
+                {/* Active Jobs Progress */}
+                {activeJobs.length > 0 && (
+                  <div className="space-y-4">
+                    <h3 className="text-lg font-bold text-gray-900 flex items-center">
+                      <span className="text-2xl mr-2">⚙️</span>
+                      Processing ({activeJobs.length})
+                    </h3>
+                    {activeJobs.map(jobId => (
+                      <TranscriptionProgress
+                        key={jobId}
+                        jobId={jobId}
+                        onComplete={handleJobComplete}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Completed Transcriptions */}
                 <div className="bg-gradient-to-br from-white to-blue-50/30 rounded-xl shadow-lg border border-blue-200">
                   <div className="p-6 border-b border-blue-200 bg-gradient-to-r from-blue-50 to-purple-50">
                     <h3 className="text-lg font-bold text-gray-900 flex items-center">
@@ -164,29 +220,73 @@ function App() {
                       </span>
                       Your Transcriptions
                     </h3>
-                    <p className="text-sm text-gray-600 ml-11">Track your music transcription progress</p>
+                    <p className="text-sm text-gray-600 ml-11">
+                      {completedJobs.length > 0 
+                        ? `${completedJobs.length} song${completedJobs.length > 1 ? 's' : ''} transcribed`
+                        : 'Track your music transcription progress'
+                      }
+                    </p>
                   </div>
 
                   <div className="max-h-[600px] overflow-y-auto">
-                    <div className="p-8 text-center">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        🎵
+                    {completedJobs.length === 0 ? (
+                      <div className="p-8 text-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                          🎵
+                        </div>
+                        <h3 className="text-base font-semibold text-gray-900 mb-2">No Transcriptions Yet</h3>
+                        <p className="text-sm text-gray-600 mb-4">Upload an audio file or YouTube link to get started.</p>
+                        
+                        {/* Demo Button */}
+                        <button
+                          onClick={() => handleViewSheetMusic({
+                            title: 'Demo Song - I-V-vi-IV Progression',
+                            artist: 'ChordScout Demo',
+                            chordData: mockChordData
+                          })}
+                          className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:shadow-md transition-all text-sm font-medium"
+                        >
+                          🎼 View Demo Sheet Music
+                        </button>
                       </div>
-                      <h3 className="text-base font-semibold text-gray-900 mb-2">No Transcriptions Yet</h3>
-                      <p className="text-sm text-gray-600 mb-4">Upload an audio file or YouTube link to get started.</p>
-                      
-                      {/* Demo Button */}
-                      <button
-                        onClick={() => handleViewSheetMusic({
-                          title: 'Demo Song - I-V-vi-IV Progression',
-                          artist: 'ChordScout Demo',
-                          chordData: mockChordData
-                        })}
-                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:shadow-md transition-all text-sm font-medium"
-                      >
-                        🎼 View Demo Sheet Music
-                      </button>
-                    </div>
+                    ) : (
+                      <div className="p-4 space-y-3">
+                        {completedJobs.map((job) => (
+                          <div
+                            key={job.id}
+                            className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-all cursor-pointer"
+                            onClick={() => handleViewSheetMusic({
+                              title: job.title,
+                              artist: job.artist,
+                              chordData: job.chords
+                            })}
+                          >
+                            <div className="flex items-start justify-between">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900">{job.title}</h4>
+                                <p className="text-sm text-gray-600">{job.artist}</p>
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full font-medium">
+                                    ✓ Completed
+                                  </span>
+                                  {job.chords?.key && (
+                                    <span className="px-2 py-1 bg-secondary text-white text-xs rounded-full font-medium">
+                                      Key: {job.chords.key}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <button className="px-3 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:shadow-md transition-all text-sm font-medium">
+                                View 🎼
+                              </button>
+                            </div>
+                            <div className="mt-3 pt-3 border-t border-gray-200 text-xs text-gray-500">
+                              {new Date(job.createdAt).toLocaleDateString()} • {new Date(job.createdAt).toLocaleTimeString()}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
