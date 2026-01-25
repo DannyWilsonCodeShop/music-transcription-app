@@ -165,8 +165,6 @@ export function generateABCFromMIDI(
     // Add note with duration
     const durationEighths = Math.max(1, Math.round(note.duration * 2));
     measureContent.push(noteName + (durationEighths > 1 ? durationEighths : ''));
-    
-    currentTime = note.start + note.duration;
   }
   
   abc += `|${measureContent.join(' ')}|]\n`;
