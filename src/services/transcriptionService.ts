@@ -1,21 +1,30 @@
 import { SFNClient, StartExecutionCommand, DescribeExecutionCommand } from '@aws-sdk/client-sfn';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
+import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
 
 // AWS Configuration
 const AWS_REGION = 'us-east-1';
 const STATE_MACHINE_ARN = 'arn:aws:states:us-east-1:090130568474:stateMachine:ChordScout-Transcription-dev';
 const JOBS_TABLE_NAME = 'ChordScout-TranscriptionJobs-dev';
+const IDENTITY_POOL_ID = 'us-east-1:781b986b-cc62-418d-8b14-70292d1f773e';
 
-// Initialize AWS clients
+// Initialize AWS clients with Cognito credentials
+const credentials = fromCognitoIdentityPool({
+  clientConfig: { region: AWS_REGION },
+  identityPoolId: IDENTITY_POOL_ID,
+});
+
 const sfnClient = new SFNClient({ 
   region: AWS_REGION,
-  // For now, we'll use the default credentials
-  // Later, we'll add Cognito authentication
+  credentials,
 });
 
 const dynamoClient = DynamoDBDocumentClient.from(
-  new DynamoDBClient({ region: AWS_REGION })
+  new DynamoDBClient({ 
+    region: AWS_REGION,
+    credentials,
+  })
 );
 
 export interface TranscriptionJob {
