@@ -8,7 +8,7 @@
         "states:DescribeExecution",
         "states:ListExecutions"
       ],
-      "Resource": "arn:aws:states:us-east-1:090130568474:stateMachine:ChordScout-Transcription-dev*"
+      "Resource": "*"
     },
     {
       "Effect": "Allow",
@@ -16,10 +16,7 @@
         "dynamodb:GetItem",
         "dynamodb:Query"
       ],
-      "Resource": [
-        "arn:aws:dynamodb:us-east-1:090130568474:table/ChordScout-TranscriptionJobs-dev",
-        "arn:aws:dynamodb:us-east-1:090130568474:table/ChordScout-TranscriptionJobs-dev/index/*"
-      ]
+      "Resource": "*"
     }
   ]
 }

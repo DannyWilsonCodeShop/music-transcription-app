@@ -50,22 +50,28 @@ export async function startTranscription(
   const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
   
   try {
+    const input = {
+      jobId,
+      youtubeUrl,
+      title,
+      userId: 'anonymous', // TODO: Replace with actual user ID from Cognito
+    };
+    
+    console.log('Starting transcription with input:', input);
+    console.log('State Machine ARN:', STATE_MACHINE_ARN);
+    
     const command = new StartExecutionCommand({
       stateMachineArn: STATE_MACHINE_ARN,
       name: jobId,
-      input: JSON.stringify({
-        jobId,
-        youtubeUrl,
-        title,
-        userId: 'anonymous', // TODO: Replace with actual user ID from Cognito
-      }),
+      input: JSON.stringify(input),
     });
     
-    await sfnClient.send(command);
-    console.log('Transcription started:', jobId);
+    const response = await sfnClient.send(command);
+    console.log('Transcription started successfully:', response);
     return jobId;
   } catch (error) {
     console.error('Error starting transcription:', error);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     throw new Error('Failed to start transcription. Please try again.');
   }
 }
