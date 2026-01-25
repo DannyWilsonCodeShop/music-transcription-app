@@ -31,11 +31,11 @@ Resources:
         Rules:
           - Id: DeleteOldAudio
             Status: Enabled
-            ExpirationInDays: 30
+            ExpirationInDays: 90
           - Id: TransitionToIA
             Status: Enabled
             Transitions:
-              - TransitionInDays: 7
+              - TransitionInDays: 30
                 StorageClass: STANDARD_IA
       CorsConfiguration:
         CorsRules:
