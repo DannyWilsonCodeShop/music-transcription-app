@@ -1,6 +1,35 @@
+import { useState } from 'react';
+import SheetMusicModal from './components/SheetMusicModal';
+
+// Mock chord data for testing
+const mockChordData = {
+  key: 'C',
+  mode: 'major',
+  chords: [
+    { name: 'C', timestamp: 0, duration: 4, confidence: 0.92 },
+    { name: 'Am', timestamp: 4, duration: 4, confidence: 0.88 },
+    { name: 'F', timestamp: 8, duration: 4, confidence: 0.91 },
+    { name: 'G', timestamp: 12, duration: 4, confidence: 0.94 },
+    { name: 'C', timestamp: 16, duration: 4, confidence: 0.90 },
+    { name: 'Em', timestamp: 20, duration: 4, confidence: 0.85 },
+    { name: 'Am', timestamp: 24, duration: 4, confidence: 0.89 },
+    { name: 'G', timestamp: 28, duration: 4, confidence: 0.93 },
+  ],
+  chordProgressionText: 'Key: C major\n\nC - Am - F - G\nC - Em - Am - G'
+};
+
 function App() {
+  const [showSheetMusic, setShowSheetMusic] = useState(false);
+  const [selectedSong, setSelectedSong] = useState<any>(null);
+
+  const handleViewSheetMusic = (song: any) => {
+    setSelectedSong(song);
+    setShowSheetMusic(true);
+  };
+
   return (
-    <div className="min-h-screen bg-background flex">
+    <>
+      <div className="min-h-screen bg-background flex">
       
       {/* LEFT SIDEBAR - Full Height Navigation */}
       <aside className="w-64 bg-primary text-white flex-shrink-0 flex flex-col">
@@ -144,7 +173,19 @@ function App() {
                         🎵
                       </div>
                       <h3 className="text-base font-semibold text-gray-900 mb-2">No Transcriptions Yet</h3>
-                      <p className="text-sm text-gray-600">Upload an audio file or YouTube link to get started.</p>
+                      <p className="text-sm text-gray-600 mb-4">Upload an audio file or YouTube link to get started.</p>
+                      
+                      {/* Demo Button */}
+                      <button
+                        onClick={() => handleViewSheetMusic({
+                          title: 'Demo Song - I-V-vi-IV Progression',
+                          artist: 'ChordScout Demo',
+                          chordData: mockChordData
+                        })}
+                        className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:shadow-md transition-all text-sm font-medium"
+                      >
+                        🎼 View Demo Sheet Music
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -245,6 +286,18 @@ function App() {
         </div>
       </div>
     </div>
+
+    {/* Sheet Music Modal */}
+    {showSheetMusic && selectedSong && (
+      <SheetMusicModal
+        isOpen={showSheetMusic}
+        onClose={() => setShowSheetMusic(false)}
+        chordData={selectedSong.chordData}
+        title={selectedSong.title}
+        artist={selectedSong.artist}
+      />
+    )}
+    </>
   );
 }
 
