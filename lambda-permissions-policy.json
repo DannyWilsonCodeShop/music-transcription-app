@@ -1,0 +1,24 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "states:StartExecution",
+        "states:DescribeExecution"
+      ],
+      "Resource": "arn:aws:states:us-east-1:090130568474:stateMachine:ChordScout-Transcription-dev"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:Query"
+      ],
+      "Resource": [
+        "arn:aws:dynamodb:us-east-1:090130568474:table/ChordScout-TranscriptionJobs-dev",
+        "arn:aws:dynamodb:us-east-1:090130568474:table/ChordScout-TranscriptionJobs-dev/index/*"
+      ]
+    }
+  ]
+}

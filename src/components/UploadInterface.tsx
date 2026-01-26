@@ -64,14 +64,14 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
   };
 
   return (
-    <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border border-blue-200 p-6">
+    <div className="bg-white rounded-xl shadow-lg border border-neutral/30 p-6">
       {/* Header */}
       <div className="mb-6">
-        <h3 className="text-xl font-bold text-gray-900 flex items-center">
+        <h3 className="text-xl font-bold text-primary flex items-center">
           <span className="text-2xl mr-3">🎵</span>
           Upload Music for Transcription
         </h3>
-        <p className="text-sm text-gray-600 mt-1">
+        <p className="text-sm text-neutral mt-1">
           Upload an audio file or paste a YouTube link to get lyrics, chords, and sheet music
         </p>
       </div>
@@ -82,8 +82,8 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           onClick={() => setActiveTab('youtube')}
           className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
             activeTab === 'youtube'
-              ? 'bg-gradient-to-r from-red-500 to-red-600 text-white shadow-md'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+              ? 'bg-secondary text-white shadow-md'
+              : 'bg-white text-neutral hover:bg-background border border-neutral/30'
           }`}
         >
           <span className="text-lg">▶️</span>
@@ -93,8 +93,8 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           onClick={() => setActiveTab('file')}
           className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
             activeTab === 'file'
-              ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-md'
-              : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+              ? 'bg-tertiary text-white shadow-md'
+              : 'bg-white text-neutral hover:bg-background border border-neutral/30'
           }`}
         >
           <span className="text-lg">📁</span>
@@ -106,7 +106,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       {activeTab === 'youtube' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-primary mb-2">
               YouTube URL *
             </label>
             <input
@@ -114,7 +114,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
               placeholder="https://www.youtube.com/watch?v=..."
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-300 text-sm bg-white"
+              className="w-full px-4 py-3 border-2 border-neutral/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary text-sm bg-white"
             />
             {youtubeUrl && !isYouTubeUrl(youtubeUrl) && (
               <p className="text-xs text-red-600 mt-1">⚠️ Please enter a valid YouTube URL</p>
@@ -123,7 +123,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-primary mb-2">
                 Song Title (optional)
               </label>
               <input
@@ -131,11 +131,11 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
                 placeholder="Enter song title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-300 text-sm bg-white"
+                className="w-full px-4 py-3 border-2 border-neutral/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary text-sm bg-white"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-primary mb-2">
                 Artist (optional)
               </label>
               <input
@@ -143,7 +143,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
                 placeholder="Enter artist name"
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-300 text-sm bg-white"
+                className="w-full px-4 py-3 border-2 border-neutral/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary text-sm bg-white"
               />
             </div>
           </div>
@@ -151,7 +151,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           <button
             onClick={handleYouTubeSubmit}
             disabled={!youtubeUrl || !isYouTubeUrl(youtubeUrl) || uploading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
+            className="w-full py-3 px-6 bg-secondary text-white rounded-lg hover:bg-tertiary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
           >
             {uploading ? (
               <>
@@ -172,7 +172,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       {activeTab === 'file' && (
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-primary mb-2">
               Audio File *
             </label>
             <div
@@ -218,7 +218,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
                 ) : (
                   <div>
                     <div className="text-5xl mb-3">📤</div>
-                    <div className="font-semibold text-gray-700 text-base mb-2">
+                    <div className="font-semibold text-primary text-base mb-2">
                       Drop audio file here or click to browse
                     </div>
                     <div className="text-sm text-gray-500">
@@ -235,7 +235,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-primary mb-2">
                 Song Title (optional)
               </label>
               <input
@@ -243,11 +243,11 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
                 placeholder="Enter song title"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-300 text-sm bg-white"
+                className="w-full px-4 py-3 border-2 border-neutral/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary text-sm bg-white"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-primary mb-2">
                 Artist (optional)
               </label>
               <input
@@ -255,7 +255,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
                 placeholder="Enter artist name"
                 value={artist}
                 onChange={(e) => setArtist(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-purple-300 text-sm bg-white"
+                className="w-full px-4 py-3 border-2 border-neutral/30 rounded-lg focus:outline-none focus:ring-2 focus:ring-secondary focus:border-secondary text-sm bg-white"
               />
             </div>
           </div>
@@ -263,7 +263,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           <button
             onClick={handleFileUpload}
             disabled={!file || uploading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-lg hover:from-blue-600 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
+            className="w-full py-3 px-6 bg-tertiary text-white rounded-lg hover:bg-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
           >
             {uploading ? (
               <>
@@ -291,27 +291,27 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       )}
 
       {/* Info Box */}
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <h4 className="text-sm font-semibold text-gray-900 mb-2">What you'll get:</h4>
-        <ul className="text-sm text-gray-700 space-y-1">
+      <div className="mt-6 p-4 bg-background border border-neutral/30 rounded-lg">
+        <h4 className="text-sm font-semibold text-primary mb-2">What you'll get:</h4>
+        <ul className="text-sm text-neutral space-y-1">
           <li className="flex items-center gap-2">
-            <span className="text-green-600">✓</span>
+            <span className="text-secondary">✓</span>
             Complete lyrics transcription
           </li>
           <li className="flex items-center gap-2">
-            <span className="text-green-600">✓</span>
+            <span className="text-secondary">✓</span>
             Chord progression with timestamps
           </li>
           <li className="flex items-center gap-2">
-            <span className="text-green-600">✓</span>
+            <span className="text-secondary">✓</span>
             Interactive sheet music with playback
           </li>
           <li className="flex items-center gap-2">
-            <span className="text-green-600">✓</span>
+            <span className="text-secondary">✓</span>
             Downloadable ABC notation and MIDI files
           </li>
         </ul>
-        <p className="text-xs text-gray-500 mt-3">
+        <p className="text-xs text-neutral mt-3">
           ⏱️ Processing time: 2-5 minutes • 🎯 Accuracy: 85%+
         </p>
       </div>
