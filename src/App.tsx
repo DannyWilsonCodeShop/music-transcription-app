@@ -23,15 +23,15 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-white">
       <DashboardHeader userName={userName} />
 
       <div className="max-w-[1600px] mx-auto px-4 py-4">
         <div className="pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
             
-            {/* LEFT COLUMN - Main Content (75% width) */}
-            <div className="lg:col-span-3 flex flex-col space-y-6">
+            {/* LEFT COLUMN - Main Content (75% width) - Light grey background */}
+            <div className="lg:col-span-3 flex flex-col space-y-6 bg-background rounded-xl p-6">
               
               {/* Upload Interface */}
               <UploadInterface onUploadStart={handleUploadStart} />
@@ -49,13 +49,16 @@ function App() {
                 <div className="space-y-4">
                   <h2 className="text-xl font-bold text-primary">Recent Transcriptions</h2>
                   {completedJobs.map(job => (
-                    <div key={job.id} className="bg-white rounded-xl shadow-sm border border-neutral/30 p-6">
+                    <div key={job.id} className="bg-white rounded-xl shadow-sm border border-neutral/20 p-6 relative overflow-hidden">
+                      {/* Gradient accent */}
+                      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-secondary to-tertiary"></div>
+                      
                       <div className="flex items-start justify-between mb-4">
                         <div>
                           <h3 className="text-lg font-bold text-primary">{job.title}</h3>
                           <p className="text-sm text-neutral">{new Date(job.createdAt).toLocaleString()}</p>
                         </div>
-                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-secondary/10 text-secondary border border-secondary/30">
+                        <span className="px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-secondary/10 to-tertiary/10 text-secondary border border-secondary/30">
                           ✅ COMPLETED
                         </span>
                       </div>
@@ -80,7 +83,7 @@ function App() {
                               {job.chords.chords?.map((chord: any, idx: number) => (
                                 <span 
                                   key={idx}
-                                  className="px-3 py-1 bg-secondary/10 text-secondary rounded-full text-sm font-medium"
+                                  className="px-3 py-1 bg-gradient-to-r from-secondary/10 to-tertiary/10 text-secondary rounded-full text-sm font-medium"
                                 >
                                   {chord.name}
                                 </span>
@@ -96,7 +99,7 @@ function App() {
                             href={job.sheetMusicUrl}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-tertiary text-white rounded-lg hover:bg-secondary transition-colors text-sm font-medium"
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-tertiary to-secondary text-white rounded-lg hover:from-secondary hover:to-tertiary transition-colors text-sm font-medium shadow-md"
                           >
                             <span>🎼</span>
                             View Sheet Music
@@ -113,10 +116,11 @@ function App() {
             <div className="space-y-4 h-[calc(100vh-200px)] overflow-y-auto">
               
               {/* Widget 1 - Ripped Songs */}
-              <div className="bg-white rounded-xl shadow-sm border border-neutral/30 p-4">
+              <div className="bg-white rounded-xl shadow-sm border border-neutral/20 p-4 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-secondary to-tertiary"></div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-base font-bold text-primary">🎵 Ripped Songs</h3>
-                  <button className="text-xs text-tertiary hover:text-secondary font-medium">View All</button>
+                  <button className="text-xs text-tertiary hover:text-secondary font-medium transition-colors">View All</button>
                 </div>
                 <div className="space-y-3 max-h-40 overflow-y-auto">
                   {[
@@ -146,10 +150,11 @@ function App() {
               </div>
 
               {/* Widget 2 - Backing Tracks */}
-              <div className="bg-white rounded-xl shadow-sm border border-neutral/30 p-4">
+              <div className="bg-white rounded-xl shadow-sm border border-neutral/20 p-4 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-tertiary to-secondary"></div>
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-base font-bold text-primary">🎼 Backing Tracks</h3>
-                  <button className="text-xs text-tertiary hover:text-secondary font-medium">View All</button>
+                  <button className="text-xs text-tertiary hover:text-secondary font-medium transition-colors">View All</button>
                 </div>
                 <div className="space-y-3 max-h-40 overflow-y-auto">
                   {[
@@ -182,7 +187,8 @@ function App() {
               </div>
 
               {/* Widget 3 - Study Modules */}
-              <div className="bg-white rounded-xl shadow-sm border border-neutral/30 p-4">
+              <div className="bg-white rounded-xl shadow-sm border border-neutral/20 p-4 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-secondary via-tertiary to-secondary"></div>
                 <h3 className="text-base font-bold text-primary mb-4">📚 Study Modules</h3>
                 <div className="space-y-3 max-h-40 overflow-y-auto">
                   {[
@@ -200,9 +206,9 @@ function App() {
                         </div>
                         <span className="text-xs font-medium text-tertiary">{module.progress}%</span>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div className="w-full bg-background rounded-full h-2">
                         <div 
-                          className="bg-tertiary h-2 rounded-full transition-all" 
+                          className="bg-gradient-to-r from-secondary to-tertiary h-2 rounded-full transition-all" 
                           style={{ width: `${module.progress}%` }}
                         ></div>
                       </div>

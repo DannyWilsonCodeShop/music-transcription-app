@@ -64,7 +64,10 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-neutral/30 p-6">
+    <div className="bg-white rounded-xl shadow-lg border border-neutral/20 p-6 relative overflow-hidden">
+      {/* Gradient accent on top */}
+      <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-secondary via-tertiary to-secondary"></div>
+      
       {/* Header */}
       <div className="mb-6">
         <h3 className="text-xl font-bold text-primary flex items-center">
@@ -82,7 +85,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           onClick={() => setActiveTab('youtube')}
           className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
             activeTab === 'youtube'
-              ? 'bg-secondary text-white shadow-md'
+              ? 'bg-gradient-to-r from-secondary to-tertiary text-white shadow-md'
               : 'bg-white text-neutral hover:bg-background border border-neutral/30'
           }`}
         >
@@ -93,7 +96,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           onClick={() => setActiveTab('file')}
           className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
             activeTab === 'file'
-              ? 'bg-tertiary text-white shadow-md'
+              ? 'bg-gradient-to-r from-tertiary to-secondary text-white shadow-md'
               : 'bg-white text-neutral hover:bg-background border border-neutral/30'
           }`}
         >
@@ -151,7 +154,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           <button
             onClick={handleYouTubeSubmit}
             disabled={!youtubeUrl || !isYouTubeUrl(youtubeUrl) || uploading}
-            className="w-full py-3 px-6 bg-secondary text-white rounded-lg hover:bg-tertiary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
+            className="w-full py-3 px-6 bg-gradient-to-r from-secondary to-tertiary text-white rounded-lg hover:from-tertiary hover:to-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
           >
             {uploading ? (
               <>
@@ -263,7 +266,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           <button
             onClick={handleFileUpload}
             disabled={!file || uploading}
-            className="w-full py-3 px-6 bg-tertiary text-white rounded-lg hover:bg-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
+            className="w-full py-3 px-6 bg-gradient-to-r from-tertiary to-secondary text-white rounded-lg hover:from-secondary hover:to-tertiary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
           >
             {uploading ? (
               <>
