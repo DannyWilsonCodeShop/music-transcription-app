@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { mockGetJobStatus, TranscriptionJob } from '../services/transcriptionService';
+import { getJobStatus, TranscriptionJob } from '../services/transcriptionService';
 
 interface TranscriptionProgressProps {
   jobId: string;
@@ -16,8 +16,7 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
 
     const fetchJobStatus = async () => {
       try {
-        // TEMPORARY: Using mock function until API proxy is set up
-        const data = await mockGetJobStatus(jobId);
+        const data = await getJobStatus(jobId);
         
         if (data) {
           setJob(data);

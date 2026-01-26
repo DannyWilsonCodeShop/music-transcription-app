@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { mockStartTranscription } from '../services/transcriptionService';
+import { startTranscription } from '../services/transcriptionService';
 
 interface UploadInterfaceProps {
   onUploadStart: (jobId: string) => void;
@@ -39,9 +39,8 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
     setError('');
     
     try {
-      // TEMPORARY: Using mock function until API proxy is set up
-      // TODO: Replace with real startTranscription once Cognito issues are resolved
-      const jobId = await mockStartTranscription(
+      // Start transcription via Step Functions
+      const jobId = await startTranscription(
         youtubeUrl,
         title || 'YouTube Video'
       );
