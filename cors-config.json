@@ -1,0 +1,6 @@
+{
+  "AllowOrigins": ["*"],
+  "AllowMethods": ["*"],
+  "AllowHeaders": ["content-type"],
+  "MaxAge": 86400
+}

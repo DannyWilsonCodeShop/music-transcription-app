@@ -1,31 +1,5 @@
-import { SFNClient, StartExecutionCommand, DescribeExecutionCommand } from '@aws-sdk/client-sfn';
-import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
-import { fromCognitoIdentityPool } from '@aws-sdk/credential-providers';
-
-// AWS Configuration
-const AWS_REGION = 'us-east-1';
-const STATE_MACHINE_ARN = 'arn:aws:states:us-east-1:090130568474:stateMachine:ChordScout-Transcription-dev';
-const JOBS_TABLE_NAME = 'ChordScout-TranscriptionJobs-dev';
-const IDENTITY_POOL_ID = 'us-east-1:d52c4b11-5f3f-449c-88c2-ae6245d474a0';
-
-// Initialize AWS clients with Cognito credentials
-const credentials = fromCognitoIdentityPool({
-  clientConfig: { region: AWS_REGION },
-  identityPoolId: IDENTITY_POOL_ID,
-});
-
-const sfnClient = new SFNClient({ 
-  region: AWS_REGION,
-  credentials,
-});
-
-const dynamoClient = DynamoDBDocumentClient.from(
-  new DynamoDBClient({ 
-    region: AWS_REGION,
-    credentials,
-  })
-);
+// API Configuration
+const API_BASE_URL = 'https://jycc6ovleq7itwnmv4erdjpn2a0mdeyv.lambda-url.us-east-1.on.aws';
 
 export interface TranscriptionJob {
   id: string;
@@ -41,154 +15,67 @@ export interface TranscriptionJob {
 }
 
 /**
- * Start a new transcription job
+ * Start a new transcription job via API proxy
  */
 export async function startTranscription(
   youtubeUrl: string,
   title: string
 ): Promise<string> {
-  const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  
   try {
-    const input = {
-      jobId,
-      youtubeUrl,
-      title,
-      userId: 'anonymous', // TODO: Replace with actual user ID from Cognito
-    };
-    
-    console.log('Starting transcription with input:', input);
-    console.log('State Machine ARN:', STATE_MACHINE_ARN);
-    
-    const command = new StartExecutionCommand({
-      stateMachineArn: STATE_MACHINE_ARN,
-      name: jobId,
-      input: JSON.stringify(input),
+    const response = await fetch(`${API_BASE_URL}/transcription/start`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        youtubeUrl,
+        title,
+      }),
     });
-    
-    const response = await sfnClient.send(command);
-    console.log('Transcription started successfully:', response);
-    return jobId;
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to start transcription');
+    }
+
+    const data = await response.json();
+    console.log('Transcription started successfully:', data);
+    return data.jobId;
   } catch (error) {
     console.error('Error starting transcription:', error);
-    console.error('Error details:', JSON.stringify(error, null, 2));
     throw new Error('Failed to start transcription. Please try again.');
   }
 }
 
 /**
- * Get the status of a transcription job
+ * Get the status of a transcription job via API proxy
  */
 export async function getJobStatus(jobId: string): Promise<TranscriptionJob | null> {
   try {
-    const command = new GetCommand({
-      TableName: JOBS_TABLE_NAME,
-      Key: { id: jobId },
+    const response = await fetch(`${API_BASE_URL}/transcription/status/${jobId}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
     });
-    
-    const response = await dynamoClient.send(command);
-    
-    if (!response.Item) {
+
+    if (response.status === 404) {
       return null;
     }
-    
-    return response.Item as TranscriptionJob;
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to get job status');
+    }
+
+    const data = await response.json();
+    return data as TranscriptionJob;
   } catch (error) {
     console.error('Error getting job status:', error);
     return null;
   }
 }
 
-/**
- * Get execution status from Step Functions
- */
-export async function getExecutionStatus(executionArn: string) {
-  try {
-    const command = new DescribeExecutionCommand({
-      executionArn,
-    });
-    
-    const response = await sfnClient.send(command);
-    return response;
-  } catch (error) {
-    console.error('Error getting execution status:', error);
-    return null;
-  }
-}
-
-/**
- * Poll for job completion
- */
-export async function pollJobStatus(
-  jobId: string,
-  onUpdate: (job: TranscriptionJob) => void,
-  maxAttempts: number = 60,
-  intervalMs: number = 5000
-): Promise<TranscriptionJob> {
-  return new Promise((resolve, reject) => {
-    let attempts = 0;
-    
-    const poll = async () => {
-      attempts++;
-      
-      const job = await getJobStatus(jobId);
-      
-      if (!job) {
-        if (attempts >= maxAttempts) {
-          reject(new Error('Job not found'));
-          return;
-        }
-        setTimeout(poll, intervalMs);
-        return;
-      }
-      
-      onUpdate(job);
-      
-      if (job.status === 'COMPLETED') {
-        resolve(job);
-        return;
-      }
-      
-      if (job.status === 'FAILED') {
-        reject(new Error(job.error || 'Transcription failed'));
-        return;
-      }
-      
-      if (attempts >= maxAttempts) {
-        reject(new Error('Transcription timeout'));
-        return;
-      }
-      
-      setTimeout(poll, intervalMs);
-    };
-    
-    poll();
-  });
-}
-
-/**
- * Get user's transcription history
- */
-export async function getUserTranscriptions(userId: string): Promise<TranscriptionJob[]> {
-  try {
-    const command = new QueryCommand({
-      TableName: JOBS_TABLE_NAME,
-      IndexName: 'UserIdIndex',
-      KeyConditionExpression: 'userId = :userId',
-      ExpressionAttributeValues: {
-        ':userId': userId,
-      },
-      ScanIndexForward: false, // Most recent first
-      Limit: 50,
-    });
-    
-    const response = await dynamoClient.send(command);
-    return (response.Items || []) as TranscriptionJob[];
-  } catch (error) {
-    console.error('Error getting user transcriptions:', error);
-    return [];
-  }
-}
 
 /**
  * Mock function for testing without AWS credentials
