@@ -75,7 +75,8 @@ def lambda_handler(event, context):
                 'statusCode': 200,
                 'body': {
                     'bucket': bucket,
-                    'key': output_key
+                    'key': output_key,
+                    'success': True
                 }
             }
         else:
@@ -90,6 +91,8 @@ def lambda_handler(event, context):
                 'python3', '-m', 'yt_dlp',
                 '-x',
                 '--audio-format', 'mp3',
+                '--quiet',  # Reduce output verbosity
+                '--no-warnings',  # Suppress warnings
                 '-o', output_path,
             ]
             
@@ -103,7 +106,9 @@ def lambda_handler(event, context):
             
             # Run yt-dlp
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print(f"yt-dlp output: {result.stdout}")
+            # Only log first 500 chars to avoid large outputs
+            stdout_preview = result.stdout[:500] + "..." if len(result.stdout) > 500 else result.stdout
+            print(f"yt-dlp completed successfully. Output preview: {stdout_preview}")
             
             # Upload to S3
             s3.upload_file(output_path, bucket, output_key)
@@ -118,18 +123,21 @@ def lambda_handler(event, context):
                 'statusCode': 200,
                 'body': {
                     'bucket': bucket,
-                    'key': output_key
+                    'key': output_key,
+                    'success': True
                 }
             }
     except subprocess.CalledProcessError as e:
-        print(f"Process error: {e.stderr}")
+        error_msg = str(e.stderr)[:200] + "..." if len(str(e.stderr)) > 200 else str(e.stderr)
+        print(f"Process error: {error_msg}")
         return {
             'statusCode': 500,
-            'body': {'error': f'Processing failed: {e.stderr}'}
+            'body': {'error': f'Processing failed: {error_msg}'}
         }
     except Exception as e:
-        print(f"Error: {str(e)}")
+        error_msg = str(e)[:200] + "..." if len(str(e)) > 200 else str(e)
+        print(f"Error: {error_msg}")
         return {
             'statusCode': 500,
-            'body': {'error': str(e)}
+            'body': {'error': error_msg}
         }

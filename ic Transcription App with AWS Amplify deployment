@@ -1,0 +1,62 @@
+[33m1760db5[m Initial commit: Music Transcription App with AWS Amplify deployment
+[33mf348613[m Add GitHub repository creation guide
+[33m125b5cd[m Fix: Update amplify.yml for frontend-only deployment and add troubleshooting guide
+[33m003a250[m Initial commit - Music Transcription App ready for production
+[33mdce0edc[m Merge: Updated to Amplify Gen 2 with React/Vite frontend
+[33m6fb044b[m Fix S3 upload permissions - add public access and guest access level
+[33m51bfc05[m  Modern UX redesign with brand colors and improved interactions
+[33m239d950[m  Fix accessibility and API deprecation issues
+[33mcee675d[m Fix uploadData API deprecation and add comprehensive feature placeholders
+[33m20a199c[m Redesign to single-page layout with all features visible
+[33me80036d[m Transform UI into 2-column dashboard with social feed, video cards, and sidebar widgets
+[33mf55ea19[m Update left column with upload, transcription options, and scrollable transcriptions list
+[33m36615dd[m Add comprehensive dashboard specification following Class-cast.com template
+[33m36c0d03[m Refactor components to match exact JSX structure from student dashboard reference
+[33madaea82[m Add 3-column dashboard layout with full-height sidebar, custom colors, and image-rich widgets
+[33m3ede09f[m Add ChordScout logo display and improve sidebar layout with scrollable sections
+[33m0c43335[m Fix build error: Remove unused AcademicCapIcon import
+[33mbdfb431[m Update project with latest changes and clean build
+[33md223655[m Fix TypeScript error in App.tsx onLoad handler
+[33m6f59687[m Implement Basic Pitch ML chord detection system
+[33m900a093[m Add abcjs sheet music generation with playback
+[33md13eb28[m Implement complete end-to-end transcription pipeline
+[33mfd57f4a[m Add upload interface and progress monitoring to dashboard
+[33mb1492ed[m Fix Lambda function dependencies and move user profile to header
+[33m6d089cc[m Fix Lambda bundling: mark AWS SDK as external modules
+[33m970e752[m Temporarily remove Lambda functions to fix deployment
+[33m9d2598c[m Remove Lambda function directories completely
+[33m08a8bae[m Deploy backend pipeline without chord detector
+[33m6d2bece[m Add deployment success documentation
+[33md6c8bba[m Fix TypeScript errors: remove unused variables
+[33m4ef9952[m Add deployment status update documentation
+[33m672ddcf[m Add GitHub Actions workflow and comprehensive deployment guide
+[33m46f2e2c[m Fix: Remove remaining currentTime reference in abcGenerator
+[33m7082135[m Docker build completed successfully! 🎉
+[33m2865214[m Add GitHub Actions setup guide (credentials in local file)
+[33m6fbc641[m Test GitHub Actions workflow - add README
+[33ma05526d[m Add workflow check guide (without credentials)
+[33mf282612[m Add comprehensive next steps and action plan
+[33m1187c70[m Fix S3 lifecycle policy and add action plans
+[33ma3c163c[m Connect frontend to backend: Add upload interface and transcription progress tracking
+[33mb75fd20[m Configure AWS credentials using Cognito Identity Pool for unauthenticated access
+[33m0a656bc[m Fix: Replace vite.svg favicon with ChordScout logo
+[33md2495c6[m Add detailed error logging for transcription debugging
+[33m04cade3[m Update to new Cognito Identity Pool ID
+[33m2ca622e[m Temporarily use mock functions for testing UI (Cognito session policy issue)
+[33m0d5a9ff[m Switch back to real AWS functions after fixing Cognito configuration
+[33mef7ddbb[m Switch to Lambda Function URL API proxy to bypass Cognito session policy restrictions
+[33mf53ba2b[m Update color scheme to brand colors and add logo to header, reduce spacing
+[33mda9ed9a[m Add gradients throughout app, white background, light grey left panel
+[33ma5bfd49[m Update API endpoint to use API Gateway
+[33m6fde91c[m Update logo to Chord Scout Logo 2.png
+[33m7048498[m Force rebuild: disable cache and update logo to Logo 2
+[33m7f53e09[m Fix yt_dlp module import by adding /opt/python to sys.path
+[33m2be1d80[m Fix: Update logo to Logo 2 in App-test.tsx (the actual file being used)
+[33mad321f8[m Add Chord Scout Logo 2.png and Favicon to repo
+[33me36c57f[m Add progress tracking with real-time updates, progress bar, debug info, and Logo 3
+[33m3503e8b[m Fix color scheme: remove gradient and reduce grey backgrounds
+[33m7eb1edd[m Implement file upload feature with S3 storage
+[33mae4a7d2[m Add YouTube cookies support to bypass bot detection
+[33m4407a02[m Update cookies setup script to check public/cookies.txt and add to gitignore
+[33ma1f7866[m Fix S3 bucket name for file uploads
+[33mf89394b[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Reduce Lambda output to avoid Step Functions size limit
