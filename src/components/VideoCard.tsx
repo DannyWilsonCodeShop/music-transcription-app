@@ -73,7 +73,7 @@ export default function VideoCard({
             <p className="text-xs text-gray-500">{timestamp}</p>
           </div>
         </div>
-        <button className="px-3 py-1 bg-[#00bfc4] text-white text-sm rounded-full hover:bg-[#00a5aa] transition-colors">
+        <button className="px-3 py-1 bg-[#0089c6] text-white text-sm rounded-full hover:bg-[#007bb0] transition-colors">
           Practice Buddy
         </button>
       </div>
@@ -92,7 +92,7 @@ export default function VideoCard({
         {!isPlaying && (
           <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
             <div className="w-16 h-16 bg-white bg-opacity-90 rounded-full flex items-center justify-center">
-              <div className="w-0 h-0 border-l-[20px] border-l-[#00bfc4] border-t-[12px] border-t-transparent border-b-[12px] border-b-transparent ml-1"></div>
+              <div className="w-0 h-0 border-l-[20px] border-l-[#0089c6] border-t-[12px] border-t-transparent border-b-[12px] border-b-transparent ml-1"></div>
             </div>
           </div>
         )}
@@ -108,16 +108,16 @@ export default function VideoCard({
       <div className="px-4 pb-4 flex items-center gap-6 text-gray-600">
         <button
           onClick={() => setLiked(!liked)}
-          className="flex items-center gap-2 hover:text-[#00bfc4] transition-colors"
+          className="flex items-center gap-2 hover:text-[#0089c6] transition-colors"
         >
           <span className="text-xl">{liked ? '❤️' : '🤍'}</span>
           <span className="text-sm font-medium">{liked ? likes + 1 : likes}</span>
         </button>
-        <button className="flex items-center gap-2 hover:text-[#00bfc4] transition-colors">
+        <button className="flex items-center gap-2 hover:text-[#0089c6] transition-colors">
           <span className="text-xl">💬</span>
           <span className="text-sm font-medium">{comments}</span>
         </button>
-        <button className="flex items-center gap-2 hover:text-[#00bfc4] transition-colors">
+        <button className="flex items-center gap-2 hover:text-[#0089c6] transition-colors">
           <span className="text-xl">🔄</span>
           <span className="text-sm font-medium">{shares}</span>
         </button>

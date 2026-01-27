@@ -33,7 +33,7 @@ export default function BackingTracksWidget() {
         <h3 className="font-semibold text-[#3f3f3f] flex items-center gap-2">
           🎼 Backing Tracks
         </h3>
-        <a href="#" className="text-xs text-[#00bfc4] hover:underline font-medium">
+        <a href="#" className="text-xs text-[#0089c6] hover:underline font-medium">
           View All
         </a>
       </div>
@@ -53,7 +53,7 @@ export default function BackingTracksWidget() {
                 </div>
                 <p className="text-xs text-gray-500">{track.genre}</p>
               </div>
-              <span className="px-2 py-1 bg-[#00bfc4] text-white text-xs rounded-full font-medium">
+              <span className="px-2 py-1 bg-[#0089c6] text-white text-xs rounded-full font-medium">
                 {track.key}
               </span>
             </div>

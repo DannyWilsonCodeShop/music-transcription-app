@@ -3,11 +3,11 @@
   <rect width="120" height="40" rx="8" fill="#3f3f3f"/>
   
   <!-- Musical note icon -->
-  <circle cx="15" cy="20" r="3" fill="#00bfc4"/>
-  <rect x="18" y="12" width="2" height="16" fill="#00bfc4"/>
-  <path d="M18 12 C22 10, 26 10, 26 12 L26 16 C26 14, 22 14, 18 16 Z" fill="#00bfc4"/>
+  <circle cx="15" cy="20" r="3" fill="#0089c6"/>
+  <rect x="18" y="12" width="2" height="16" fill="#0089c6"/>
+  <path d="M18 12 C22 10, 26 10, 26 12 L26 16 C26 14, 22 14, 18 16 Z" fill="#0089c6"/>
   
   <!-- Text -->
   <text x="32" y="16" font-family="Inter, sans-serif" font-size="10" font-weight="600" fill="white">ChordScout</text>
-  <text x="32" y="28" font-family="Inter, sans-serif" font-size="7" fill="#00bfc4">Music Transcription</text>
+  <text x="32" y="28" font-family="Inter, sans-serif" font-size="7" fill="#0089c6">Music Transcription</text>
 </svg>

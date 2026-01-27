@@ -43,12 +43,12 @@ export default function CommunityPostCard({
       <div className="flex items-center gap-6 text-gray-600 pt-3 border-t border-gray-100">
         <button
           onClick={() => setLiked(!liked)}
-          className="flex items-center gap-2 hover:text-[#00bfc4] transition-colors"
+          className="flex items-center gap-2 hover:text-[#0089c6] transition-colors"
         >
           <span className="text-xl">{liked ? '❤️' : '🤍'}</span>
           <span className="text-sm font-medium">{liked ? likes + 1 : likes}</span>
         </button>
-        <button className="flex items-center gap-2 hover:text-[#00bfc4] transition-colors">
+        <button className="flex items-center gap-2 hover:text-[#0089c6] transition-colors">
           <span className="text-xl">💬</span>
           <span className="text-sm font-medium">{comments}</span>
         </button>

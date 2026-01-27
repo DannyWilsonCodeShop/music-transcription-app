@@ -62,7 +62,7 @@ export default function TranscriptionsList() {
             🎼 Your Transcriptions
           </h2>
           {jobs.length > 0 && (
-            <span className="px-3 py-1 bg-[#00bfc4] text-white text-sm rounded-full font-medium">
+            <span className="px-3 py-1 bg-[#0089c6] text-white text-sm rounded-full font-medium">
               {jobs.length}
             </span>
           )}
@@ -73,7 +73,7 @@ export default function TranscriptionsList() {
       <div className="max-h-[600px] overflow-y-auto">
         {loading ? (
           <div className="text-center py-12 px-4">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#00bfc4]"></div>
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-[#0089c6]"></div>
             <p className="text-gray-500 mt-2">Loading transcriptions...</p>
           </div>
         ) : jobs.length === 0 ? (

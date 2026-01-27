@@ -8,7 +8,7 @@ export default {
     extend: {
       colors: {
         primary: '#3f3f3f',      // Dark gray - headers, text
-        secondary: '#00bfc4',    // Cyan - accents, buttons
+        secondary: '#0089c6',    // Blue - accents, buttons
         tertiary: '#0089c6',     // Blue - links, secondary buttons
         accent: '#ffe600',       // Yellow - highlights, warnings
         neutral: '#9e9e9e',      // Gray - secondary text

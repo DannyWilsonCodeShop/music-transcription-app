@@ -104,17 +104,17 @@ export default function UploadSection() {
           <div
             className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
               file
-                ? 'border-[#00bfc4] bg-white/80'
-                : 'border-gray-300 bg-white/50 hover:border-[#00bfc4] hover:bg-white/70'
+                ? 'border-[#0089c6] bg-white/80'
+                : 'border-gray-300 bg-white/50 hover:border-[#0089c6] hover:bg-white/70'
             }`}
             onDragOver={(e) => {
               e.preventDefault();
-              e.currentTarget.classList.add('border-[#00bfc4]', 'bg-white/80');
+              e.currentTarget.classList.add('border-[#0089c6]', 'bg-white/80');
             }}
             onDragLeave={(e) => {
               e.preventDefault();
               if (!file) {
-                e.currentTarget.classList.remove('border-[#00bfc4]', 'bg-white/80');
+                e.currentTarget.classList.remove('border-[#0089c6]', 'bg-white/80');
               }
             }}
             onDrop={(e) => {
@@ -136,7 +136,7 @@ export default function UploadSection() {
               {file ? (
                 <div>
                   <div className="text-4xl mb-2">🎵</div>
-                  <div className="font-semibold text-[#00bfc4] mb-1">{file.name}</div>
+                  <div className="font-semibold text-[#0089c6] mb-1">{file.name}</div>
                   <div className="text-sm text-gray-500">
                     {(file.size / 1024 / 1024).toFixed(1)} MB
                   </div>
@@ -158,7 +158,7 @@ export default function UploadSection() {
           <button
             onClick={handleFileUpload}
             disabled={!file || loading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-[#00bfc4] to-[#0089c6] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#0089c6] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? '🎵 Processing...' : '🚀 Upload & Transcribe'}
           </button>
@@ -174,7 +174,7 @@ export default function UploadSection() {
               placeholder="https://www.youtube.com/watch?v=..."
               value={youtubeUrl}
               onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-[#00bfc4] focus:outline-none transition-colors bg-white"
+              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-[#0089c6] focus:outline-none transition-colors bg-white"
             />
             <p className="text-xs text-gray-500 mt-2">
               Paste a YouTube music video URL to transcribe
@@ -184,7 +184,7 @@ export default function UploadSection() {
           <button
             onClick={handleYouTubeSubmit}
             disabled={!youtubeUrl || loading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#00bfc4] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#0089c6] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Processing...' : '🎬 Transcribe YouTube Video'}
           </button>

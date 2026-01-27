@@ -1,17 +1,89 @@
 {
   "Comment": "ChordScout Music Transcription Workflow with Error Handling",
-  "StartAt": "CheckInputType",
+  "StartAt": "UpdateJobProcessing",
   "States": {
+    "UpdateJobProcessing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ChordScout-TranscriptionJobs-dev",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, #currentStep = :step, #progress = :progress, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#status": "status",
+          "#currentStep": "currentStep",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "PROCESSING"
+          },
+          ":step": {
+            "S": "Starting transcription"
+          },
+          ":progress": {
+            "N": "5"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": "$.updateResult",
+      "Next": "CheckInputType",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "UpdateJobFailed"
+        }
+      ]
+    },
     "CheckInputType": {
       "Type": "Choice",
       "Choices": [
         {
           "Variable": "$.youtubeUrl",
           "IsPresent": true,
-          "Next": "DownloadYouTubeAudio"
+          "Next": "UpdateJobDownloading"
         }
       ],
-      "Default": "TranscribeLyrics"
+      "Default": "UpdateJobTranscribing"
+    },
+    "UpdateJobDownloading": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ChordScout-TranscriptionJobs-dev",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #currentStep = :step, #progress = :progress, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#currentStep": "currentStep",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":step": {
+            "S": "Downloading audio from YouTube"
+          },
+          ":progress": {
+            "N": "10"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": "$.updateResult",
+      "Next": "DownloadYouTubeAudio"
     },
     "DownloadYouTubeAudio": {
       "Type": "Task",
@@ -46,7 +118,7 @@
         "title.$": "$.title",
         "userId.$": "$.userId"
       },
-      "Next": "TranscribeLyrics"
+      "Next": "UpdateJobTranscribing"
     },
     "HandleDownloadError": {
       "Type": "Pass",
@@ -56,7 +128,38 @@
         "error.$": "$.download.body.error",
         "message": "Failed to download audio from YouTube. The video may be unavailable, private, or region-restricted."
       },
-      "End": true
+      "Next": "UpdateJobFailed"
+    },
+    "UpdateJobTranscribing": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ChordScout-TranscriptionJobs-dev",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #currentStep = :step, #progress = :progress, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#currentStep": "currentStep",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":step": {
+            "S": "Transcribing audio with AI"
+          },
+          ":progress": {
+            "N": "40"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": "$.updateResult",
+      "Next": "TranscribeLyrics"
     },
     "TranscribeLyrics": {
       "Type": "Task",
@@ -79,7 +182,7 @@
         "error": "Failed to transcribe audio",
         "message": "An error occurred during audio transcription."
       },
-      "End": true
+      "Next": "UpdateJobFailed"
     },
     "PrepareSheetMusicInput": {
       "Type": "Pass",
@@ -88,6 +191,37 @@
         "lyrics.$": "$.transcription.body",
         "title.$": "$.title"
       },
+      "Next": "UpdateJobGeneratingMusic"
+    },
+    "UpdateJobGeneratingMusic": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ChordScout-TranscriptionJobs-dev",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #currentStep = :step, #progress = :progress, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#currentStep": "currentStep",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":step": {
+            "S": "Generating sheet music"
+          },
+          ":progress": {
+            "N": "80"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "ResultPath": "$.updateResult",
       "Next": "GenerateSheetMusic"
     },
     "GenerateSheetMusic": {
@@ -100,7 +234,7 @@
           "ResultPath": "$.error"
         }
       ],
-      "End": true
+      "Next": "UpdateJobCompleted"
     },
     "HandleSheetMusicError": {
       "Type": "Pass",
@@ -109,6 +243,78 @@
         "status": "FAILED",
         "error": "Failed to generate sheet music",
         "message": "An error occurred during sheet music generation."
+      },
+      "Next": "UpdateJobFailed"
+    },
+    "UpdateJobCompleted": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ChordScout-TranscriptionJobs-dev",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, #currentStep = :step, #progress = :progress, #updatedAt = :updatedAt",
+        "ExpressionAttributeNames": {
+          "#status": "status",
+          "#currentStep": "currentStep",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "COMPLETED"
+          },
+          ":step": {
+            "S": "Completed"
+          },
+          ":progress": {
+            "N": "100"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          }
+        }
+      },
+      "End": true
+    },
+    "UpdateJobFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:updateItem",
+      "Parameters": {
+        "TableName": "ChordScout-TranscriptionJobs-dev",
+        "Key": {
+          "id": {
+            "S.$": "$.jobId"
+          }
+        },
+        "UpdateExpression": "SET #status = :status, #currentStep = :step, #progress = :progress, #updatedAt = :updatedAt, #error = :error",
+        "ExpressionAttributeNames": {
+          "#status": "status",
+          "#currentStep": "currentStep",
+          "#progress": "progress",
+          "#updatedAt": "updatedAt",
+          "#error": "error"
+        },
+        "ExpressionAttributeValues": {
+          ":status": {
+            "S": "FAILED"
+          },
+          ":step": {
+            "S": "Failed"
+          },
+          ":progress": {
+            "N": "0"
+          },
+          ":updatedAt": {
+            "S.$": "$$.State.EnteredTime"
+          },
+          ":error": {
+            "S.$": "$.error"
+          }
+        }
       },
       "End": true
     }

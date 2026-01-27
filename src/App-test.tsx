@@ -287,10 +287,10 @@ function App() {
               {/* RIGHT SIDEBAR - Widgets (1/3 width) */}
               <div className="space-y-4">
                 
-                {/* Widget 1 - Ripped Songs */}
+                {/* Widget 1 - Transcribed Songs */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-base font-bold text-gray-900">🎵 Ripped Songs</h3>
+                    <h3 className="text-base font-bold text-gray-900">🎵 Transcribed Songs</h3>
                     <button className="text-xs text-blue-600 hover:text-blue-700 font-medium">View All</button>
                   </div>
                   <div className="space-y-3">

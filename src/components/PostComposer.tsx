@@ -74,7 +74,7 @@ export default function PostComposer() {
         {/* Expandable Button */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="flex-1 text-left px-4 py-3 rounded-xl bg-gradient-to-r from-[#00bfc4] to-[#ffe600] text-white font-medium hover:shadow-md transition-all"
+          className="flex-1 text-left px-4 py-3 rounded-xl bg-gradient-to-r from-[#0089c6] to-[#ffe600] text-white font-medium hover:shadow-md transition-all"
         >
           <span className="flex items-center gap-2">
             ✨ {dailyQuestion}
@@ -101,7 +101,7 @@ export default function PostComposer() {
             value={postContent}
             onChange={(e) => setPostContent(e.target.value)}
             placeholder="Share your thoughts..."
-            className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-[#00bfc4] focus:outline-none resize-none"
+            className="w-full p-3 border-2 border-gray-200 rounded-lg focus:border-[#0089c6] focus:outline-none resize-none"
             rows={4}
             autoFocus
           />
