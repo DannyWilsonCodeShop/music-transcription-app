@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { uploadData } from 'aws-amplify/storage';
 import { startTranscription } from '../services/transcriptionService';
 
 interface UploadInterfaceProps {
@@ -21,9 +22,36 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
     setError('');
     
     try {
-      // TODO: Implement file upload to S3 and transcription
-      // For now, show error that file upload is not yet implemented
-      setError('File upload coming soon! Please use YouTube URL for now.');
+      // Generate unique filename
+      const timestamp = Date.now();
+      const sanitizedFilename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const s3Key = `audio-files/${timestamp}-${sanitizedFilename}`;
+      
+      // Upload to S3
+      console.log('Uploading file to S3:', s3Key);
+      const result = await uploadData({
+        key: s3Key,
+        data: file,
+        options: {
+          contentType: file.type,
+        }
+      }).result;
+      
+      console.log('File uploaded successfully:', result);
+      
+      // Start transcription with S3 file URL
+      const s3Url = `s3://chordscout-audio-dev-090130568474/${s3Key}`;
+      const jobId = await startTranscription(
+        s3Url,
+        title || file.name.replace(/\.[^/.]+$/, '')
+      );
+
+      onUploadStart(jobId);
+      
+      // Reset form
+      setFile(null);
+      setTitle('');
+      setArtist('');
     } catch (err) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Upload failed');

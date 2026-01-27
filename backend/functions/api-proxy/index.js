@@ -1,6 +1,6 @@
 const { SFNClient, StartExecutionCommand } = require('@aws-sdk/client-sfn');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
 const sfnClient = new SFNClient({ region: 'us-east-1' });
 const dynamoClient = DynamoDBDocumentClient.from(new DynamoDBClient({ region: 'us-east-1' }));
@@ -43,7 +43,27 @@ exports.handler = async (event) => {
       }
 
       const jobId = `job-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      const now = new Date().toISOString();
 
+      // Create initial job record in DynamoDB
+      const putCommand = new PutCommand({
+        TableName: JOBS_TABLE_NAME,
+        Item: {
+          id: jobId,
+          youtubeUrl,
+          title: title || 'YouTube Video',
+          userId: 'anonymous',
+          status: 'PENDING',
+          currentStep: 'Initializing',
+          progress: 0,
+          createdAt: now,
+          updatedAt: now,
+        },
+      });
+
+      await dynamoClient.send(putCommand);
+
+      // Start Step Functions execution
       const command = new StartExecutionCommand({
         stateMachineArn: STATE_MACHINE_ARN,
         name: jobId,
