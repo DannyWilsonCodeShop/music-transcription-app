@@ -6,6 +6,8 @@ export interface TranscriptionJob {
   youtubeUrl?: string;
   title: string;
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  currentStep?: string;
+  progress?: number;
   createdAt: string;
   updatedAt?: string;
   lyrics?: string;

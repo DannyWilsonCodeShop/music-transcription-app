@@ -1,0 +1,54 @@
+{
+  "Comment": "ChordScout Music Transcription Workflow (Fixed)",
+  "StartAt": "CheckInputType",
+  "States": {
+    "CheckInputType": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.youtubeUrl",
+          "IsPresent": true,
+          "Next": "DownloadYouTubeAudio"
+        }
+      ],
+      "Default": "TranscribeLyrics"
+    },
+    "DownloadYouTubeAudio": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-youtube-downloader-dev",
+      "ResultPath": "$.download",
+      "Next": "PrepareTranscribeInput"
+    },
+    "PrepareTranscribeInput": {
+      "Type": "Pass",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "bucket.$": "$.download.body.bucket",
+        "key.$": "$.download.body.key",
+        "title.$": "$.title",
+        "userId.$": "$.userId"
+      },
+      "Next": "TranscribeLyrics"
+    },
+    "TranscribeLyrics": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-whisper-transcribe-dev",
+      "ResultPath": "$.transcription",
+      "Next": "PrepareSheetMusicInput"
+    },
+    "PrepareSheetMusicInput": {
+      "Type": "Pass",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "lyrics.$": "$.transcription.body",
+        "title.$": "$.title"
+      },
+      "Next": "GenerateSheetMusic"
+    },
+    "GenerateSheetMusic": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-sheet-music-dev",
+      "End": true
+    }
+  }
+}

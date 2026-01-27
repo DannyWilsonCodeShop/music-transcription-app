@@ -1,0 +1,154 @@
+{
+  "Comment": "ChordScout Music Transcription Workflow with Progress Tracking",
+  "StartAt": "InitializeJob",
+  "States": {
+    "InitializeJob": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-update-job-status-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "userId.$": "$.userId",
+        "youtubeUrl.$": "$.youtubeUrl",
+        "title.$": "$.title",
+        "status": "PENDING",
+        "step": "Initializing",
+        "progress": 0
+      },
+      "ResultPath": "$.statusUpdate",
+      "Next": "CheckInputType"
+    },
+    "CheckInputType": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.youtubeUrl",
+          "IsPresent": true,
+          "Next": "UpdateStatusDownloading"
+        }
+      ],
+      "Default": "UpdateStatusTranscribing"
+    },
+    "UpdateStatusDownloading": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-update-job-status-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "status": "PROCESSING",
+        "step": "Downloading audio from YouTube",
+        "progress": 10
+      },
+      "ResultPath": "$.statusUpdate",
+      "Next": "DownloadYouTubeAudio"
+    },
+    "DownloadYouTubeAudio": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-youtube-downloader-dev",
+      "ResultPath": "$.download",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "UpdateStatusFailed"
+        }
+      ],
+      "Next": "PrepareTranscribeInput"
+    },
+    "PrepareTranscribeInput": {
+      "Type": "Pass",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "bucket.$": "$.download.body.bucket",
+        "key.$": "$.download.body.key",
+        "title.$": "$.title",
+        "userId.$": "$.userId"
+      },
+      "Next": "UpdateStatusTranscribing"
+    },
+    "UpdateStatusTranscribing": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-update-job-status-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "status": "PROCESSING",
+        "step": "Transcribing lyrics with Whisper AI",
+        "progress": 40
+      },
+      "ResultPath": "$.statusUpdate",
+      "Next": "TranscribeLyrics"
+    },
+    "TranscribeLyrics": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-whisper-transcribe-dev",
+      "ResultPath": "$.transcription",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "UpdateStatusFailed"
+        }
+      ],
+      "Next": "PrepareSheetMusicInput"
+    },
+    "PrepareSheetMusicInput": {
+      "Type": "Pass",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "lyrics.$": "$.transcription.body",
+        "title.$": "$.title"
+      },
+      "Next": "UpdateStatusGenerating"
+    },
+    "UpdateStatusGenerating": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-update-job-status-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "status": "PROCESSING",
+        "step": "Generating sheet music",
+        "progress": 70
+      },
+      "ResultPath": "$.statusUpdate",
+      "Next": "GenerateSheetMusic"
+    },
+    "GenerateSheetMusic": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-sheet-music-dev",
+      "ResultPath": "$.sheetMusic",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "UpdateStatusFailed"
+        }
+      ],
+      "Next": "UpdateStatusCompleted"
+    },
+    "UpdateStatusCompleted": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-update-job-status-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "status": "COMPLETED",
+        "step": "Complete",
+        "progress": 100,
+        "result": {
+          "lyrics.$": "$.lyrics",
+          "sheetMusicUrl.$": "$.sheetMusic.body.url"
+        }
+      },
+      "End": true
+    },
+    "UpdateStatusFailed": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-update-job-status-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "status": "FAILED",
+        "step": "Failed",
+        "progress": 0,
+        "error.$": "$.error.Cause"
+      },
+      "End": true
+    }
+  }
+}
