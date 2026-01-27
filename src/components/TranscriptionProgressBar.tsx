@@ -34,7 +34,7 @@ export default function TranscriptionProgressBar({ job }: TranscriptionProgressB
       </div>
 
       {/* Progress Bar */}
-      <div className="relative w-full h-3 bg-gray-200 rounded-full overflow-hidden mb-3">
+      <div className="relative w-full h-3 bg-blue-100 rounded-full overflow-hidden mb-3">
         <div
           className={`absolute top-0 left-0 h-full transition-all duration-500 ease-out ${
             isFailed
@@ -75,7 +75,7 @@ export default function TranscriptionProgressBar({ job }: TranscriptionProgressB
 
       {/* Debug Info */}
       {!isComplete && !isFailed && (
-        <div className="mt-3 p-2 bg-gray-50 rounded text-xs text-gray-500 font-mono">
+        <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-gray-500 font-mono">
           <div>Job ID: {job.id}</div>
           <div>Status: {job.status}</div>
           {job.updatedAt && (

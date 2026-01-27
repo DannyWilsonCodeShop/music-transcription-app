@@ -71,7 +71,7 @@ function App() {
 
   return (
     <>
-      <div className="min-h-screen bg-background flex">
+      <div className="min-h-screen bg-white flex">
       
       {/* LEFT SIDEBAR - Full Height Navigation */}
       <aside className="w-64 bg-primary text-white flex-shrink-0 flex flex-col">
@@ -299,7 +299,7 @@ function App() {
                       { name: 'Wonderwall', artist: 'Oasis', key: 'Em', date: '3 days ago', image: 'https://picsum.photos/seed/wonder/80/80' },
                       { name: 'Let It Be', artist: 'The Beatles', key: 'C', date: '5 days ago', image: 'https://picsum.photos/seed/letit/80/80' },
                     ].map((song, idx) => (
-                      <div key={idx} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                      <div key={idx} className="flex items-start space-x-3 p-3 bg-blue-50/30 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer">
                         <img 
                           src={song.image} 
                           alt={song.name}
@@ -336,7 +336,7 @@ function App() {
                       { name: 'Jazz Swing', genre: 'Jazz', key: 'Bb', color: 'bg-purple-500', image: 'https://picsum.photos/seed/jazz/80/80' },
                       { name: 'Rock Ballad', genre: 'Rock', key: 'G', color: 'bg-red-500', image: 'https://picsum.photos/seed/rock/80/80' },
                     ].map((track, idx) => (
-                      <div key={idx} className="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
+                      <div key={idx} className="flex items-start space-x-3 p-3 bg-purple-50/30 rounded-lg hover:bg-purple-50 transition-colors cursor-pointer">
                         <div className="relative flex-shrink-0">
                           <img 
                             src={track.image} 

@@ -294,7 +294,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       )}
 
       {/* Info Box */}
-      <div className="mt-6 p-4 bg-background border border-neutral/30 rounded-lg">
+      <div className="mt-6 p-4 bg-blue-50/50 border border-blue-200 rounded-lg">
         <h4 className="text-sm font-semibold text-primary mb-2">What you'll get:</h4>
         <ul className="text-sm text-neutral space-y-1">
           <li className="flex items-center gap-2">
