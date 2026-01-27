@@ -101,23 +101,23 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-secondary via-tertiary to-secondary"></div>
       
       {/* Header */}
-      <div className="mb-6">
-        <h3 className="text-xl font-bold text-primary flex items-center">
-          <span className="text-2xl mr-3">🎵</span>
+      <div className="mb-4">
+        <h3 className="text-lg font-bold text-primary flex items-center">
+          <span className="text-xl mr-2">🎵</span>
           Upload Music for Transcription
         </h3>
-        <p className="text-sm text-neutral mt-1">
+        <p className="text-xs text-neutral mt-1">
           Upload an audio file or paste a YouTube link to get lyrics, chords, and sheet music
         </p>
       </div>
 
       {/* Tab Buttons */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-4">
         <button
           onClick={() => setActiveTab('youtube')}
-          className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2 px-3 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
             activeTab === 'youtube'
-              ? 'bg-gradient-to-r from-secondary to-tertiary text-white shadow-md'
+              ? 'bg-secondary text-white shadow-md'
               : 'bg-white text-neutral hover:bg-background border border-neutral/30'
           }`}
         >
@@ -126,9 +126,9 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
         </button>
         <button
           onClick={() => setActiveTab('file')}
-          className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
+          className={`flex-1 py-2 px-3 rounded-lg font-medium transition-all text-sm flex items-center justify-center gap-2 ${
             activeTab === 'file'
-              ? 'bg-gradient-to-r from-tertiary to-secondary text-white shadow-md'
+              ? 'bg-tertiary text-white shadow-md'
               : 'bg-white text-neutral hover:bg-background border border-neutral/30'
           }`}
         >
@@ -139,7 +139,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
 
       {/* YouTube Tab */}
       {activeTab === 'youtube' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-primary mb-2">
               YouTube URL *
@@ -186,7 +186,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           <button
             onClick={handleYouTubeSubmit}
             disabled={!youtubeUrl || !isYouTubeUrl(youtubeUrl) || uploading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-secondary to-tertiary text-white rounded-lg hover:from-tertiary hover:to-secondary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
+            className="w-full py-2 px-4 bg-secondary text-white rounded-lg hover:bg-secondary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
           >
             {uploading ? (
               <>
@@ -205,13 +205,13 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
 
       {/* File Upload Tab */}
       {activeTab === 'file' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div>
             <label className="block text-sm font-medium text-primary mb-2">
               Audio File *
             </label>
             <div
-              className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
+              className={`border-2 border-dashed rounded-xl p-6 text-center transition-all cursor-pointer ${
                 file
                   ? 'border-secondary bg-white'
                   : 'border-gray-300 bg-white hover:border-secondary hover:bg-blue-50'
@@ -298,7 +298,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
           <button
             onClick={handleFileUpload}
             disabled={!file || uploading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-tertiary to-secondary text-white rounded-lg hover:from-secondary hover:to-tertiary transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
+            className="w-full py-2 px-4 bg-tertiary text-white rounded-lg hover:bg-tertiary/90 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md font-medium text-sm flex items-center justify-center gap-2"
           >
             {uploading ? (
               <>
@@ -326,9 +326,9 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       )}
 
       {/* Info Box */}
-      <div className="mt-6 p-4 bg-blue-50/50 border border-blue-200 rounded-lg">
-        <h4 className="text-sm font-semibold text-primary mb-2">What you'll get:</h4>
-        <ul className="text-sm text-neutral space-y-1">
+      <div className="mt-4 p-3 bg-blue-50/50 border border-blue-200 rounded-lg">
+        <h4 className="text-xs font-semibold text-primary mb-2">What you'll get:</h4>
+        <ul className="text-xs text-neutral space-y-1">
           <li className="flex items-center gap-2">
             <span className="text-secondary">✓</span>
             Complete lyrics transcription
@@ -346,7 +346,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
             Downloadable ABC notation and MIDI files
           </li>
         </ul>
-        <p className="text-xs text-neutral mt-3">
+        <p className="text-xs text-neutral mt-2">
           ⏱️ Processing time: 2-5 minutes • 🎯 Accuracy: 85%+
         </p>
       </div>
