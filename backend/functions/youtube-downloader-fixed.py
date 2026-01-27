@@ -9,6 +9,24 @@ sys.path.insert(0, '/opt/python')
 
 s3 = boto3.client('s3')
 
+def get_youtube_cookies():
+    """
+    Get YouTube cookies from S3 if available.
+    Cookies should be in Netscape format.
+    """
+    try:
+        bucket = os.environ.get('BUCKET_NAME')
+        cookies_key = 'config/youtube-cookies.txt'
+        cookies_path = '/tmp/youtube-cookies.txt'
+        
+        # Try to download cookies from S3
+        s3.download_file(bucket, cookies_key, cookies_path)
+        print(f"Downloaded YouTube cookies from S3")
+        return cookies_path
+    except Exception as e:
+        print(f"No cookies found or error downloading: {e}")
+        return None
+
 def lambda_handler(event, context):
     job_id = event['jobId']
     source_url = event.get('youtubeUrl') or event.get('sourceUrl')
@@ -64,14 +82,28 @@ def lambda_handler(event, context):
             # YouTube URL - use yt-dlp
             output_path = f'/tmp/{job_id}.mp3'
             
-            # yt-dlp is a Python module in the layer
-            subprocess.run([
+            # Get cookies if available
+            cookies_path = get_youtube_cookies()
+            
+            # Build yt-dlp command
+            cmd = [
                 'python3', '-m', 'yt_dlp',
                 '-x',
                 '--audio-format', 'mp3',
                 '-o', output_path,
-                source_url
-            ], check=True, capture_output=True, text=True)
+            ]
+            
+            # Add cookies if available
+            if cookies_path and os.path.exists(cookies_path):
+                cmd.extend(['--cookies', cookies_path])
+                print("Using YouTube cookies for authentication")
+            
+            # Add URL
+            cmd.append(source_url)
+            
+            # Run yt-dlp
+            result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+            print(f"yt-dlp output: {result.stdout}")
             
             # Upload to S3
             s3.upload_file(output_path, bucket, output_key)
@@ -79,6 +111,8 @@ def lambda_handler(event, context):
             # Clean up
             if os.path.exists(output_path):
                 os.remove(output_path)
+            if cookies_path and os.path.exists(cookies_path):
+                os.remove(cookies_path)
             
             return {
                 'statusCode': 200,
