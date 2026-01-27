@@ -1,5 +1,5 @@
 // API Configuration
-const API_BASE_URL = 'https://jycc6ovleq7itwnmv4erdjpn2a0mdeyv.lambda-url.us-east-1.on.aws';
+const API_BASE_URL = 'https://rzx9drt3z1.execute-api.us-east-1.amazonaws.com/prod';
 
 export interface TranscriptionJob {
   id: string;
