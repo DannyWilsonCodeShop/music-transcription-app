@@ -20,7 +20,7 @@ export default function DashboardHeader({ userName }: DashboardHeaderProps) {
         {/* Left side - Logo */}
         <div className="flex items-center">
           <img 
-            src="/Chord Scout Logo 1.png" 
+            src="/Chord Scout Logo 2.png" 
             alt="ChordScout Logo" 
             className="h-12 w-auto"
           />
