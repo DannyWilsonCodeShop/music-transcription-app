@@ -4,3 +4,5 @@ node_modules
 amplify_outputs*
 amplifyconfiguration*
 aws-credentials.txt
+public/cookies.txt
+youtube-cookies.txt

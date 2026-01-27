@@ -5,37 +5,34 @@
 
 echo "=== YouTube Cookies Setup for ChordScout ==="
 echo ""
-echo "To fix YouTube bot detection, we need to export cookies from your browser."
-echo ""
-echo "OPTION 1: Export cookies using a browser extension"
-echo "  1. Install 'Get cookies.txt LOCALLY' extension:"
-echo "     - Chrome: https://chrome.google.com/webstore/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc"
-echo "     - Firefox: https://addons.mozilla.org/en-US/firefox/addon/cookies-txt/"
-echo "  2. Go to youtube.com and make sure you're logged in"
-echo "  3. Click the extension icon and export cookies"
-echo "  4. Save the file as 'youtube-cookies.txt' in this directory"
-echo ""
-echo "OPTION 2: Use yt-dlp to extract cookies from your browser"
-echo "  Run: yt-dlp --cookies-from-browser chrome --cookies youtube-cookies.txt https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-echo "  (Replace 'chrome' with 'firefox', 'edge', or 'safari' as needed)"
-echo ""
-echo "Once you have youtube-cookies.txt, run this script again to upload it to S3."
-echo ""
 
-# Check if cookies file exists
-if [ ! -f "youtube-cookies.txt" ]; then
-    echo "❌ youtube-cookies.txt not found in current directory"
+# Check for cookies file in multiple locations
+COOKIES_FILE=""
+if [ -f "public/cookies.txt" ]; then
+    COOKIES_FILE="public/cookies.txt"
+    echo "✓ Found cookies at public/cookies.txt"
+elif [ -f "youtube-cookies.txt" ]; then
+    COOKIES_FILE="youtube-cookies.txt"
+    echo "✓ Found cookies at youtube-cookies.txt"
+else
+    echo "❌ Cookies file not found"
     echo ""
-    echo "Please create the file first using one of the methods above."
+    echo "Please create one of these files:"
+    echo "  - public/cookies.txt"
+    echo "  - youtube-cookies.txt"
+    echo ""
+    echo "To export cookies from your browser:"
+    echo "  1. Install 'Get cookies.txt LOCALLY' extension"
+    echo "  2. Go to youtube.com (logged in)"
+    echo "  3. Click extension icon and export"
     exit 1
 fi
 
-echo "✓ Found youtube-cookies.txt"
 echo ""
 
 # Upload to S3
 echo "Uploading cookies to S3..."
-aws s3 cp youtube-cookies.txt s3://chordscout-audio-dev-090130568474/config/youtube-cookies.txt \
+aws s3 cp "$COOKIES_FILE" s3://chordscout-audio-dev-090130568474/config/youtube-cookies.txt \
     --region us-east-1 \
     --profile chordscout
 
