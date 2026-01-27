@@ -78,7 +78,7 @@ function App() {
         {/* Logo Section */}
         <div className="p-6 border-b border-gray-700">
           <img 
-            src="/Chord Scout Logo 1.png" 
+            src="/Chord Scout Logo 2.png" 
             alt="ChordScout Logo" 
             className="w-full h-auto"
           />
