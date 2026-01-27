@@ -25,7 +25,7 @@
 
 ### Header Content
 - **Title**: Dynamic greeting ("Good morning, Danny!")
-- **Subtitle**: "Ready to continue your learning journey?"
+- **Subtitle**: "Ready to break down a song?"
 - **Actions**: None in header
 - **Sticky**: No (uses DashboardLayout component)
 - **Background**: #3f3f3f (dark gray)
