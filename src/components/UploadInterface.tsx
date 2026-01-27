@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { uploadData } from 'aws-amplify/storage';
 import { startTranscription } from '../services/transcriptionService';
+import outputs from '../../amplify_outputs.json';
 
 interface UploadInterfaceProps {
   onUploadStart: (jobId: string) => void;
@@ -39,8 +40,11 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       
       console.log('File uploaded successfully:', result);
       
+      // Get the actual bucket name from Amplify outputs
+      const bucketName = outputs.storage.bucket_name;
+      
       // Start transcription with S3 file URL
-      const s3Url = `s3://chordscout-audio-dev-090130568474/${s3Key}`;
+      const s3Url = `s3://${bucketName}/${s3Key}`;
       const jobId = await startTranscription(
         s3Url,
         title || file.name.replace(/\.[^/.]+$/, '')
