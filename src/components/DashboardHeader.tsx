@@ -17,7 +17,7 @@ export default function DashboardHeader({ userName }: DashboardHeaderProps) {
   return (
     <header className="bg-gradient-to-r from-primary via-primary to-tertiary text-white py-3 px-4 shadow-lg">
       <div className="max-w-[1600px] mx-auto flex justify-between items-center">
-        {/* Left side - Logo */}
+        {/* Left side - Logo (Updated to Logo 2) */}
         <div className="flex items-center">
           <img 
             src="/Chord Scout Logo 2.png" 
