@@ -103,7 +103,9 @@ def lambda_handler(event, context):
             
             # Run yt-dlp
             result = subprocess.run(cmd, check=True, capture_output=True, text=True)
-            print(f"yt-dlp output: {result.stdout}")
+            # Don't log full output to avoid size limits
+            if result.stdout:
+                print(f"yt-dlp completed successfully")
             
             # Upload to S3
             s3.upload_file(output_path, bucket, output_key)
