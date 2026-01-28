@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "RapidAPI Hub - YouTube MP3": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "https://mcp.rapidapi.com",
+        "--header",
+        "x-api-host: youtube-mp36.p.rapidapi.com",
+        "--header",
+        "x-api-key: 252611e8d7mshdde3262a7e2137bp12792bjsn7ce487b8a3dc"
+      ],
+      "disabled": false,
+      "autoApprove": ["rapidapi_call"]
+    }
+  }
+}

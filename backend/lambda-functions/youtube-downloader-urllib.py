@@ -119,22 +119,42 @@ def try_youtube_mp3_downloader5(video_id):
     """Try YouTube MP3 Audio Video Downloader API - the working one!"""
     url = f"https://youtube-mp3-audio-video-downloader.p.rapidapi.com/get_m4a_download_link/{video_id}"
     
+    print(f"Making request to: {url}")
+    print(f"Using API key: {os.environ.get('RAPIDAPI_KEY')[:10]}...")
+    
     req = urllib.request.Request(url)
     req.add_header("x-rapidapi-key", os.environ.get('RAPIDAPI_KEY'))
     req.add_header("x-rapidapi-host", "youtube-mp3-audio-video-downloader.p.rapidapi.com")
+    req.add_header("User-Agent", "Mozilla/5.0 (compatible; ChordScout/1.0)")
     
-    with urllib.request.urlopen(req, timeout=30) as response:
-        data = json.loads(response.read().decode())
+    print(f"Request headers: {dict(req.headers)}")
     
-    print(f"YouTube MP3 Audio Video Downloader API Response: {data}")
-    
-    # Check for the download URL - try main file first, then reserved file
-    download_url = data.get('file') or data.get('reserved_file')
-    
-    if download_url:
-        # Clean up the URL (remove escape characters)
-        download_url = download_url.replace('\\/', '/')
-        return download_url
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            print(f"Response status: {response.status}")
+            print(f"Response headers: {dict(response.headers)}")
+            data = json.loads(response.read().decode())
+        
+        print(f"YouTube MP3 Audio Video Downloader API Response: {data}")
+        
+        # Check for the download URL - try main file first, then reserved file
+        download_url = data.get('file') or data.get('reserved_file')
+        
+        if download_url:
+            # Clean up the URL (remove escape characters)
+            download_url = download_url.replace('\\/', '/')
+            print(f"Found download URL: {download_url}")
+            return download_url
+        else:
+            print("No download URL found in response")
+        
+    except urllib.error.HTTPError as e:
+        print(f"HTTP Error {e.code}: {e.reason}")
+        print(f"Response body: {e.read().decode() if hasattr(e, 'read') else 'No body'}")
+        raise
+    except Exception as e:
+        print(f"Other error: {e}")
+        raise
     
     return None
 

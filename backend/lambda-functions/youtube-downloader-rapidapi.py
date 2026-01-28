@@ -35,19 +35,39 @@ def lambda_handler(event, context):
         
         print(f"Processing video ID: {video_id}")
         
-        # Use RapidAPI YouTube service
+        # Try RapidAPI first, fallback to urllib method
         audio_url = download_with_rapidapi(video_id)
+        
+        if not audio_url:
+            print("RapidAPI failed, trying urllib fallback...")
+            audio_url = download_with_urllib_fallback(video_id)
         
         if not audio_url:
             return {
                 'statusCode': 500,
                 'body': {
-                    'error': 'Failed to extract audio from YouTube video'
+                    'error': 'Failed to extract audio from YouTube video using both RapidAPI and fallback methods'
                 }
             }
         
-        # Download and upload to S3
-        s3_key = upload_to_s3(audio_url, job_id)
+        # Download and upload to S3 (handle both HTTP URLs and S3 paths)
+        if audio_url.startswith('s3://'):
+            # Already uploaded by fallback method
+            s3_key = audio_url.split('/', 3)[3]  # Extract key from s3://bucket/key
+        else:
+            # Try to download from HTTP URL and upload
+            try:
+                s3_key = upload_to_s3(audio_url, job_id)
+            except requests.exceptions.HTTPError as e:
+                if e.response.status_code == 404:
+                    print(f"RapidAPI download link failed (404), trying fallback method...")
+                    audio_url = download_with_urllib_fallback(video_id)
+                    if audio_url and audio_url.startswith('s3://'):
+                        s3_key = audio_url.split('/', 3)[3]  # Extract key from s3://bucket/key
+                    else:
+                        raise Exception("Both RapidAPI and fallback methods failed")
+                else:
+                    raise e
         
         return {
             'statusCode': 200,
@@ -172,4 +192,75 @@ def download_with_alternative_api(video_id):
             
     except requests.exceptions.RequestException as e:
         print(f"Alternative API request failed: {e}")
+        return None
+
+def download_with_urllib_fallback(video_id):
+    """
+    Fallback method using urllib and cookies when RapidAPI fails
+    """
+    import subprocess
+    import tempfile
+    import os
+    
+    try:
+        # Use yt-dlp with cookies if available
+        youtube_url = f"https://www.youtube.com/watch?v={video_id}"
+        
+        # Check if cookies file exists in Lambda environment
+        cookies_path = "/tmp/cookies.txt"
+        
+        # Copy cookies file from deployment package to /tmp if it exists
+        if os.path.exists("cookies.txt"):
+            import shutil
+            shutil.copy("cookies.txt", cookies_path)
+            print("Cookies file copied to /tmp")
+        
+        # Create temp directory for download
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_path = os.path.join(temp_dir, "audio.%(ext)s")
+            
+            # Build yt-dlp command
+            cmd = [
+                "yt-dlp",
+                "--extract-audio",
+                "--audio-format", "mp3",
+                "--audio-quality", "128K",
+                "--output", output_path,
+                youtube_url
+            ]
+            
+            # Add cookies if available
+            if os.path.exists(cookies_path):
+                cmd.extend(["--cookies", cookies_path])
+            
+            # Run yt-dlp
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+            
+            if result.returncode == 0:
+                # Find the downloaded file
+                for file in os.listdir(temp_dir):
+                    if file.startswith("audio."):
+                        file_path = os.path.join(temp_dir, file)
+                        
+                        # Upload directly to S3 from file
+                        s3_client = boto3.client('s3')
+                        bucket_name = os.environ['BUCKET_NAME']
+                        s3_key = f"audio/{video_id}.mp3"
+                        
+                        with open(file_path, 'rb') as f:
+                            s3_client.put_object(
+                                Bucket=bucket_name,
+                                Key=s3_key,
+                                Body=f.read(),
+                                ContentType='audio/mpeg'
+                            )
+                        
+                        print(f"Fallback method: Uploaded to S3: s3://{bucket_name}/{s3_key}")
+                        return f"s3://{bucket_name}/{s3_key}"  # Return S3 path instead of HTTP URL
+            
+            print(f"yt-dlp failed: {result.stderr}")
+            return None
+            
+    except Exception as e:
+        print(f"Fallback method failed: {e}")
         return None
