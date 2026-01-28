@@ -1,0 +1,26 @@
+{
+  "title": "YouTube Audio Downloader Input",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "youtubeUrl": {
+      "title": "YouTube URL",
+      "type": "string",
+      "description": "Full YouTube video URL",
+      "editor": "textfield",
+      "example": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+    },
+    "url": {
+      "title": "URL (alternative)",
+      "type": "string",
+      "description": "Alternative field for YouTube URL",
+      "editor": "textfield"
+    },
+    "videoId": {
+      "title": "Video ID",
+      "type": "string",
+      "description": "YouTube video ID (optional)",
+      "editor": "textfield"
+    }
+  }
+}

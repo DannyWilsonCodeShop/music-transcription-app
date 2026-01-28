@@ -1,0 +1,14 @@
+{
+  "name": "youtube-audio-downloader",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Download audio from YouTube videos",
+  "main": "main.js",
+  "scripts": {
+    "start": "node main.js"
+  },
+  "dependencies": {
+    "apify": "^3.0.0",
+    "@distube/ytdl-core": "^4.14.4"
+  }
+}

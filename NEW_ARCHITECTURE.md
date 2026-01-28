@@ -225,3 +225,292 @@ STEP_FUNCTION_ARN=arn:aws:states:...
 2. Build Madmom Docker container
 3. Create Lambda functions
 4. Set up infrastructure
+
+
+---
+
+## YouTube Download Strategy - Evolution & Solutions
+
+### Current Challenge (January 2026)
+YouTube has implemented aggressive bot detection that blocks yt-dlp downloads, even with cookies. The issue manifests as:
+- "Sign in to confirm you're not a bot" errors
+- HLS fragment download failures (empty files)
+- Inconsistent success rates
+
+### Solution Options Analysis
+
+#### Option 1: Third-Party YouTube API (✅ RECOMMENDED - PHASE 1)
+**Services:**
+- **Apify YouTube Scraper** (Already have token in .env!)
+  - Handles bot detection automatically
+  - Returns direct download URLs
+  - Cost: ~$0.001-0.01 per download
+
+- **RapidAPI YouTube Services**
+  - Multiple providers available
+  - Reliable audio extraction
+  - Cost: ~$0.001-0.01 per download
+
+**Pros:**
+- ✅ No bot detection issues
+- ✅ No cookie management needed
+- ✅ Reliable and fast
+- ✅ Already have Apify token
+- ✅ Quick implementation (1-2 hours)
+
+**Cons:**
+- ❌ Small cost per download (~$0.001-0.01)
+- ❌ Dependency on third-party service
+- ❌ Rate limits may apply
+
+**Implementation:**
+```python
+# Replace yt-dlp with Apify in Lambda
+import requests
+
+def download_with_apify(youtube_url, job_id):
+    response = requests.post(
+        'https://api.apify.com/v2/acts/apify~youtube-scraper/runs',
+        json={'startUrls': [{'url': youtube_url}]},
+        params={'token': os.environ['APIFY_API_TOKEN']}
+    )
+    # Get audio URL and download
+```
+
+---
+
+#### Option 2: Lambda + FFmpeg Layer
+**Approach:** Add FFmpeg to Lambda via Lambda Layer to handle HLS streams properly
+
+**Pros:**
+- ✅ Handles all YouTube formats
+- ✅ No third-party dependencies
+- ✅ Better audio quality control
+- ✅ One-time setup
+
+**Cons:**
+- ❌ Larger Lambda package (~50MB)
+- ❌ Still needs cookie management
+- ❌ More complex deployment
+- ❌ Cookies expire frequently
+
+**Implementation:**
+```python
+ydl_opts = {
+    'format': 'bestaudio/best',
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'm4a',
+    }],
+    'ffmpeg_location': '/opt/bin/ffmpeg',  # Lambda layer path
+}
+```
+
+---
+
+#### Option 3: ECS Fargate for Downloads (✅ RECOMMENDED - PHASE 2)
+**Approach:** Move YouTube downloading from Lambda to ECS Fargate (like chord detector)
+
+**Why:**
+- Full control over environment
+- Can install FFmpeg easily
+- Longer execution time (no 15min Lambda limit)
+- Better for handling large files
+- Consistent with existing chord detector architecture
+
+**Pros:**
+- ✅ Most reliable long-term solution
+- ✅ No Lambda limitations
+- ✅ Full FFmpeg support
+- ✅ Consistent architecture
+- ✅ Better error handling
+- ✅ Can handle any video length
+
+**Cons:**
+- ❌ Slightly higher cost (~$0.04 per task)
+- ❌ More infrastructure to manage
+- ❌ Longer setup time (6 hours)
+
+**Implementation:**
+```dockerfile
+FROM python:3.11
+RUN apt-get update && apt-get install -y ffmpeg
+RUN pip install yt-dlp boto3
+COPY download.py .
+CMD ["python", "download.py"]
+```
+
+---
+
+### 🏆 Recommended Implementation Path
+
+#### **Phase 1: Quick Win with Apify (THIS WEEK)**
+**Timeline:** 1-2 hours
+**Cost:** ~$1-10 per 1000 videos
+**Reliability:** ⭐⭐⭐⭐⭐
+
+**Steps:**
+1. Update Lambda to use Apify API
+2. Remove yt-dlp dependency
+3. Test with various videos
+4. Deploy to production
+
+**Benefits:**
+- Works immediately
+- No bot detection
+- Minimal code changes
+- Proven reliability
+
+---
+
+#### **Phase 2: ECS Migration (NEXT SPRINT)**
+**Timeline:** 6 hours
+**Cost:** ~$40 per 1000 videos
+**Reliability:** ⭐⭐⭐⭐⭐
+
+**Steps:**
+1. Create ECS task definition for YouTube downloader
+2. Build Docker image with FFmpeg + yt-dlp
+3. Update Step Functions to trigger ECS task
+4. Keep Apify as fallback
+5. Implement cookie rotation system
+
+**Benefits:**
+- Full control and flexibility
+- No third-party dependencies
+- Consistent with chord detector
+- Can handle edge cases
+
+---
+
+### Cost Comparison (per 1000 videos)
+
+| Solution | Cost | Reliability | Setup Time | Maintenance |
+|----------|------|-------------|------------|-------------|
+| **Apify (Phase 1)** | $1-10 | ⭐⭐⭐⭐⭐ | 1 hour | Low |
+| **Lambda + FFmpeg** | $0.50 | ⭐⭐⭐⭐ | 4 hours | Medium |
+| **ECS (Phase 2)** | $40 | ⭐⭐⭐⭐⭐ | 6 hours | Low |
+| **Current (yt-dlp only)** | $0.10 | ⭐⭐ | - | High |
+
+---
+
+### Updated Cost Estimates (with Apify)
+
+**Phase 1 (Apify):**
+- YouTube download (Apify): ~$0.005
+- Deepgram Nova-3: ~$0.017
+- Lambda compute: ~$0.001
+- S3 storage: ~$0.0001
+- DynamoDB: ~$0.0001
+- **Total per song: ~$0.024**
+
+**Phase 2 (ECS):**
+- YouTube download (ECS): ~$0.04
+- Deepgram Nova-3: ~$0.017
+- Lambda compute: ~$0.001
+- S3 storage: ~$0.0001
+- DynamoDB: ~$0.0001
+- **Total per song: ~$0.059**
+
+---
+
+### Action Plan
+
+**Today (Phase 1):**
+1. ✅ Update Lambda to use Apify API
+2. ✅ Test with multiple YouTube videos
+3. ✅ Deploy to production
+4. ✅ Monitor reliability
+
+**This Week:**
+1. Monitor Apify usage and costs
+2. Collect metrics on success rate
+3. Plan ECS migration if needed
+
+**Next Sprint (Phase 2):**
+1. Create ECS task for YouTube downloads
+2. Implement cookie rotation system
+3. Keep Apify as backup/fallback
+4. A/B test both approaches
+
+---
+
+### Cookie Management Notes
+
+**Current Status:**
+- ✅ Cookies uploaded to S3: `s3://chordscout-audio-temp-dev-090130568474/cookies/youtube-cookies.txt`
+- ✅ Lambda configured to use cookies
+- ✅ Cookies bypass bot detection
+- ❌ HLS fragment downloads still fail
+
+**For Phase 2 (ECS):**
+- Implement automatic cookie refresh (weekly)
+- Use browser automation to export fresh cookies
+- Store multiple cookie sets for rotation
+- Monitor cookie expiration
+
+**Cookie Refresh Script:**
+```bash
+# Run weekly via cron or GitHub Actions
+./export-youtube-cookies.sh
+aws s3 cp cookies.txt s3://bucket/cookies/youtube-cookies.txt
+```
+
+---
+
+### Testing Strategy
+
+**Phase 1 Testing:**
+- [ ] Test with popular music videos
+- [ ] Test with age-restricted content
+- [ ] Test with long videos (>10 min)
+- [ ] Test with various audio qualities
+- [ ] Monitor Apify rate limits
+
+**Phase 2 Testing:**
+- [ ] Compare ECS vs Apify reliability
+- [ ] Measure cost differences
+- [ ] Test cookie rotation
+- [ ] Load testing (100+ concurrent downloads)
+
+---
+
+### Monitoring & Alerts
+
+**Key Metrics:**
+- Download success rate
+- Average download time
+- Cost per download
+- Error types and frequency
+- API rate limit hits
+
+**Alerts:**
+- Success rate drops below 95%
+- Average cost exceeds $0.10 per song
+- Apify rate limit warnings
+- Cookie expiration (Phase 2)
+
+---
+
+## Updated Implementation Steps
+
+1. ✅ Set up environment variables
+2. ✅ Create DynamoDB tables
+3. ✅ Create S3 buckets with proper policies
+4. 🔄 Build Lambda functions:
+   - ✅ create-job
+   - 🔄 youtube-downloader (UPDATE TO APIFY)
+   - ✅ lyrics-transcriber (Deepgram)
+   - ✅ chord-detector (Madmom Docker on ECS)
+   - ✅ pdf-generator
+   - ✅ update-job-status
+   - ✅ get-job-status
+5. ✅ Create Step Functions workflow
+6. ✅ Update frontend to use new API
+7. 🔄 Test end-to-end flow
+8. 🔄 Deploy to production
+
+**Next Immediate Steps:**
+1. 🎯 Implement Apify integration in youtube-downloader Lambda
+2. 🎯 Test with multiple videos
+3. 🎯 Deploy and monitor

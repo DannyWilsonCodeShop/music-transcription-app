@@ -1,6 +1,9 @@
 // API Configuration - ChordScout V2 with Deepgram + ECS
 const API_BASE_URL = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com/dev';
 
+// TEMPORARY: Enable mock mode while fixing YouTube download
+const USE_MOCK_DATA = true;
+
 export interface TranscriptionJob {
   id: string;
   youtubeUrl?: string;
@@ -24,6 +27,12 @@ export interface TranscriptionJob {
 export async function startTranscription(
   youtubeUrl: string
 ): Promise<string> {
+  // TEMPORARY: Use mock data while fixing YouTube download
+  if (USE_MOCK_DATA) {
+    console.log('🎭 MOCK MODE: Using mock transcription');
+    return mockStartTranscription(youtubeUrl, 'Mock Video');
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/jobs`, {
       method: 'POST',
@@ -53,6 +62,12 @@ export async function startTranscription(
  * Get the status of a transcription job via ChordScout V2 API
  */
 export async function getJobStatus(jobId: string): Promise<TranscriptionJob | null> {
+  // TEMPORARY: Use mock data while fixing YouTube download
+  if (USE_MOCK_DATA) {
+    console.log('🎭 MOCK MODE: Using mock job status');
+    return mockGetJobStatus(jobId);
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/jobs/${jobId}`, {
       method: 'GET',
@@ -127,7 +142,7 @@ export async function mockStartTranscription(
   title: string
 ): Promise<string> {
   const jobId = `mock-job-${Date.now()}`;
-  console.log('Mock transcription started:', { jobId, youtubeUrl, title });
+  console.log('🎭 Mock transcription started:', { jobId, youtubeUrl, title });
   
   // Simulate async operation
   await new Promise(resolve => setTimeout(resolve, 1000));
@@ -136,31 +151,92 @@ export async function mockStartTranscription(
 }
 
 /**
- * Mock function for testing
+ * Mock function for testing - simulates realistic workflow
  */
 export async function mockGetJobStatus(jobId: string): Promise<TranscriptionJob> {
-  // Simulate different stages
+  // Simulate different stages based on elapsed time
   const elapsed = Date.now() - parseInt(jobId.split('-')[2] || '0');
   
   let status: TranscriptionJob['status'] = 'PENDING';
-  if (elapsed > 5000) status = 'DOWNLOADING';
-  if (elapsed > 15000) status = 'COMPLETE';
+  let progress = 0;
+  let currentStep = 'Initializing...';
   
-  return {
+  if (elapsed > 2000) {
+    status = 'DOWNLOADING';
+    progress = 15;
+    currentStep = 'Downloading audio from YouTube...';
+  }
+  if (elapsed > 5000) {
+    status = 'TRANSCRIBING';
+    progress = 45;
+    currentStep = 'Transcribing lyrics with Deepgram Nova-3...';
+  }
+  if (elapsed > 10000) {
+    status = 'DETECTING_CHORDS';
+    progress = 75;
+    currentStep = 'Detecting chords with AI model...';
+  }
+  if (elapsed > 15000) {
+    status = 'GENERATING_PDF';
+    progress = 90;
+    currentStep = 'Generating PDF with chords and lyrics...';
+  }
+  if (elapsed > 18000) {
+    status = 'COMPLETE';
+    progress = 100;
+    currentStep = 'Complete!';
+  }
+  
+  const job: TranscriptionJob = {
     id: jobId,
-    title: 'Test Song',
+    title: 'Rick Astley - Never Gonna Give You Up',
     status,
-    createdAt: new Date().toISOString(),
-    lyrics: status === 'COMPLETE' ? 'Never gonna give you up\nNever gonna let you down' : undefined,
-    chords: status === 'COMPLETE' ? {
-      key: 'C',
+    progress,
+    currentStep,
+    createdAt: new Date(Date.now() - elapsed).toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  
+  // Add completion data when done
+  if (status === 'COMPLETE') {
+    job.completedAt = new Date().toISOString();
+    job.lyrics = `[Verse 1]
+We're no strangers to love
+You know the rules and so do I
+A full commitment's what I'm thinking of
+You wouldn't get this from any other guy
+
+[Pre-Chorus]
+I just wanna tell you how I'm feeling
+Gotta make you understand
+
+[Chorus]
+Never gonna give you up
+Never gonna let you down
+Never gonna run around and desert you
+Never gonna make you cry
+Never gonna say goodbye
+Never gonna tell a lie and hurt you`;
+    
+    job.chords = {
+      key: 'F',
       mode: 'major',
       chords: [
-        { name: 'C', timestamp: 0, duration: 2, confidence: 0.9 },
-        { name: 'G', timestamp: 2, duration: 2, confidence: 0.85 },
-        { name: 'Am', timestamp: 4, duration: 2, confidence: 0.88 },
-        { name: 'F', timestamp: 6, duration: 2, confidence: 0.92 },
+        { name: 'F', timestamp: 0, duration: 4, confidence: 0.92 },
+        { name: 'G', timestamp: 4, duration: 4, confidence: 0.89 },
+        { name: 'Am', timestamp: 8, duration: 4, confidence: 0.91 },
+        { name: 'F', timestamp: 12, duration: 4, confidence: 0.93 },
+        { name: 'G', timestamp: 16, duration: 4, confidence: 0.88 },
+        { name: 'C', timestamp: 20, duration: 4, confidence: 0.90 },
+        { name: 'G', timestamp: 24, duration: 4, confidence: 0.87 },
+        { name: 'Am', timestamp: 28, duration: 4, confidence: 0.92 },
       ]
-    } : undefined,
-  };
+    };
+    
+    // Mock PDF URL (will show download button)
+    job.pdfUrl = 'https://example.com/mock-pdf.pdf';
+    job.sheetMusicUrl = 'https://example.com/mock-pdf.pdf';
+  }
+  
+  return job;
 }

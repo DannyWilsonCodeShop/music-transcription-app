@@ -50,7 +50,7 @@ exports.handler = async (event) => {
               { name: 'JOB_ID', value: jobId },
               { name: 'AUDIO_BUCKET', value: bucket },
               { name: 'AUDIO_KEY', value: key },
-              { name: 'DYNAMODB_TABLE', value: JOBS_TABLE }
+              { name: 'DYNAMODB_JOBS_TABLE', value: JOBS_TABLE }
             ]
           }
         ]

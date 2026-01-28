@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "youtube-audio-downloader",
+  "title": "YouTube Audio Downloader",
+  "description": "Downloads audio from YouTube videos and returns direct download links",
+  "version": "1.0.0",
+  "dockerfile": "./Dockerfile",
+  "input": "./input_schema.json"
+}

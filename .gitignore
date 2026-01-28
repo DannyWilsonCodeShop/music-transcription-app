@@ -6,3 +6,9 @@ amplifyconfiguration*
 aws-credentials.txt
 public/cookies.txt
 youtube-cookies.txt
+
+# Environment variables
+.env
+.env.local
+cookies.txt
+cookies (1).txt
