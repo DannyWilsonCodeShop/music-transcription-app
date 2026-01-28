@@ -17,7 +17,7 @@
    - Choose GitHub
    - Select: `music-transcription-app` repository
    - **Important**: Choose `development` branch (not main)
-   - App name: `chord-scout-dev`
+   - App name: `music-transcription-app-dev`
 
 3. **Build Settings:**
    - Auto-detected from `amplify.yml`

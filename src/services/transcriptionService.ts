@@ -2,7 +2,7 @@
 const API_BASE_URL = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com/dev';
 
 // TEMPORARY: Enable mock mode while fixing YouTube download
-const USE_MOCK_DATA = true;
+const USE_MOCK_DATA = false;
 
 export interface TranscriptionJob {
   id: string;
