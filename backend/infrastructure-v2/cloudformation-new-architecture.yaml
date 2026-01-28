@@ -1,0 +1,448 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ChordScout High-Accuracy Pipeline - Deepgram + Madmom'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+  
+  DeepgramApiKey:
+    Type: String
+    NoEcho: true
+    Description: Deepgram API key for lyrics transcription
+  
+  ChordDetectorImageUri:
+    Type: String
+    Description: ECR image URI for Madmom chord detector
+
+Resources:
+  # S3 Bucket for temporary audio files
+  AudioTempBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'chordscout-audio-temp-${Environment}-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter1Day
+            Status: Enabled
+            ExpirationInDays: 1
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  # S3 Bucket for final PDFs
+  PDFBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'chordscout-pdfs-${Environment}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  # S3 Bucket Policy for public PDF access
+  PDFBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PDFBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${PDFBucket.Arn}/pdfs/*'
+
+  # DynamoDB Table for jobs
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ChordScout-Jobs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # DynamoDB Table for transcription history
+  TranscriptionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ChordScout-Transcriptions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: transcriptionId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: transcriptionId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # IAM Role for Lambda functions
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ChordScout-Lambda-V2-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ChordScoutLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub '${AudioTempBucket.Arn}/*'
+                  - !Sub '${PDFBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt JobsTable.Arn
+                  - !Sub '${JobsTable.Arn}/index/*'
+                  - !GetAtt TranscriptionsTable.Arn
+                  - !Sub '${TranscriptionsTable.Arn}/index/*'
+
+  # Lambda: Create Job
+  CreateJobFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-create-job-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+          STEP_FUNCTION_ARN: !Ref TranscriptionStateMachine
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: JSON.stringify({ message: 'Placeholder' }) };
+          };
+
+  # Lambda: YouTube Downloader
+  YouTubeDownloaderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-youtube-downloader-${Environment}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          S3_AUDIO_BUCKET: !Ref AudioTempBucket
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': {}}
+
+  # Lambda: Lyrics Transcriber (Deepgram)
+  LyricsTranscriberFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-lyrics-transcriber-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          DEEPGRAM_API_KEY: !Ref DeepgramApiKey
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: {} };
+          };
+
+  # Lambda: Chord Detector (Madmom)
+  ChordDetectorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-chord-detector-${Environment}'
+      PackageType: Image
+      Code:
+        ImageUri: !Ref ChordDetectorImageUri
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 3008
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+
+  # Lambda: PDF Generator
+  PDFGeneratorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-pdf-generator-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 1024
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+          S3_PDF_BUCKET: !Ref PDFBucket
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: {} };
+          };
+
+  # Lambda: Get Job Status
+  GetJobStatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-get-job-status-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: JSON.stringify({}) };
+          };
+
+  # Step Functions Role
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ChordScout-StepFunctions-V2-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt YouTubeDownloaderFunction.Arn
+                  - !GetAtt LyricsTranscriberFunction.Arn
+                  - !GetAtt ChordDetectorFunction.Arn
+                  - !GetAtt PDFGeneratorFunction.Arn
+
+  # Step Functions State Machine
+  TranscriptionStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub 'ChordScout-V2-Transcription-${Environment}'
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "ChordScout High-Accuracy Transcription Workflow",
+          "StartAt": "DownloadYouTubeAudio",
+          "States": {
+            "DownloadYouTubeAudio": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${YouTubeDownloaderFunction.Arn}",
+                "Payload.$": "$"
+              },
+              "ResultPath": "$.download",
+              "Next": "ParallelProcessing"
+            },
+            "ParallelProcessing": {
+              "Type": "Parallel",
+              "Branches": [
+                {
+                  "StartAt": "TranscribeLyrics",
+                  "States": {
+                    "TranscribeLyrics": {
+                      "Type": "Task",
+                      "Resource": "${LyricsTranscriberFunction.Arn}",
+                      "End": true
+                    }
+                  }
+                },
+                {
+                  "StartAt": "DetectChords",
+                  "States": {
+                    "DetectChords": {
+                      "Type": "Task",
+                      "Resource": "${ChordDetectorFunction.Arn}",
+                      "End": true
+                    }
+                  }
+                }
+              ],
+              "Next": "GeneratePDF"
+            },
+            "GeneratePDF": {
+              "Type": "Task",
+              "Resource": "${PDFGeneratorFunction.Arn}",
+              "End": true
+            }
+          }
+        }
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'ChordScout-API-${Environment}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: ['*']
+
+  # API Integration: Create Job
+  CreateJobIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt CreateJobFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  CreateJobRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'POST /jobs'
+      Target: !Sub 'integrations/${CreateJobIntegration}'
+
+  # API Integration: Get Job Status
+  GetJobStatusIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetJobStatusFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  GetJobStatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'GET /jobs/{jobId}'
+      Target: !Sub 'integrations/${GetJobStatusIntegration}'
+
+  # API Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGateway
+      StageName: !Ref Environment
+      AutoDeploy: true
+
+  # Lambda Permissions for API Gateway
+  CreateJobPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateJobFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  GetJobStatusPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetJobStatusFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+  
+  AudioTempBucketName:
+    Description: S3 bucket for temporary audio files
+    Value: !Ref AudioTempBucket
+  
+  PDFBucketName:
+    Description: S3 bucket for PDFs
+    Value: !Ref PDFBucket
+  
+  JobsTableName:
+    Description: DynamoDB jobs table
+    Value: !Ref JobsTable
+  
+  StateMachineArn:
+    Description: Step Functions state machine ARN
+    Value: !Ref TranscriptionStateMachine

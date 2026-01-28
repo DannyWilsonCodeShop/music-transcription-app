@@ -23,7 +23,7 @@ export default function TranscriptionProgress({ jobId, onComplete }: Transcripti
           setJob(data);
           setLoading(false);
 
-          if (data.status === 'COMPLETED') {
+          if (data.status === 'COMPLETE') {
             clearInterval(interval);
             onComplete(data);
           } else if (data.status === 'FAILED') {

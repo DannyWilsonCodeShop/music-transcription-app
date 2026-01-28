@@ -1,0 +1,575 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ChordScout V2 - ECS Fargate for Chord Detection'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+  
+  DeepgramApiKey:
+    Type: String
+    NoEcho: true
+  
+  ChordDetectorImageUri:
+    Type: String
+
+Resources:
+  # VPC for ECS
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'ChordScout-VPC-${Environment}'
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  Route:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref RouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  SubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref RouteTable
+
+  SubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref RouteTable
+
+  # S3 Buckets
+  AudioTempBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'chordscout-audio-temp-${Environment}-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter1Day
+            Status: Enabled
+            ExpirationInDays: 1
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+
+  PDFBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'chordscout-pdfs-${Environment}-${AWS::AccountId}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET]
+            AllowedOrigins: ['*']
+
+  PDFBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref PDFBucket
+      PolicyDocument:
+        Statement:
+          - Sid: PublicReadGetObject
+            Effect: Allow
+            Principal: '*'
+            Action: s3:GetObject
+            Resource: !Sub '${PDFBucket.Arn}/pdfs/*'
+
+  # DynamoDB Tables
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'ChordScout-Jobs-V2-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIdIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'ChordScout-${Environment}'
+
+  # ECS Task Definition for Chord Detector
+  ChordDetectorTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'chordscout-chord-detector-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '1024'
+      Memory: '3072'
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: chord-detector
+          Image: !Ref ChordDetectorImageUri
+          Essential: true
+          Environment:
+            - Name: DYNAMODB_JOBS_TABLE
+              Value: !Ref JobsTable
+            - Name: S3_AUDIO_BUCKET
+              Value: !Ref AudioTempBucket
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ChordDetectorLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  ChordDetectorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/chordscout-chord-detector-${Environment}'
+      RetentionInDays: 7
+
+  # ECS Task Execution Role
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # ECS Task Role
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: ChordDetectorPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub '${AudioTempBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt JobsTable.Arn
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ChordScout-Lambda-V2-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ChordScoutLambdaPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource:
+                  - !Sub '${AudioTempBucket.Arn}/*'
+                  - !Sub '${PDFBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt JobsTable.Arn
+                  - !Sub '${JobsTable.Arn}/index/*'
+              - Effect: Allow
+                Action:
+                  - ecs:RunTask
+                  - ecs:DescribeTasks
+                Resource: '*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource:
+                  - !GetAtt ECSTaskExecutionRole.Arn
+                  - !GetAtt ECSTaskRole.Arn
+
+  # Lambda Functions
+  CreateJobFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-create-job-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+          STEP_FUNCTION_ARN: !Ref TranscriptionStateMachine
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: JSON.stringify({ message: 'Placeholder' }) };
+          };
+
+  YouTubeDownloaderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-youtube-downloader-${Environment}'
+      Runtime: python3.11
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 1024
+      Environment:
+        Variables:
+          S3_AUDIO_BUCKET: !Ref AudioTempBucket
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          def lambda_handler(event, context):
+              return {'statusCode': 200, 'body': {}}
+
+  LyricsTranscriberFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-lyrics-transcriber-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          DEEPGRAM_API_KEY: !Ref DeepgramApiKey
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: {} };
+          };
+
+  # Lambda to trigger ECS task for chord detection
+  ChordDetectorTriggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-chord-detector-trigger-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          ECS_CLUSTER: !Ref ECSCluster
+          TASK_DEFINITION: !Ref ChordDetectorTaskDefinition
+          SUBNET_1: !Ref PublicSubnet1
+          SUBNET_2: !Ref PublicSubnet2
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          const { ECSClient, RunTaskCommand } = require('@aws-sdk/client-ecs');
+          const ecs = new ECSClient({});
+          
+          exports.handler = async (event) => {
+            const { jobId, bucket, key } = event;
+            
+            const params = {
+              cluster: process.env.ECS_CLUSTER,
+              taskDefinition: process.env.TASK_DEFINITION,
+              launchType: 'FARGATE',
+              networkConfiguration: {
+                awsvpcConfiguration: {
+                  subnets: [process.env.SUBNET_1, process.env.SUBNET_2],
+                  assignPublicIp: 'ENABLED'
+                }
+              },
+              overrides: {
+                containerOverrides: [{
+                  name: 'chord-detector',
+                  environment: [
+                    { name: 'JOB_ID', value: jobId },
+                    { name: 'BUCKET', value: bucket },
+                    { name: 'KEY', value: key }
+                  ]
+                }]
+              }
+            };
+            
+            const result = await ecs.send(new RunTaskCommand(params));
+            
+            return {
+              statusCode: 200,
+              body: {
+                taskArn: result.tasks[0].taskArn
+              }
+            };
+          };
+
+  PDFGeneratorFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-pdf-generator-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 60
+      MemorySize: 1024
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+          S3_PDF_BUCKET: !Ref PDFBucket
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: {} };
+          };
+
+  GetJobStatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'chordscout-v2-get-job-status-${Environment}'
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
+      MemorySize: 256
+      Environment:
+        Variables:
+          DYNAMODB_JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: JSON.stringify({}) };
+          };
+
+  # Step Functions Role
+  StepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ChordScout-StepFunctions-V2-${Environment}'
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                  - !GetAtt YouTubeDownloaderFunction.Arn
+                  - !GetAtt LyricsTranscriberFunction.Arn
+                  - !GetAtt ChordDetectorTriggerFunction.Arn
+                  - !GetAtt PDFGeneratorFunction.Arn
+
+  # Step Functions State Machine
+  TranscriptionStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      StateMachineName: !Sub 'ChordScout-V2-Transcription-${Environment}'
+      RoleArn: !GetAtt StepFunctionsRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "ChordScout V2 with ECS Fargate",
+          "StartAt": "DownloadYouTubeAudio",
+          "States": {
+            "DownloadYouTubeAudio": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${YouTubeDownloaderFunction.Arn}",
+                "Payload.$": "$"
+              },
+              "ResultPath": "$.download",
+              "Next": "ParallelProcessing"
+            },
+            "ParallelProcessing": {
+              "Type": "Parallel",
+              "Branches": [
+                {
+                  "StartAt": "TranscribeLyrics",
+                  "States": {
+                    "TranscribeLyrics": {
+                      "Type": "Task",
+                      "Resource": "${LyricsTranscriberFunction.Arn}",
+                      "End": true
+                    }
+                  }
+                },
+                {
+                  "StartAt": "TriggerChordDetection",
+                  "States": {
+                    "TriggerChordDetection": {
+                      "Type": "Task",
+                      "Resource": "${ChordDetectorTriggerFunction.Arn}",
+                      "End": true
+                    }
+                  }
+                }
+              ],
+              "Next": "WaitForChordDetection"
+            },
+            "WaitForChordDetection": {
+              "Type": "Wait",
+              "Seconds": 30,
+              "Next": "GeneratePDF"
+            },
+            "GeneratePDF": {
+              "Type": "Task",
+              "Resource": "${PDFGeneratorFunction.Arn}",
+              "End": true
+            }
+          }
+        }
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'ChordScout-API-V2-${Environment}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: [GET, POST, OPTIONS]
+        AllowHeaders: ['*']
+
+  CreateJobIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt CreateJobFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  CreateJobRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'POST /jobs'
+      Target: !Sub 'integrations/${CreateJobIntegration}'
+
+  GetJobStatusIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetJobStatusFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  GetJobStatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'GET /jobs/{jobId}'
+      Target: !Sub 'integrations/${GetJobStatusIntegration}'
+
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGateway
+      StageName: !Ref Environment
+      AutoDeploy: true
+
+  CreateJobPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateJobFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  GetJobStatusPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetJobStatusFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+Outputs:
+  ApiEndpoint:
+    Value: !Sub 'https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}'
+  
+  ECSClusterName:
+    Value: !Ref ECSCluster
+  
+  TaskDefinitionArn:
+    Value: !Ref ChordDetectorTaskDefinition

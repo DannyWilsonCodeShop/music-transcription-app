@@ -1,62 +1,38 @@
 import { useState } from 'react';
-import { uploadData } from 'aws-amplify/storage';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '../../amplify/data/resource';
-
-const client = generateClient<Schema>();
+import { startTranscription } from '../services/transcriptionService';
 
 export default function UploadSection() {
-  const [file, setFile] = useState<File | null>(null);
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'file' | 'youtube'>('file');
-
-  const handleFileUpload = async () => {
-    if (!file) return;
-    
-    setLoading(true);
-    try {
-      const result = await uploadData({
-        path: `audio-files/${Date.now()}-${file.name}`,
-        data: file
-      }).result;
-
-      await client.models.TranscriptionJob.create({
-        status: 'pending',
-        audioUrl: result.path,
-        title: file.name,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
-      setFile(null);
-      alert('File uploaded successfully! Processing will begin shortly.');
-    } catch (error) {
-      console.error('Error uploading file:', error);
-      alert('Upload failed. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const handleYouTubeSubmit = async () => {
     if (!youtubeUrl) return;
     
     setLoading(true);
+    setError(null);
+    setSuccess(null);
+    
     try {
-      await client.models.TranscriptionJob.create({
-        status: 'pending',
-        youtubeUrl,
-        title: 'YouTube Video',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-
+      const jobId = await startTranscription(youtubeUrl);
+      
+      // Store job ID in localStorage
+      const storedJobIds = localStorage.getItem('chordscout_jobs');
+      const jobIds: string[] = storedJobIds ? JSON.parse(storedJobIds) : [];
+      jobIds.unshift(jobId); // Add to beginning
+      localStorage.setItem('chordscout_jobs', JSON.stringify(jobIds.slice(0, 50))); // Keep last 50
+      
       setYoutubeUrl('');
-      alert('YouTube link submitted! Processing will begin shortly.');
+      setSuccess(`Job created successfully! Job ID: ${jobId}`);
+      
+      // Refresh the page after 2 seconds to show the new job
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } catch (error) {
       console.error('Error creating YouTube job:', error);
-      alert('Submission failed. Please try again.');
+      setError(error instanceof Error ? error.message : 'Submission failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -64,7 +40,7 @@ export default function UploadSection() {
 
   return (
     <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl shadow-lg border border-blue-200 p-4">
-      {/* Header with Avatar and Tabs */}
+      {/* Header with Avatar */}
       <div className="flex items-center gap-3 mb-4">
         {/* Avatar */}
         <img
@@ -72,124 +48,54 @@ export default function UploadSection() {
           alt="User avatar"
           className="w-10 h-10 rounded-full"
         />
-
-        {/* Tab Buttons */}
-        <div className="flex-1 flex gap-2">
-          <button
-            onClick={() => setActiveTab('file')}
-            className={`flex-1 py-2 px-4 rounded-full font-medium transition-all ${
-              activeTab === 'file'
-                ? 'bg-gradient-to-r from-white to-blue-50 shadow-md text-[#3f3f3f]'
-                : 'bg-white/50 text-gray-600 hover:bg-white/70'
-            }`}
-          >
-            📁 Upload File
-          </button>
-          <button
-            onClick={() => setActiveTab('youtube')}
-            className={`flex-1 py-2 px-4 rounded-full font-medium transition-all ${
-              activeTab === 'youtube'
-                ? 'bg-gradient-to-r from-white to-blue-50 shadow-md text-[#3f3f3f]'
-                : 'bg-white/50 text-gray-600 hover:bg-white/70'
-            }`}
-          >
-            🎬 YouTube Link
-          </button>
+        <div className="flex-1">
+          <h3 className="font-semibold text-gray-800">Create New Transcription</h3>
+          <p className="text-sm text-gray-600">Paste a YouTube URL to get started</p>
         </div>
       </div>
 
-      {/* File Upload Tab */}
-      {activeTab === 'file' && (
-        <div className="space-y-4">
-          <div
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-all cursor-pointer ${
-              file
-                ? 'border-[#0089c6] bg-white/80'
-                : 'border-gray-300 bg-white/50 hover:border-[#0089c6] hover:bg-white/70'
-            }`}
-            onDragOver={(e) => {
-              e.preventDefault();
-              e.currentTarget.classList.add('border-[#0089c6]', 'bg-white/80');
-            }}
-            onDragLeave={(e) => {
-              e.preventDefault();
-              if (!file) {
-                e.currentTarget.classList.remove('border-[#0089c6]', 'bg-white/80');
+      {/* YouTube Input */}
+      <div className="space-y-4">
+        <div className="bg-white/80 rounded-xl p-4">
+          <input
+            type="url"
+            placeholder="https://www.youtube.com/watch?v=..."
+            value={youtubeUrl}
+            onChange={(e) => setYoutubeUrl(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && youtubeUrl && !loading) {
+                handleYouTubeSubmit();
               }
             }}
-            onDrop={(e) => {
-              e.preventDefault();
-              const files = e.dataTransfer.files;
-              if (files.length > 0 && files[0].type.startsWith('audio/')) {
-                setFile(files[0]);
-              }
-            }}
-          >
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="hidden"
-              id="file-upload"
-            />
-            <label htmlFor="file-upload" className="cursor-pointer block">
-              {file ? (
-                <div>
-                  <div className="text-4xl mb-2">🎵</div>
-                  <div className="font-semibold text-[#0089c6] mb-1">{file.name}</div>
-                  <div className="text-sm text-gray-500">
-                    {(file.size / 1024 / 1024).toFixed(1)} MB
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="text-4xl mb-2">📤</div>
-                  <div className="font-semibold text-gray-700 mb-1">
-                    Drop audio file here or click to browse
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    Supports MP3, WAV, M4A, FLAC, OGG (max 50MB)
-                  </div>
-                </div>
-              )}
-            </label>
-          </div>
-
-          <button
-            onClick={handleFileUpload}
-            disabled={!file || loading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#0089c6] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? '🎵 Processing...' : '🚀 Upload & Transcribe'}
-          </button>
+            className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-[#0089c6] focus:outline-none transition-colors bg-white"
+          />
+          <p className="text-xs text-gray-500 mt-2">
+            🎵 Paste a YouTube music video URL to transcribe with high-accuracy AI
+          </p>
         </div>
-      )}
 
-      {/* YouTube Tab */}
-      {activeTab === 'youtube' && (
-        <div className="space-y-4">
-          <div className="bg-white/80 rounded-xl p-4">
-            <input
-              type="url"
-              placeholder="https://www.youtube.com/watch?v=..."
-              value={youtubeUrl}
-              onChange={(e) => setYoutubeUrl(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg focus:border-[#0089c6] focus:outline-none transition-colors bg-white"
-            />
-            <p className="text-xs text-gray-500 mt-2">
-              Paste a YouTube music video URL to transcribe
-            </p>
+        {/* Error Message */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <p className="text-sm">{error}</p>
           </div>
+        )}
 
-          <button
-            onClick={handleYouTubeSubmit}
-            disabled={!youtubeUrl || loading}
-            className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#0089c6] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {loading ? 'Processing...' : '🎬 Transcribe YouTube Video'}
-          </button>
-        </div>
-      )}
+        {/* Success Message */}
+        {success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg">
+            <p className="text-sm">{success}</p>
+          </div>
+        )}
+
+        <button
+          onClick={handleYouTubeSubmit}
+          disabled={!youtubeUrl || loading}
+          className="w-full py-3 px-6 bg-gradient-to-r from-[#0089c6] to-[#0089c6] text-white font-semibold rounded-full hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loading ? '🎵 Creating Job...' : '🎬 Transcribe YouTube Video'}
+        </button>
+      </div>
     </div>
   );
 }

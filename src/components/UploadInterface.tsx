@@ -45,10 +45,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
       
       // Start transcription with S3 file URL
       const s3Url = `s3://${bucketName}/${s3Key}`;
-      const jobId = await startTranscription(
-        s3Url,
-        title || file.name.replace(/\.[^/.]+$/, '')
-      );
+      const jobId = await startTranscription(s3Url);
 
       onUploadStart(jobId);
       
@@ -72,10 +69,7 @@ export default function UploadInterface({ onUploadStart }: UploadInterfaceProps)
     
     try {
       // Start transcription via Step Functions
-      const jobId = await startTranscription(
-        youtubeUrl,
-        title || 'YouTube Video'
-      );
+      const jobId = await startTranscription(youtubeUrl);
 
       onUploadStart(jobId);
       

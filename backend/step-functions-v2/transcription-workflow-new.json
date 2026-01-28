@@ -1,0 +1,161 @@
+{
+  "Comment": "ChordScout High-Accuracy Transcription Workflow - Deepgram + Madmom",
+  "StartAt": "DownloadYouTubeAudio",
+  "States": {
+    "DownloadYouTubeAudio": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${YouTubeDownloaderFunctionArn}",
+        "Payload": {
+          "jobId.$": "$.jobId",
+          "youtubeUrl.$": "$.youtubeUrl",
+          "videoId.$": "$.videoId",
+          "userId.$": "$.userId"
+        }
+      },
+      "ResultPath": "$.downloadResult",
+      "Next": "ParallelProcessing",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleFailure",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ]
+    },
+    
+    "ParallelProcessing": {
+      "Type": "Parallel",
+      "Comment": "Run lyrics transcription and chord detection in parallel",
+      "Branches": [
+        {
+          "StartAt": "TranscribeLyrics",
+          "States": {
+            "TranscribeLyrics": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${LyricsTranscriberFunctionArn}",
+                "Payload": {
+                  "jobId.$": "$.jobId",
+                  "bucket.$": "$.downloadResult.Payload.body.bucket",
+                  "key.$": "$.downloadResult.Payload.body.key"
+                }
+              },
+              "ResultSelector": {
+                "lyrics.$": "$.Payload.body.lyrics"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "DetectChords",
+          "States": {
+            "DetectChords": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${ChordDetectorFunctionArn}",
+                "Payload": {
+                  "jobId.$": "$.jobId",
+                  "bucket.$": "$.downloadResult.Payload.body.bucket",
+                  "key.$": "$.downloadResult.Payload.body.key"
+                }
+              },
+              "ResultSelector": {
+                "taskArn.$": "$.Payload.body.taskArn"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.processing",
+      "Next": "GeneratePDF",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+    
+    "GeneratePDF": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${PDFGeneratorFunctionArn}",
+        "Payload": {
+          "jobId.$": "$.jobId"
+        }
+      },
+      "ResultPath": "$.pdf",
+      "ResultSelector": {
+        "pdfUrl.$": "$.Payload.body.pdfUrl",
+        "pdfKey.$": "$.Payload.body.pdfKey"
+      },
+      "Next": "Success",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleFailure",
+          "ResultPath": "$.error"
+        }
+      ],
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ]
+    },
+    
+    "Success": {
+      "Type": "Succeed"
+    },
+    
+    "HandleFailure": {
+      "Type": "Pass",
+      "Parameters": {
+        "error.$": "$.error",
+        "jobId.$": "$.jobId"
+      },
+      "Next": "Fail"
+    },
+    
+    "Fail": {
+      "Type": "Fail",
+      "Error": "WorkflowFailed",
+      "Cause": "Transcription workflow failed"
+    }
+  }
+}

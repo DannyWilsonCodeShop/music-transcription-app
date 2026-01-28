@@ -23,7 +23,7 @@ export default function TranscriptionProgressBar({ job }: TranscriptionProgressB
   };
 
   const progress = job.progress || 0;
-  const isComplete = job.status === 'COMPLETED';
+  const isComplete = job.status === 'COMPLETE';
   const isFailed = job.status === 'FAILED';
 
   return (
@@ -54,7 +54,7 @@ export default function TranscriptionProgressBar({ job }: TranscriptionProgressB
       {/* Status and Step */}
       <div className="flex justify-between items-center text-sm">
         <div className="flex items-center space-x-2">
-          {job.status === 'PROCESSING' && (
+          {(job.status === 'DOWNLOADING' || job.status === 'TRANSCRIBING' || job.status === 'DETECTING_CHORDS' || job.status === 'GENERATING_PDF') && (
             <div className="w-2 h-2 bg-secondary rounded-full animate-pulse" />
           )}
           <span className={`font-medium ${
