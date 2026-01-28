@@ -32,7 +32,7 @@ function App() {
       {/* Logo */}
       <div className="pt-12 pb-16">
         <img 
-          src="/Chord Scout Logo 4.png" 
+          src="/Chord Scout Logo 5.png" 
           alt="Chord Scout" 
           className="h-24 w-auto"
         />
