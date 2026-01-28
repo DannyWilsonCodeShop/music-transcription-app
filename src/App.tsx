@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Upload, Music } from 'lucide-react';
+import { ArrowUpTrayIcon, MusicalNoteIcon } from '@heroicons/react/24/outline';
 
 function App() {
   const [youtubeUrl, setYoutubeUrl] = useState('');
@@ -42,7 +42,7 @@ function App() {
       <div className="w-full max-w-md px-6">
         <div className="bg-gray-900 border border-gray-700 rounded-lg p-8 shadow-2xl">
           <h2 className="text-2xl font-bold text-white mb-8 text-center flex items-center justify-center">
-            <Music className="w-6 h-6 mr-2 text-gray-400" />
+            <MusicalNoteIcon className="w-6 h-6 mr-2 text-gray-400" />
             Upload Music
           </h2>
           
@@ -75,7 +75,7 @@ function App() {
                 Upload Audio File
               </label>
               <div className="border-2 border-dashed border-gray-600 rounded-lg p-8 text-center hover:border-gray-500 transition-colors bg-gray-800">
-                <Upload className="w-10 h-10 text-gray-500 mx-auto mb-3" />
+                <ArrowUpTrayIcon className="w-10 h-10 text-gray-500 mx-auto mb-3" />
                 <input
                   id="audio-file"
                   type="file"
