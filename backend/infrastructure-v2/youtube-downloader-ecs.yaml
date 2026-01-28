@@ -1,0 +1,226 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'YouTube Downloader ECS Task and Lambda Trigger'
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC ID for ECS tasks
+    Default: vpc-0123456789abcdef0
+  
+  SubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Subnet IDs for ECS tasks
+    Default: subnet-0123456789abcdef0,subnet-0123456789abcdef1
+  
+  JobsTableName:
+    Type: String
+    Description: DynamoDB Jobs Table Name
+    Default: music-transcription-jobs
+  
+  S3BucketName:
+    Type: String
+    Description: S3 Bucket for audio files
+    Default: music-transcription-audio
+
+Resources:
+  # ECR Repository for YouTube Downloader
+  YouTubeDownloaderRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: youtube-downloader
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 5 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 5
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+
+  # ECS Cluster (if not exists)
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: music-transcription-cluster
+      CapacityProviders:
+        - FARGATE
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+
+  # Security Group for ECS Tasks
+  ECSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for YouTube downloader ECS tasks
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+
+  # IAM Role for ECS Task
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: YouTubeDownloaderTaskPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:PutObjectAcl
+                Resource: !Sub 'arn:aws:s3:::${S3BucketName}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobsTableName}'
+
+  # IAM Role for ECS Task Execution
+  ECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # CloudWatch Log Group
+  YouTubeDownloaderLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/youtube-downloader
+      RetentionInDays: 7
+
+  # ECS Task Definition
+  YouTubeDownloaderTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: youtube-downloader-task
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: 1024
+      Memory: 2048
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: youtube-downloader
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/youtube-downloader:latest'
+          Essential: true
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref YouTubeDownloaderLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+          Environment:
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+
+  # IAM Role for Lambda
+  YouTubeDownloaderLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: YouTubeDownloaderLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:RunTask
+                Resource: !Ref YouTubeDownloaderTaskDefinition
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt ECSTaskRole.Arn
+                  - !GetAtt ECSExecutionRole.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobsTableName}'
+
+  # Lambda Function
+  YouTubeDownloaderLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: youtube-downloader-trigger
+      Runtime: nodejs18.x
+      Handler: index.handler
+      Role: !GetAtt YouTubeDownloaderLambdaRole.Arn
+      Timeout: 60
+      Environment:
+        Variables:
+          ECS_CLUSTER: !Ref ECSCluster
+          YOUTUBE_TASK_DEFINITION: !Ref YouTubeDownloaderTaskDefinition
+          SUBNET_IDS: !Join [',', !Ref SubnetIds]
+          SECURITY_GROUP: !Ref ECSSecurityGroup
+          DYNAMODB_JOBS_TABLE: !Ref JobsTableName
+          S3_BUCKET: !Ref S3BucketName
+      Code:
+        ZipFile: |
+          // Placeholder - will be updated with actual code
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'Placeholder function' };
+          };
+
+Outputs:
+  ECRRepositoryURI:
+    Description: ECR Repository URI for YouTube Downloader
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/youtube-downloader'
+    Export:
+      Name: !Sub '${AWS::StackName}-ECRRepositoryURI'
+  
+  ECSClusterName:
+    Description: ECS Cluster Name
+    Value: !Ref ECSCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ECSClusterName'
+  
+  TaskDefinitionArn:
+    Description: ECS Task Definition ARN
+    Value: !Ref YouTubeDownloaderTaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-TaskDefinitionArn'
+  
+  LambdaFunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt YouTubeDownloaderLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaFunctionArn'
