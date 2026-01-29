@@ -1,280 +1,202 @@
-import { useState } from 'react';
-
-const mockData = {
-  title: "Wonderwall - Oasis",
-  key: "G Major",
-  tempo: "87 BPM",
-  chords: ["Em7", "G", "D", "C", "Am", "C", "D", "G"],
-  lyrics: [
-    { time: "0:12", text: "Today is gonna be the day that they're gonna throw it back to you", chords: ["Em7", "G", "D", "C"] },
-    { time: "0:19", text: "By now you should've somehow realized what you gotta do", chords: ["Am", "C", "D", "G"] },
-    { time: "0:26", text: "I don't believe that anybody feels the way I do about you now", chords: ["Em7", "G", "D", "C", "Am", "C", "D"] }
-  ],
-  nashvilleNumbers: "6m - 1 - 5 - 4 - 2m - 4 - 5 - 1"
-};
+import { useState, useEffect } from 'react';
+import { startTranscription, getJobStatus, TranscriptionJob } from './services/transcriptionService';
 
 function App() {
-  const [input, setInput] = useState('');
-  const [inputType, setInputType] = useState<'url' | 'file'>('url');
-  const [showResults, setShowResults] = useState(false);
+  const [url, setUrl] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [job, setJob] = useState<TranscriptionJob | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
-    
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      setShowResults(true);
+  useEffect(() => {
+    if (!jobId) return;
+    const pollInterval = setInterval(async () => {
+      const status = await getJobStatus(jobId);
+      if (status) {
+        setJob(status);
+        if (status.status === 'COMPLETE' || status.status === 'FAILED') {
+          clearInterval(pollInterval);
+          setIsLoading(false);
+        }
+      }
     }, 2000);
+    return () => clearInterval(pollInterval);
+  }, [jobId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!url.trim()) return;
+    setIsLoading(true);
+    try {
+      const newJobId = await startTranscription(url);
+      setJobId(newJobId);
+    } catch (error) {
+      console.error('Failed:', error);
+      setIsLoading(false);
+      alert('Failed to start transcription.');
+    }
   };
-
-  const handleReset = () => {
-    setShowResults(false);
-    setInput('');
-    setInputType('url');
-  };
-
-  if (showResults) {
-    return (
-      <div className="h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 overflow-hidden">
-        {/* Header */}
-        <header className="bg-white/10 backdrop-blur-sm border-b border-white/20">
-          <div className="px-6 py-3 flex items-center justify-between">
-            <img 
-              src="/Chord Scout Logo 5.png" 
-              alt="Chord Scout" 
-              className="h-8 w-auto"
-            />
-            <button
-              onClick={handleReset}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-medium transition-colors"
-            >
-              New Transcription
-            </button>
-          </div>
-        </header>
-
-        {/* 3-Column Layout */}
-        <div className="grid grid-cols-12 h-[calc(100vh-50px)]">
-          {/* Left Column */}
-          <div className="col-span-2 bg-white/5 border-r border-white/10">
-            {/* Left sidebar content can go here */}
-          </div>
-
-          {/* Middle Column - Results */}
-          <div className="col-span-8 p-3 overflow-y-auto">
-            <div className="max-w-4xl mx-auto">
-              <div className="mb-4">
-                <h1 className="text-xl font-bold text-white mb-1">Transcription Results</h1>
-                <p className="text-gray-400 text-sm">Your music has been analyzed</p>
-              </div>
-
-              {/* Results Grid */}
-              <div className="grid gap-3">
-                {/* Song Info */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <h2 className="text-lg font-bold text-white mb-2">{mockData.title}</h2>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-white/5 rounded-lg p-2">
-                      <p className="text-gray-400 text-xs">Key</p>
-                      <p className="text-white font-semibold text-sm">{mockData.key}</p>
-                    </div>
-                    <div className="bg-white/5 rounded-lg p-2">
-                      <p className="text-gray-400 text-xs">Tempo</p>
-                      <p className="text-white font-semibold text-sm">{mockData.tempo}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Chords */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <h3 className="text-sm font-semibold text-white mb-2">Chord Progression</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {mockData.chords.map((chord, index) => (
-                      <span key={index} className="bg-blue-600/20 border border-blue-500/30 text-blue-300 px-2 py-1 rounded text-xs font-mono font-semibold">
-                        {chord}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Nashville Numbers */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <h3 className="text-sm font-semibold text-white mb-2">Nashville Number System</h3>
-                  <div className="bg-white/5 rounded-lg p-2">
-                    <p className="text-green-300 font-mono text-sm">{mockData.nashvilleNumbers}</p>
-                  </div>
-                </div>
-
-                {/* Lyrics with Chords */}
-                <div className="bg-white/5 border border-white/10 rounded-lg p-3">
-                  <h3 className="text-sm font-semibold text-white mb-2">Lyrics & Timing</h3>
-                  <div className="space-y-2">
-                    {mockData.lyrics.map((line, index) => (
-                      <div key={index} className="bg-white/5 rounded-lg p-2 border-l-2 border-blue-500">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="bg-blue-600/20 text-blue-300 px-1 py-0.5 rounded text-xs font-mono">
-                            {line.time}
-                          </span>
-                          <div className="flex gap-1">
-                            {line.chords.map((chord, chordIndex) => (
-                              <span key={chordIndex} className="bg-gray-700/50 text-gray-300 px-1 py-0.5 rounded text-xs font-mono">
-                                {chord}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                        <p className="text-gray-300 text-xs">{line.text}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Right Column */}
-          <div className="col-span-2 bg-white/5 border-l border-white/10">
-            {/* Right sidebar content can go here */}
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
-    <div className="h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 overflow-hidden">
-      {/* Header */}
-      <header className="bg-white/10 backdrop-blur-sm border-b border-white/20">
-        <div className="px-6 py-3">
-          <img 
-            src="/Chord Scout Logo 5.png" 
-            alt="Chord Scout" 
-            className="h-8 w-auto"
-          />
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #1f2937 0%, #111827 50%, #0f172a 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '20px'
+    }}>
+      <div style={{ width: '100%', maxWidth: '800px' }}>
+        
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+          <h1 style={{
+            fontSize: '48px',
+            fontWeight: 'bold',
+            background: 'linear-gradient(to right, #9333ea, #2563eb)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            marginBottom: '12px'
+          }}>
+            Music Transcription App
+          </h1>
+          <p style={{ color: '#9ca3af', fontSize: '18px' }}>
+            Transform any YouTube video into chords and lyrics
+          </p>
         </div>
-      </header>
 
-      {/* 3-Column Layout */}
-      <div className="grid grid-cols-12 h-[calc(100vh-50px)]">
-        {/* Left Column */}
-        <div className="col-span-2 bg-white/5 border-r border-white/10">
-          {/* Left sidebar content can go here */}
-        </div>
-
-        {/* Middle Column - Main Card */}
-        <div className="col-span-8 flex items-center justify-center p-6">
-          <div className="bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl p-8 w-full max-w-lg shadow-2xl">
-            {/* Header */}
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-white mb-3">Chord Scout</h1>
-              <p className="text-gray-300 text-lg">Transform any song into chords and lyrics</p>
+        {/* Search Bar */}
+        <form onSubmit={handleSubmit}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+            border: '1px solid #e5e7eb',
+            overflow: 'hidden',
+            transition: 'box-shadow 0.3s'
+          }}>
+            
+            {/* Sparkle Icon */}
+            <div style={{ paddingLeft: '20px', paddingRight: '12px' }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="#9333ea">
+                <path d="M12 2L9.19 8.63L2 9.24l5.46 4.73L5.82 21L12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2z"/>
+              </svg>
             </div>
 
-            {/* Input Type Selector */}
-            <div className="mb-6">
-              <p className="text-gray-200 font-medium mb-3">Choose your input method:</p>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setInputType('url')}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    inputType === 'url'
-                      ? 'border-blue-500 bg-blue-500/20 text-blue-200'
-                      : 'border-white/30 bg-white/10 text-gray-300 hover:border-white/50'
-                  }`}
-                >
-                  <div className="text-center">
-                    <div className="text-2xl mb-2">🔗</div>
-                    <div className="font-medium">YouTube URL</div>
-                    <div className="text-xs opacity-75">Paste a link</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setInputType('file')}
-                  className={`p-4 rounded-xl border-2 transition-all ${
-                    inputType === 'file'
-                      ? 'border-blue-500 bg-blue-500/20 text-blue-200'
-                      : 'border-white/30 bg-white/10 text-gray-300 hover:border-white/50'
-                  }`}
-                >
-                  <div className="text-center">
-                    <div className="text-2xl mb-2">🎵</div>
-                    <div className="font-medium">Audio File</div>
-                    <div className="text-xs opacity-75">Upload MP3/WAV</div>
-                  </div>
-                </button>
-              </div>
+            {/* Input */}
+            <input
+              type="text"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Paste YouTube URL here..."
+              disabled={isLoading}
+              style={{
+                flex: 1,
+                padding: '20px 0',
+                fontSize: '16px',
+                border: 'none',
+                outline: 'none',
+                color: '#1f2937',
+                backgroundColor: 'transparent'
+              }}
+            />
+
+            {/* Button */}
+            <button
+              type="submit"
+              disabled={!url.trim() || isLoading}
+              style={{
+                margin: '8px',
+                padding: '12px 24px',
+                background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                color: 'white',
+                fontWeight: '500',
+                borderRadius: '12px',
+                border: 'none',
+                cursor: url.trim() && !isLoading ? 'pointer' : 'not-allowed',
+                opacity: !url.trim() || isLoading ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                transition: 'all 0.2s'
+              }}
+            >
+              {isLoading ? 'Processing...' : 'Start'}
+              {!isLoading && (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                </svg>
+              )}
+            </button>
+          </div>
+        </form>
+
+        {/* Progress */}
+        {isLoading && job && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ color: '#374151', fontWeight: '500' }}>{job.currentStep || 'Processing...'}</span>
+              <span style={{ color: '#9333ea', fontWeight: '600' }}>{job.progress || 0}%</span>
             </div>
-
-            {/* Input Form */}
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label className="block text-gray-200 font-medium mb-3">
-                  {inputType === 'url' ? 'YouTube URL' : 'Audio File Path'}
-                </label>
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={
-                    inputType === 'url' 
-                      ? 'https://www.youtube.com/watch?v=...' 
-                      : 'Select or drag an audio file'
-                  }
-                  className="w-full px-4 py-4 bg-white/10 border border-white/30 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:bg-white/20 transition-all"
-                  disabled={isLoading}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading}
-                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-200 disabled:cursor-not-allowed shadow-lg"
-              >
-                {isLoading ? (
-                  <div className="flex items-center justify-center gap-3">
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    Processing...
-                  </div>
-                ) : (
-                  'Start Transcription'
-                )}
-              </button>
-            </form>
-
-            {/* Features */}
-            <div className="mt-8 pt-6 border-t border-white/20">
-              <p className="text-gray-300 text-sm text-center mb-4">What you'll get:</p>
-              <div className="grid grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center gap-2 text-gray-200">
-                  <span className="text-green-400">✓</span>
-                  Chord progressions
-                </div>
-                <div className="flex items-center gap-2 text-gray-200">
-                  <span className="text-green-400">✓</span>
-                  Nashville numbers
-                </div>
-                <div className="flex items-center gap-2 text-gray-200">
-                  <span className="text-green-400">✓</span>
-                  Timed lyrics
-                </div>
-                <div className="flex items-center gap-2 text-gray-200">
-                  <span className="text-green-400">✓</span>
-                  Key & tempo
-                </div>
-              </div>
+            <div style={{
+              width: '100%',
+              height: '10px',
+              backgroundColor: '#e5e7eb',
+              borderRadius: '999px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                borderRadius: '999px',
+                width: `${job.progress || 0}%`,
+                transition: 'width 0.5s'
+              }}/>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Right Column */}
-        <div className="col-span-2 bg-white/5 border-l border-white/10">
-          {/* Right sidebar content can go here */}
-        </div>
+        {/* Results */}
+        {job?.status === 'COMPLETE' && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            background: 'linear-gradient(to right, #f0fdf4, #dcfce7)',
+            borderRadius: '16px',
+            border: '1px solid #86efac'
+          }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#166534', marginBottom: '8px' }}>
+              ✓ Transcription Complete!
+            </h2>
+            <p style={{ color: '#15803d', marginBottom: '16px' }}>{job.title}</p>
+            {job.pdfUrl && (
+              <a 
+                href={job.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: 'inline-block',
+                  padding: '10px 20px',
+                  backgroundColor: '#16a34a',
+                  color: 'white',
+                  borderRadius: '8px',
+                  textDecoration: 'none',
+                  fontWeight: '500'
+                }}
+              >
+                Download PDF
+              </a>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
