@@ -1,4 +1,4 @@
-// API Configuration - ChordScout V2 with Deepgram + ECS
+// API Configuration - Music Transcription App V2 with Deepgram + ECS
 const API_BASE_URL = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com/dev';
 
 // TEMPORARY: Enable mock mode while fixing YouTube download
@@ -22,7 +22,7 @@ export interface TranscriptionJob {
 }
 
 /**
- * Start a new transcription job via ChordScout V2 API
+ * Start a new transcription job via Music Transcription App V2 API
  */
 export async function startTranscription(
   youtubeUrl: string
@@ -59,7 +59,7 @@ export async function startTranscription(
 }
 
 /**
- * Get the status of a transcription job via ChordScout V2 API
+ * Get the status of a transcription job via Music Transcription App V2 API
  */
 export async function getJobStatus(jobId: string): Promise<TranscriptionJob | null> {
   // TEMPORARY: Use mock data while fixing YouTube download
