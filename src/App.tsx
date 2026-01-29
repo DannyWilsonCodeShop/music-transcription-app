@@ -7,6 +7,7 @@ function App() {
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<TranscriptionJob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -33,14 +34,19 @@ function App() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url.trim()) return;
+    
     setIsLoading(true);
+    setError(null);
+    setJob(null);
+    setPdfUrl(null);
+    
     try {
       const newJobId = await startTranscription(url);
       setJobId(newJobId);
     } catch (error) {
       console.error('Failed:', error);
       setIsLoading(false);
-      alert('Failed to start transcription.');
+      setError(error instanceof Error ? error.message : 'Failed to start transcription. Please check if the backend is deployed.');
     }
   };
 
@@ -169,6 +175,67 @@ function App() {
                 transition: 'width 0.5s'
               }}/>
             </div>
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            background: 'linear-gradient(to right, #fef2f2, #fee2e2)',
+            borderRadius: '16px',
+            border: '1px solid #fca5a5'
+          }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#991b1b', marginBottom: '8px' }}>
+              ❌ Error
+            </h2>
+            <p style={{ color: '#dc2626', marginBottom: '16px' }}>{error}</p>
+            <details style={{ color: '#7f1d1d', fontSize: '14px' }}>
+              <summary style={{ cursor: 'pointer', fontWeight: '500' }}>Troubleshooting</summary>
+              <ul style={{ marginTop: '12px', paddingLeft: '20px' }}>
+                <li>Check if the backend infrastructure is deployed</li>
+                <li>Verify the API Gateway URL in transcriptionService.ts</li>
+                <li>Check AWS CloudWatch logs for errors</li>
+                <li>Ensure all Lambda functions are deployed</li>
+                <li>Run: <code style={{ backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>./deploy-backend.sh</code></li>
+              </ul>
+            </details>
+          </div>
+        )}
+
+        {/* Job Failed */}
+        {job?.status === 'FAILED' && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            background: 'linear-gradient(to right, #fef2f2, #fee2e2)',
+            borderRadius: '16px',
+            border: '1px solid #fca5a5'
+          }}>
+            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#991b1b', marginBottom: '8px' }}>
+              ❌ Transcription Failed
+            </h2>
+            <p style={{ color: '#dc2626', marginBottom: '8px' }}>{job.error || 'An unknown error occurred'}</p>
+            <button
+              onClick={() => {
+                setJob(null);
+                setJobId(null);
+                setError(null);
+                setIsLoading(false);
+              }}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Try Again
+            </button>
           </div>
         )}
 
