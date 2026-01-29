@@ -77,7 +77,7 @@ aws cloudformation $OPERATION \
     ParameterKey=Environment,ParameterValue=$ENVIRONMENT \
     ParameterKey=DeepgramApiKey,ParameterValue=$DEEPGRAM_API_KEY \
     ParameterKey=ChordDetectorImageUri,ParameterValue=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/chordscout-chord-detector:latest \
-  --capabilities CAPABILITY_IAM \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --region $AWS_REGION
 
 echo ""

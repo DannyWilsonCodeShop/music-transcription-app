@@ -4,14 +4,8 @@
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, UpdateCommand } = require('@aws-sdk/lib-dynamodb');
-const { createReadStream } = require('fs');
-const { writeFile, unlink } = require('fs/promises');
-const { exec } = require('child_process');
-const { promisify } = require('util');
+const { writeFile } = require('fs/promises');
 const fetch = require('node-fetch');
-const ffmpegPath = require('ffmpeg-static');
-
-const execAsync = promisify(exec);
 
 const s3Client = new S3Client({});
 const dynamoClient = new DynamoDBClient({});
@@ -44,32 +38,24 @@ exports.handler = async (event) => {
     
     console.log(`Audio downloaded: ${audioPath}, size: ${buffer.length} bytes`);
     
-    // Always convert to MP3 for maximum Deepgram compatibility
-    const mp3Path = `/tmp/${jobId}.mp3`;
-    let finalAudioPath = audioPath;
-    let contentType = 'audio/mpeg';
+    // Determine content type from file extension
+    const fileExtension = key.split('.').pop().toLowerCase();
+    const contentTypeMap = {
+      'mp3': 'audio/mpeg',
+      'm4a': 'audio/mp4',
+      'mp4': 'audio/mp4',
+      'webm': 'audio/webm',
+      'opus': 'audio/opus',
+      'ogg': 'audio/ogg',
+      'wav': 'audio/wav',
+      'flac': 'audio/flac'
+    };
     
-    try {
-      // Use FFmpeg to convert any format to MP3 (extract audio only, no video)
-      console.log(`Using FFmpeg at: ${ffmpegPath}`);
-      console.log(`Converting audio to MP3...`);
-      
-      const { stdout, stderr } = await execAsync(
-        `"${ffmpegPath}" -i "${audioPath}" -vn -acodec libmp3lame -ar 44100 -ab 128k -ac 2 "${mp3Path}" 2>&1`
-      );
-      
-      console.log('FFmpeg output:', stderr || stdout);
-      console.log('Successfully converted to MP3');
-      
-      finalAudioPath = mp3Path;
-      
-      // Clean up original file
-      await unlink(audioPath).catch(() => {});
-    } catch (error) {
-      console.error('FFmpeg conversion failed:', error.message);
-      console.error('FFmpeg stderr:', error.stderr || error.stdout);
-      throw new Error(`Audio conversion failed: ${error.message}`);
-    }
+    const contentType = contentTypeMap[fileExtension] || 'audio/mpeg';
+    console.log(`Audio format: ${fileExtension}, Content-Type: ${contentType}`);
+    
+    // Use audio directly without conversion (Deepgram supports many formats)
+    const finalAudioPath = audioPath;
     
     console.log(`Audio ready for Deepgram: ${finalAudioPath}, type: ${contentType}`);
     
