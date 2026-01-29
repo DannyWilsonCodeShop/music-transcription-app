@@ -1,8 +1,8 @@
 // API Configuration - Music Transcription App V2 with Deepgram + ECS
 const API_BASE_URL = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com/dev';
 
-// TEMPORARY: Enable mock mode while fixing YouTube download
-const USE_MOCK_DATA = true;
+// Mock mode disabled - using live API
+const USE_MOCK_DATA = false;
 
 export interface TranscriptionJob {
   id: string;
@@ -93,17 +93,50 @@ export async function getJobStatus(jobId: string): Promise<TranscriptionJob | nu
       youtubeUrl: data.youtubeUrl,
       title: data.videoTitle || 'Processing...',
       status: mapBackendStatus(data.status),
+      currentStep: getStepDescription(data.status),
       progress: data.progress || 0,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       completedAt: data.completedAt,
+      lyrics: data.lyricsData?.text,
+      chords: data.chordsData,
       pdfUrl: data.pdfUrl,
       sheetMusicUrl: data.pdfUrl, // Use PDF URL as sheet music
-      error: data.error,
+      error: data.errorMessage,
     } as TranscriptionJob;
   } catch (error) {
     console.error('Error getting job status:', error);
     return null;
+  }
+}
+
+/**
+ * Get user-friendly step description
+ */
+function getStepDescription(status: string): string {
+  switch (status) {
+    case 'PENDING':
+      return 'Initializing...';
+    case 'DOWNLOADING':
+      return 'Downloading audio from YouTube...';
+    case 'DOWNLOADED':
+      return 'Audio downloaded successfully';
+    case 'TRANSCRIBING':
+      return 'Transcribing lyrics with Deepgram...';
+    case 'TRANSCRIBED':
+      return 'Lyrics transcribed successfully';
+    case 'DETECTING_CHORDS':
+      return 'Detecting chords with AI...';
+    case 'CHORDS_DETECTED':
+      return 'Chords detected successfully';
+    case 'GENERATING_PDF':
+      return 'Generating PDF with Nashville Numbers...';
+    case 'COMPLETE':
+      return 'Complete!';
+    case 'FAILED':
+      return 'Failed';
+    default:
+      return 'Processing...';
   }
 }
 
