@@ -1,15 +1,16 @@
 """
-Lambda: YouTube Downloader with yt-dlp
-Downloads audio from YouTube using yt-dlp and uploads to S3
-Extracts audio-only MP3 for Deepgram compatibility
+Lambda: YouTube Downloader using RapidAPI
+Downloads audio from YouTube using a paid RapidAPI service
 """
 
 import json
 import boto3
 import os
 import logging
-import yt_dlp
+import requests
+from datetime import datetime
 from urllib.parse import urlparse, parse_qs
+import time
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -19,9 +20,10 @@ dynamodb = boto3.resource('dynamodb')
 
 AUDIO_BUCKET = os.environ['S3_AUDIO_BUCKET']
 JOBS_TABLE = os.environ['DYNAMODB_JOBS_TABLE']
+RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', '')
 
 def lambda_handler(event, context):
-    """Download YouTube audio using yt-dlp and upload to S3"""
+    """Download YouTube audio using RapidAPI service"""
     
     logger.info(f"Event: {json.dumps(event)}")
     
@@ -30,77 +32,61 @@ def lambda_handler(event, context):
         youtube_url = event['youtubeUrl']
         video_id = event.get('videoId', extract_video_id(youtube_url))
         
+        if not RAPIDAPI_KEY:
+            raise Exception("RAPIDAPI_KEY environment variable not set")
+        
         # Update job status
         update_job_status(job_id, 'DOWNLOADING', 10)
         
-        logger.info(f"Downloading audio from {youtube_url} using yt-dlp")
+        logger.info(f"Downloading audio from {youtube_url} using RapidAPI")
         
-        # Download audio using yt-dlp
-        audio_path, metadata = download_with_ytdlp(youtube_url, job_id)
+        # Download audio using RapidAPI
+        audio_url, metadata = download_with_rapidapi(video_id, youtube_url)
         
-        file_size = os.path.getsize(audio_path)
+        logger.info(f"Got audio URL: {audio_url}")
+        
+        # Download the audio file
+        logger.info("Downloading audio file...")
+        audio_response = requests.get(audio_url, stream=True, timeout=300)
+        audio_response.raise_for_status()
+        
+        # Save to temp file
+        temp_path = f'/tmp/{job_id}.mp3'
+        with open(temp_path, 'wb') as f:
+            for chunk in audio_response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        file_size = os.path.getsize(temp_path)
         logger.info(f"Downloaded {file_size} bytes")
         
-        # Determine file extension from downloaded file
-        extension = audio_path.split('.')[-1]
-        
         # Upload to S3
-        s3_key = f'audio/{job_id}.{extension}'
+        s3_key = f'audio/{job_id}.mp3'
         
         logger.info(f"Uploading to S3: {AUDIO_BUCKET}/{s3_key}")
         
-        # Determine content type
-        content_types = {
-            'mp3': 'audio/mpeg',
-            'm4a': 'audio/mp4',
-            'webm': 'audio/webm',
-            'opus': 'audio/opus',
-            'ogg': 'audio/ogg'
-        }
-        content_type = content_types.get(extension, 'audio/mpeg')
+        with open(temp_path, 'rb') as f:
+            s3_client.put_object(
+                Bucket=AUDIO_BUCKET,
+                Key=s3_key,
+                Body=f,
+                ContentType='audio/mpeg'
+            )
         
-        s3_client.upload_file(
-            audio_path,
-            AUDIO_BUCKET,
-            s3_key,
-            ExtraArgs={'ContentType': content_type}
-        )
+        logger.info("Upload complete")
         
-        video_title = metadata.get('title', f'Video {video_id}')
-        duration = metadata.get('duration', 0)
+        # Clean up temp file
+        os.remove(temp_path)
         
-        # Update job with audio info
-        table = dynamodb.Table(JOBS_TABLE)
-        table.update_item(
-            Key={'jobId': job_id},
-            UpdateExpression='SET audioS3Key = :key, videoTitle = :title, #duration = :duration, #status = :status, progress = :progress, updatedAt = :updated',
-            ExpressionAttributeNames={
-                '#status': 'status',
-                '#duration': 'duration'
-            },
-            ExpressionAttributeValues={
-                ':key': s3_key,
-                ':title': video_title,
-                ':duration': duration,
-                ':status': 'DOWNLOADED',
-                ':progress': 25,
-                ':updated': context.aws_request_id
-            }
-        )
-        
-        # Clean up
-        if os.path.exists(audio_path):
-            os.remove(audio_path)
+        # Update job with download info
+        update_job_status(job_id, 'DOWNLOADED', 20)
         
         return {
             'statusCode': 200,
             'body': {
                 'jobId': job_id,
-                'bucket': AUDIO_BUCKET,
-                'key': s3_key,
-                'videoTitle': video_title,
-                'duration': duration,
-                'fileSize': file_size
+                's3Key': s3_key,
+                'videoTitle': metadata.get('title', 'Unknown'),
+                'duration': metadata.get('duration', 0)
             }
         }
         
@@ -112,57 +98,81 @@ def lambda_handler(event, context):
             'body': {'error': str(e)}
         }
 
-def download_with_ytdlp(youtube_url, job_id):
-    """Download audio using yt-dlp (no post-processing, direct download)"""
+def download_with_rapidapi(video_id, youtube_url):
+    """
+    Download audio using RapidAPI YouTube MP3 service
+    Using: https://rapidapi.com/ytjar/api/youtube-mp36
+    """
     
-    output_template = f'/tmp/{job_id}.%(ext)s'
+    # API endpoint
+    url = "https://youtube-mp36.p.rapidapi.com/dl"
     
-    ydl_opts = {
-        'format': 'bestaudio[ext=m4a]/bestaudio[ext=mp3]/bestaudio',  # Prefer M4A or MP3
-        'outtmpl': output_template,
-        'quiet': False,
-        'no_warnings': False,
-        'extract_flat': False,
+    querystring = {"id": video_id}
+    
+    headers = {
+        "x-rapidapi-key": RAPIDAPI_KEY,
+        "x-rapidapi-host": "youtube-mp36.p.rapidapi.com"
     }
     
-    logger.info(f"yt-dlp options: {json.dumps(ydl_opts, indent=2)}")
+    max_retries = 10
+    retry_delay = 1  # seconds
     
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Extract info
-            logger.info("Extracting video info...")
-            info = ydl.extract_info(youtube_url, download=True)
+    for attempt in range(max_retries):
+        try:
+            logger.info(f"RapidAPI request attempt {attempt + 1}/{max_retries}")
             
-            # Get metadata
-            metadata = {
-                'title': info.get('title', 'Unknown'),
-                'duration': info.get('duration', 0),
-                'uploader': info.get('uploader', 'Unknown')
-            }
+            response = requests.get(url, headers=headers, params=querystring, timeout=30)
+            response.raise_for_status()
             
-            logger.info(f"Video info: {metadata}")
+            data = response.json()
+            logger.info(f"RapidAPI response: {json.dumps(data)}")
             
-            # Find the downloaded file (could be .m4a, .webm, .opus, etc.)
-            downloaded_file = ydl.prepare_filename(info)
+            status = data.get('status')
             
-            if not os.path.exists(downloaded_file):
-                raise Exception(f"Audio file not found at {downloaded_file}")
+            if status == 'ok':
+                # Success - got the MP3 link
+                audio_url = data.get('link')
+                if not audio_url:
+                    raise Exception("No audio link in response")
+                
+                # Extract metadata
+                metadata = {
+                    'title': data.get('title', 'Unknown'),
+                    'duration': 0  # RapidAPI doesn't provide duration
+                }
+                
+                return audio_url, metadata
+                
+            elif status == 'processing':
+                # Still processing - wait and retry
+                logger.info(f"Video still processing, waiting {retry_delay}s...")
+                time.sleep(retry_delay)
+                continue
+                
+            elif status == 'fail':
+                # Failed
+                error_msg = data.get('msg', 'Unknown error')
+                raise Exception(f"RapidAPI conversion failed: {error_msg}")
             
-            logger.info(f"Audio downloaded to: {downloaded_file}")
-            
-            return downloaded_file, metadata
-            
-    except Exception as e:
-        logger.error(f"yt-dlp error: {str(e)}")
-        raise Exception(f"Failed to download audio: {str(e)}")
+            else:
+                raise Exception(f"Unknown status: {status}")
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Request error: {str(e)}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay)
+                continue
+            raise Exception(f"Failed to download after {max_retries} attempts: {str(e)}")
+    
+    raise Exception(f"Video processing timeout after {max_retries} attempts")
 
-def extract_video_id(url):
+def extract_video_id(youtube_url):
     """Extract video ID from YouTube URL"""
-    parsed = urlparse(url)
+    parsed = urlparse(youtube_url)
     if parsed.hostname in ['www.youtube.com', 'youtube.com']:
-        if parsed.path == '/watch':
-            return parse_qs(parsed.query)['v'][0]
-    elif parsed.hostname in ['youtu.be']:
+        query = parse_qs(parsed.query)
+        return query.get('v', [None])[0]
+    elif parsed.hostname == 'youtu.be':
         return parsed.path[1:]
     return None
 
@@ -174,7 +184,7 @@ def update_job_status(job_id, status, progress, error=None):
         expr_values = {
             ':status': status,
             ':progress': progress,
-            ':updated': str(os.urandom(16).hex())
+            ':updated': datetime.utcnow().isoformat() + 'Z'
         }
         
         if error:

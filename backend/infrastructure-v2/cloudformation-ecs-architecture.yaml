@@ -11,6 +11,11 @@ Parameters:
     Type: String
     NoEcho: true
   
+  RapidApiKey:
+    Type: String
+    NoEcho: true
+    Description: RapidAPI key for YouTube MP3 downloader service
+  
   ChordDetectorImageUri:
     Type: String
 
@@ -299,6 +304,7 @@ Resources:
         Variables:
           S3_AUDIO_BUCKET: !Ref AudioTempBucket
           DYNAMODB_JOBS_TABLE: !Ref JobsTable
+          RAPIDAPI_KEY: !Ref RapidApiKey
       Code:
         ZipFile: |
           def lambda_handler(event, context):

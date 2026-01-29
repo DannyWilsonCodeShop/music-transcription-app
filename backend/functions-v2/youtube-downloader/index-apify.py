@@ -249,12 +249,13 @@ def extract_video_id(url):
 def update_job_status(job_id, status, progress, error=None):
     """Update job status in DynamoDB"""
     try:
+        from datetime import datetime
         table = dynamodb.Table(JOBS_TABLE)
         update_expr = 'SET #status = :status, progress = :progress, updatedAt = :updated'
         expr_values = {
             ':status': status,
             ':progress': progress,
-            ':updated': str(os.urandom(16).hex())
+            ':updated': datetime.utcnow().isoformat() + 'Z'
         }
         
         if error:

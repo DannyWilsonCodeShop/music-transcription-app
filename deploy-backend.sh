@@ -34,8 +34,8 @@ if [ -z "$DEEPGRAM_API_KEY" ]; then
     exit 1
 fi
 
-if [ -z "$APIFY_API_TOKEN" ]; then
-    echo -e "${RED}❌ Error: APIFY_API_TOKEN not set in .env${NC}"
+if [ -z "$RAPIDAPI_KEY" ]; then
+    echo -e "${RED}❌ Error: RAPIDAPI_KEY not set in .env${NC}"
     exit 1
 fi
 
@@ -76,6 +76,7 @@ aws cloudformation $OPERATION \
   --parameters \
     ParameterKey=Environment,ParameterValue=$ENVIRONMENT \
     ParameterKey=DeepgramApiKey,ParameterValue=$DEEPGRAM_API_KEY \
+    ParameterKey=RapidApiKey,ParameterValue=$RAPIDAPI_KEY \
     ParameterKey=ChordDetectorImageUri,ParameterValue=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/chordscout-chord-detector:latest \
   --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
   --region $AWS_REGION
