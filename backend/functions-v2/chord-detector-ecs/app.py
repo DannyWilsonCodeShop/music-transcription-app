@@ -1,7 +1,7 @@
 """
-ECS Task: Chord Detector with Madmom
+ECS Task: Chord Detector with Librosa
 Runs as a Fargate task, processes audio and updates DynamoDB
-Uses Madmom's DeepChromaChordRecognitionProcessor for high accuracy (89.6%)
+Uses Librosa's chromagram-based chord detection
 """
 
 import json
@@ -10,6 +10,7 @@ import os
 import logging
 import sys
 import numpy as np
+from decimal import Decimal
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger()
@@ -19,25 +20,30 @@ dynamodb = boto3.resource('dynamodb')
 
 JOBS_TABLE = os.environ['DYNAMODB_JOBS_TABLE']
 
-# Import Madmom
+# Import Librosa
 try:
-    from madmom.features.chords import DeepChromaChordRecognitionProcessor
-    from madmom.audio.signal import SignalProcessor, FramedSignalProcessor
-    from madmom.audio.stft import ShortTimeFourierTransformProcessor
-    from madmom.audio.spectrogram import LogarithmicFilteredSpectrogramProcessor
-    import madmom
-    MADMOM_AVAILABLE = True
-    logger.info(f"Madmom version: {madmom.__version__}")
+    import librosa
+    LIBROSA_AVAILABLE = True
+    logger.info(f"Librosa version: {librosa.__version__}")
 except ImportError as e:
-    logger.error(f"Madmom not available: {e}")
-    MADMOM_AVAILABLE = False
+    logger.error(f"Librosa not available: {e}")
+    LIBROSA_AVAILABLE = False
 
-# Chord label mapping (Madmom uses 25 chord classes)
+# Chord templates (12 major + 12 minor chords)
 CHORD_LABELS = [
-    'N',      # No chord
     'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B',  # Major
     'Cm', 'C#m', 'Dm', 'D#m', 'Em', 'Fm', 'F#m', 'Gm', 'G#m', 'Am', 'A#m', 'Bm'  # Minor
 ]
+
+def convert_to_decimal(obj):
+    """Convert floats to Decimal for DynamoDB compatibility"""
+    if isinstance(obj, float):
+        return Decimal(str(obj))
+    elif isinstance(obj, dict):
+        return {k: convert_to_decimal(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_decimal(item) for item in obj]
+    return obj
 
 def main():
     """Main entry point for ECS task"""
@@ -66,6 +72,9 @@ def main():
         # Detect chords (using mock for now)
         logger.info("Running chord detection...")
         chords_data = detect_chords(audio_path)
+        
+        # Convert floats to Decimal for DynamoDB
+        chords_data = convert_to_decimal(chords_data)
         
         # Update job with chords
         table = dynamodb.Table(JOBS_TABLE)
@@ -96,73 +105,37 @@ def main():
 
 def detect_chords(audio_path):
     """
-    Detect chords using Madmom's DeepChromaChordRecognitionProcessor
-    This uses a CNN+CRF model trained on large chord datasets
-    Achieves ~89.6% accuracy on standard benchmarks
+    Detect chords using Librosa's chromagram analysis
+    Uses chroma features to identify chord progressions
     """
     
-    if not MADMOM_AVAILABLE:
-        logger.error("Madmom not available, cannot detect chords")
-        raise Exception("Madmom library not installed")
+    if not LIBROSA_AVAILABLE:
+        logger.error("Librosa not available, cannot detect chords")
+        raise Exception("Librosa library not installed")
     
     try:
-        logger.info(f"Loading audio file with Madmom: {audio_path}")
+        logger.info(f"Loading audio file with Librosa: {audio_path}")
         
-        # Initialize Madmom chord recognition processor
-        # This uses a pre-trained deep learning model
-        chord_processor = DeepChromaChordRecognitionProcessor()
+        # Load audio file
+        y, sr = librosa.load(audio_path, sr=22050)
+        duration = librosa.get_duration(y=y, sr=sr)
         
-        logger.info("Running Madmom chord recognition (this may take a minute)...")
+        logger.info(f"Audio loaded: duration={duration:.2f}s, sample_rate={sr}Hz")
         
-        # Process the audio file
-        # Returns array of [time, chord_label] pairs
-        chords = chord_processor(audio_path)
+        # Extract chroma features (pitch class profiles)
+        hop_length = 512
+        chromagram = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=hop_length)
         
-        logger.info(f"Madmom detected {len(chords)} chord frames")
+        logger.info(f"Chromagram shape: {chromagram.shape}")
         
-        # Convert Madmom output to our format
-        chord_segments = []
+        # Define chord templates (major and minor triads)
+        chord_templates = create_chord_templates()
         
-        if len(chords) == 0:
-            logger.warning("No chords detected")
-            return {
-                'chords': [],
-                'key': 'C',
-                'model': 'madmom-cnn-crf',
-                'totalChords': 0,
-                'duration': 0
-            }
+        # Match chromagram to chord templates
+        chord_sequence = match_chords_to_templates(chromagram, chord_templates, hop_length, sr)
         
         # Group consecutive same chords into segments
-        current_chord_idx = int(chords[0][1])
-        current_chord = CHORD_LABELS[current_chord_idx] if current_chord_idx < len(CHORD_LABELS) else 'N'
-        start_time = float(chords[0][0])
-        
-        for i in range(1, len(chords)):
-            time = float(chords[i][0])
-            chord_idx = int(chords[i][1])
-            chord = CHORD_LABELS[chord_idx] if chord_idx < len(CHORD_LABELS) else 'N'
-            
-            if chord != current_chord:
-                # Save previous segment
-                chord_segments.append({
-                    'chord': current_chord,
-                    'start': round(start_time, 2),
-                    'end': round(time, 2),
-                    'duration': round(time - start_time, 2)
-                })
-                
-                current_chord = chord
-                start_time = time
-        
-        # Add final segment
-        end_time = float(chords[-1][0])
-        chord_segments.append({
-            'chord': current_chord,
-            'start': round(start_time, 2),
-            'end': round(end_time, 2),
-            'duration': round(end_time - start_time, 2)
-        })
+        chord_segments = group_chord_segments(chord_sequence)
         
         # Filter out very short segments (likely noise)
         chord_segments = [s for s in chord_segments if s['duration'] >= 0.5]
@@ -170,22 +143,117 @@ def detect_chords(audio_path):
         # Detect key
         key = detect_key(chord_segments)
         
-        duration = chord_segments[-1]['end'] if chord_segments else 0
-        
-        logger.info(f"Detected {len(chord_segments)} chord segments, key: {key}, duration: {duration}s")
+        logger.info(f"Detected {len(chord_segments)} chord segments, key: {key}, duration: {duration:.2f}s")
         
         return {
             'chords': chord_segments,
             'key': key,
-            'model': 'madmom-cnn-crf',
+            'model': 'librosa-chromagram',
             'totalChords': len(chord_segments),
-            'duration': round(duration, 2),
-            'accuracy': '89.6%'
+            'duration': round(duration, 2)
         }
         
     except Exception as e:
-        logger.error(f"Madmom chord detection failed: {str(e)}", exc_info=True)
+        logger.error(f"Librosa chord detection failed: {str(e)}", exc_info=True)
         raise
+
+def create_chord_templates():
+    """Create chord templates for major and minor triads"""
+    templates = {}
+    
+    # Major chord template: root, major third, perfect fifth (0, 4, 7 semitones)
+    major_template = np.array([1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0])
+    
+    # Minor chord template: root, minor third, perfect fifth (0, 3, 7 semitones)
+    minor_template = np.array([1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0])
+    
+    # Create templates for all 12 major chords
+    for i in range(12):
+        chord_name = CHORD_LABELS[i]
+        templates[chord_name] = np.roll(major_template, i)
+    
+    # Create templates for all 12 minor chords
+    for i in range(12):
+        chord_name = CHORD_LABELS[i + 12]
+        templates[chord_name] = np.roll(minor_template, i)
+    
+    return templates
+
+def match_chords_to_templates(chromagram, templates, hop_length, sr):
+    """Match each frame of chromagram to best matching chord template"""
+    chord_sequence = []
+    
+    for frame_idx in range(chromagram.shape[1]):
+        chroma_frame = chromagram[:, frame_idx]
+        
+        # Normalize chroma frame
+        if np.sum(chroma_frame) > 0:
+            chroma_frame = chroma_frame / np.sum(chroma_frame)
+        
+        # Find best matching chord template
+        best_chord = 'N'
+        best_score = 0
+        
+        for chord_name, template in templates.items():
+            # Compute correlation between chroma frame and template
+            score = np.dot(chroma_frame, template)
+            
+            if score > best_score:
+                best_score = score
+                best_chord = chord_name
+        
+        # Only accept chord if confidence is high enough
+        if best_score < 0.3:
+            best_chord = 'N'
+        
+        # Calculate timestamp
+        time = librosa.frames_to_time(frame_idx, sr=sr, hop_length=hop_length)
+        
+        chord_sequence.append({
+            'time': time,
+            'chord': best_chord,
+            'confidence': best_score
+        })
+    
+    return chord_sequence
+
+def group_chord_segments(chord_sequence):
+    """Group consecutive same chords into segments"""
+    if not chord_sequence:
+        return []
+    
+    segments = []
+    current_chord = chord_sequence[0]['chord']
+    start_time = chord_sequence[0]['time']
+    
+    for i in range(1, len(chord_sequence)):
+        chord = chord_sequence[i]['chord']
+        time = chord_sequence[i]['time']
+        
+        if chord != current_chord:
+            # Save previous segment (skip 'N' chords)
+            if current_chord != 'N':
+                segments.append({
+                    'chord': current_chord,
+                    'start': round(start_time, 2),
+                    'end': round(time, 2),
+                    'duration': round(time - start_time, 2)
+                })
+            
+            current_chord = chord
+            start_time = time
+    
+    # Add final segment
+    if current_chord != 'N':
+        end_time = chord_sequence[-1]['time']
+        segments.append({
+            'chord': current_chord,
+            'start': round(start_time, 2),
+            'end': round(end_time, 2),
+            'duration': round(end_time - start_time, 2)
+        })
+    
+    return segments
 
 def detect_key(chord_segments):
     """Detect musical key based on chord frequency and duration"""
