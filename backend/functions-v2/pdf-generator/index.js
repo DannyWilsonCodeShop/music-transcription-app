@@ -35,15 +35,13 @@ exports.handler = async (event) => {
     
     const { lyricsData, chordsData, videoTitle } = job;
     
-    if (!lyricsData) {
-      throw new Error('Missing lyrics data');
-    }
-    
     console.log('Generating PDF...');
+    console.log('Video title:', videoTitle);
+    console.log('Has lyrics:', !!lyricsData && !!lyricsData.text);
     console.log('Has chords:', !!chordsData);
     
-    // Generate PDF (with or without chords)
-    const pdfBuffer = await generatePDF(videoTitle, lyricsData, chordsData || null);
+    // Generate PDF (with or without lyrics/chords)
+    const pdfBuffer = await generatePDF(videoTitle, lyricsData || null, chordsData || null);
     
     // Upload to S3
     const pdfKey = `pdfs/${jobId}.pdf`;
@@ -119,40 +117,73 @@ async function generatePDF(title, lyricsData, chordsData) {
   const staffHeight = 25;
   const chordSpacing = 40;
   
-  // Combine lyrics and chords with Nashville numbers
-  const combined = chordsData ? combineLyricsAndChords(lyricsData, chordsData) : formatLyricsOnly(lyricsData);
+  // Check if we have lyrics
+  const hasLyrics = lyricsData && lyricsData.text && lyricsData.text.trim().length > 0;
   
-  for (const section of combined) {
-    // Check if we need a new page
-    if (yPos > pageHeight - marginBottom - staffHeight - 40) {
-      doc.addPage();
-      yPos = 20;
-    }
-    
-    // Draw lyrics first
+  if (!hasLyrics) {
+    // No lyrics - show message and chords only
     doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(128, 128, 128);
+    doc.text('No lyrics detected - this may be an instrumental track', 20, yPos);
+    yPos += 20;
     
-    const lines = doc.splitTextToSize(section.text, 170);
-    for (const line of lines) {
+    if (chordsData && chordsData.chords && chordsData.chords.length > 0) {
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text('Detected Chords:', 20, yPos);
+      yPos += 10;
+      
+      // Show all chords in a grid
+      const allChords = chordsData.chords.map(c => c.chord || c.name).filter(c => c && c !== 'N');
+      const uniqueChords = [...new Set(allChords)];
+      
+      drawChordStaff(doc, uniqueChords.slice(0, 8), chordsData.key, 20, yPos, 170);
+      yPos += staffHeight + 15;
+      
+      if (uniqueChords.length > 8) {
+        drawChordStaff(doc, uniqueChords.slice(8, 16), chordsData.key, 20, yPos, 170);
+      }
+    } else {
+      doc.setFont('helvetica', 'normal');
+      doc.text('No chords detected', 20, yPos);
+    }
+  } else {
+    // Combine lyrics and chords with Nashville numbers
+    const combined = chordsData ? combineLyricsAndChords(lyricsData, chordsData) : formatLyricsOnly(lyricsData);
+  
+    for (const section of combined) {
+      // Check if we need a new page
       if (yPos > pageHeight - marginBottom - staffHeight - 40) {
         doc.addPage();
         yPos = 20;
       }
-      doc.text(line, 20, yPos);
-      yPos += 6;
+      
+      // Draw lyrics first
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(0, 0, 0);
+      
+      const lines = doc.splitTextToSize(section.text, 170);
+      for (const line of lines) {
+        if (yPos > pageHeight - marginBottom - staffHeight - 40) {
+          doc.addPage();
+          yPos = 20;
+        }
+        doc.text(line, 20, yPos);
+        yPos += 6;
+      }
+      
+      yPos += 8; // Space before staff
+      
+      // Draw chord staff with Nashville numbers if chords exist
+      if (section.chords && section.chords.length > 0) {
+        drawChordStaff(doc, section.chords, chordsData ? chordsData.key : 'C', 20, yPos, 170);
+        yPos += staffHeight + 15;
+      }
+      
+      yPos += 10; // Extra space between sections
     }
-    
-    yPos += 8; // Space before staff
-    
-    // Draw chord staff with Nashville numbers if chords exist
-    if (section.chords && section.chords.length > 0) {
-      drawChordStaff(doc, section.chords, chordsData.key, 20, yPos, 170);
-      yPos += staffHeight + 15;
-    }
-    
-    yPos += 10; // Extra space between sections
   }
   
   // Footer

@@ -17,8 +17,10 @@ logger = logging.getLogger()
 
 s3_client = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
+lambda_client = boto3.client('lambda')
 
 JOBS_TABLE = os.environ['DYNAMODB_JOBS_TABLE']
+PDF_GENERATOR_FUNCTION = os.environ.get('PDF_GENERATOR_FUNCTION', '')
 
 # Import Librosa
 try:
@@ -91,6 +93,22 @@ def main():
         )
         
         logger.info("Chord detection complete!")
+        
+        # Trigger PDF generation
+        if PDF_GENERATOR_FUNCTION:
+            try:
+                logger.info(f"Triggering PDF generation: {PDF_GENERATOR_FUNCTION}")
+                lambda_client.invoke(
+                    FunctionName=PDF_GENERATOR_FUNCTION,
+                    InvocationType='Event',  # Async invocation
+                    Payload=json.dumps({'jobId': job_id})
+                )
+                logger.info("PDF generation triggered successfully")
+            except Exception as e:
+                logger.error(f"Failed to trigger PDF generation: {str(e)}")
+                # Don't fail the whole task if PDF trigger fails
+        else:
+            logger.warning("PDF_GENERATOR_FUNCTION not set, skipping PDF generation trigger")
         
         # Clean up
         if os.path.exists(audio_path):

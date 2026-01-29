@@ -93,7 +93,9 @@ def lambda_handler(event, context):
         # Clean up temp file
         os.remove(temp_path)
         
-        # Update job with download info
+        # Update job with download info and video title
+        video_title = metadata.get('title', 'Unknown')
+        update_job_with_metadata(job_id, video_title, metadata.get('duration', 0))
         update_job_status(job_id, 'DOWNLOADED', 20)
         
         return {
@@ -103,7 +105,7 @@ def lambda_handler(event, context):
                 'bucket': AUDIO_BUCKET,
                 'key': s3_key,
                 's3Key': s3_key,  # Keep for backward compatibility
-                'videoTitle': metadata.get('title', 'Unknown'),
+                'videoTitle': video_title,
                 'duration': metadata.get('duration', 0)
             }
         }
@@ -217,3 +219,20 @@ def update_job_status(job_id, status, progress, error=None):
         )
     except Exception as e:
         logger.error(f"Failed to update job status: {str(e)}")
+
+def update_job_with_metadata(job_id, video_title, duration):
+    """Update job with video metadata in DynamoDB"""
+    try:
+        table = dynamodb.Table(JOBS_TABLE)
+        table.update_item(
+            Key={'jobId': job_id},
+            UpdateExpression='SET videoTitle = :title, videoDuration = :duration, updatedAt = :updated',
+            ExpressionAttributeValues={
+                ':title': video_title,
+                ':duration': duration,
+                ':updated': datetime.utcnow().isoformat() + 'Z'
+            }
+        )
+        logger.info(f"Updated job metadata: title={video_title}, duration={duration}")
+    except Exception as e:
+        logger.error(f"Failed to update job metadata: {str(e)}")

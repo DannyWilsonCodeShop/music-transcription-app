@@ -1,5 +1,5 @@
 // API Configuration - Music Transcription App V2 with Deepgram + ECS
-const API_BASE_URL = 'https://ppq03hif98.execute-api.us-east-1.amazonaws.com/dev';
+const API_BASE_URL = '';
 
 // Mock mode disabled - using live API
 const USE_MOCK_DATA = false;

@@ -92,6 +92,7 @@ exports.handler = async (event) => {
     const transcription = await deepgramResponse.json();
     
     console.log('Transcription complete');
+    console.log('Full Deepgram response:', JSON.stringify(transcription, null, 2));
     
     // Extract lyrics with timestamps
     const results = transcription.results;
@@ -101,6 +102,10 @@ exports.handler = async (event) => {
     const lyricsText = alternatives.transcript;
     const words = alternatives.words || [];
     const paragraphs = alternatives.paragraphs?.paragraphs || [];
+    
+    console.log('Transcript text:', lyricsText);
+    console.log('Words count:', words.length);
+    console.log('Paragraphs count:', paragraphs.length);
     
     const lyricsData = {
       text: lyricsText,

@@ -175,6 +175,8 @@ Resources:
               Value: !Ref JobsTable
             - Name: S3_AUDIO_BUCKET
               Value: !Ref AudioTempBucket
+            - Name: PDF_GENERATOR_FUNCTION
+              Value: !Sub 'chordscout-v2-pdf-generator-${Environment}'
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -225,6 +227,10 @@ Resources:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
                 Resource: !GetAtt JobsTable.Arn
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:chordscout-v2-pdf-generator-${Environment}'
 
   # Lambda Execution Role
   LambdaExecutionRole:
@@ -548,7 +554,7 @@ Resources:
                 }
               ],
               "ResultPath": "$.processing",
-              "Next": "WaitForChordDetection",
+              "Next": "Success",
               "Catch": [
                 {
                   "ErrorEquals": ["States.ALL"],
@@ -557,28 +563,8 @@ Resources:
                 }
               ]
             },
-            "WaitForChordDetection": {
-              "Type": "Wait",
-              "Seconds": 30,
-              "Next": "GeneratePDF"
-            },
-            "GeneratePDF": {
-              "Type": "Task",
-              "Resource": "arn:aws:states:::lambda:invoke",
-              "Parameters": {
-                "FunctionName": "${PDFGeneratorFunction.Arn}",
-                "Payload": {
-                  "jobId.$": "$.jobId"
-                }
-              },
-              "End": true,
-              "Catch": [
-                {
-                  "ErrorEquals": ["States.ALL"],
-                  "Next": "HandleFailure",
-                  "ResultPath": "$.error"
-                }
-              ]
+            "Success": {
+              "Type": "Succeed"
             },
             "HandleFailure": {
               "Type": "Pass",

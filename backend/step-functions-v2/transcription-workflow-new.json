@@ -139,8 +139,8 @@
     
     "WaitForChordDetection": {
       "Type": "Wait",
-      "Seconds": 30,
-      "Comment": "Wait for ECS chord detection task to complete",
+      "Seconds": 60,
+      "Comment": "Wait for ECS chord detection task to complete (increased to 60s for reliability)",
       "Next": "GeneratePDF"
     },
     
