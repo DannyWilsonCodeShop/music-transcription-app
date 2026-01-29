@@ -4,9 +4,9 @@
   "description": "Create transcription job Lambda",
   "main": "index.js",
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.700.0",
+    "@aws-sdk/client-dynamodb": "^3.975.0",
+    "@aws-sdk/client-sfn": "^3.978.0",
     "@aws-sdk/lib-dynamodb": "^3.700.0",
-    "@aws-sdk/client-sfn": "^3.700.0",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.1"
   }
 }

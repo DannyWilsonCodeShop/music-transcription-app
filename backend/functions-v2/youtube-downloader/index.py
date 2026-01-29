@@ -47,7 +47,23 @@ def lambda_handler(event, context):
         
         # Download the audio file
         logger.info("Downloading audio file...")
-        audio_response = requests.get(audio_url, stream=True, timeout=300)
+        audio_response = requests.get(audio_url, stream=True, timeout=300, allow_redirects=True)
+        
+        # Check if we got a 404 - this means the link needs whitelisting
+        if audio_response.status_code == 404:
+            logger.warning("Got 404 - link may need whitelisting. Trying with different headers...")
+            # Try with referer header
+            audio_response = requests.get(
+                audio_url, 
+                stream=True, 
+                timeout=300,
+                allow_redirects=True,
+                headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                    'Referer': 'https://ytjar.info/'
+                }
+            )
+        
         audio_response.raise_for_status()
         
         # Save to temp file
