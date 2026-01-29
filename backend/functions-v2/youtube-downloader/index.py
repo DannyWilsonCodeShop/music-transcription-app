@@ -107,19 +107,18 @@ def lambda_handler(event, context):
         }
 
 def download_with_apify(youtube_url, job_id):
-    """Download audio using Apify YouTube Video Downloader"""
+    """Download audio using Apify YouTube Scraper"""
     
     logger.info(f"Starting Apify actor for {youtube_url}")
     
-    # Start Apify actor run - using epctex youtube-video-downloader
+    # Start Apify actor run
     run_response = requests.post(
-        'https://api.apify.com/v2/acts/epctex~youtube-video-downloader/runs',
+        'https://api.apify.com/v2/acts/streamers~youtube-scraper/runs',
         json={
-            'startUrls': [youtube_url],
-            'maxItems': 1,
-            'proxy': {
-                'useApifyProxy': True
-            }
+            'startUrls': [{'url': youtube_url}],
+            'maxResults': 1,
+            'downloadSubtitles': False,
+            'downloadThumbnails': False,
         },
         params={'token': APIFY_API_TOKEN}
     )
@@ -132,13 +131,13 @@ def download_with_apify(youtube_url, job_id):
     
     logger.info(f"Apify run started: {run_id}")
     
-    # Wait for run to complete (poll every 3 seconds, max 3 minutes)
+    # Wait for run to complete (poll every 2 seconds, max 2 minutes)
     max_attempts = 60
     for attempt in range(max_attempts):
-        time.sleep(3)
+        time.sleep(2)
         
         status_response = requests.get(
-            f'https://api.apify.com/v2/acts/epctex~youtube-video-downloader/runs/{run_id}',
+            f'https://api.apify.com/v2/acts/streamers~youtube-scraper/runs/{run_id}',
             params={'token': APIFY_API_TOKEN}
         )
         
@@ -155,7 +154,7 @@ def download_with_apify(youtube_url, job_id):
         elif status in ['FAILED', 'ABORTED', 'TIMED-OUT']:
             raise Exception(f"Apify run failed with status: {status}")
     else:
-        raise Exception("Apify run timed out after 3 minutes")
+        raise Exception("Apify run timed out after 2 minutes")
     
     # Get dataset items (video info)
     dataset_id = status_data['data']['defaultDatasetId']
@@ -174,51 +173,82 @@ def download_with_apify(youtube_url, job_id):
     
     video_data = items[0]
     
-    logger.info(f"Video data keys: {list(video_data.keys())}")
+    logger.info(f"Video data: {json.dumps(video_data, indent=2)}")
     
     # Extract metadata
     metadata = {
-        'title': video_data.get('title', video_data.get('name', 'Unknown')),
-        'duration': video_data.get('duration', video_data.get('lengthSeconds', 0)),
-        'uploader': video_data.get('author', video_data.get('channelName', 'Unknown'))
+        'title': video_data.get('title', 'Unknown'),
+        'duration': video_data.get('duration', 0),
+        'uploader': video_data.get('channelName', 'Unknown')
     }
     
-    # Get audio download URL - epctex returns downloadLinks
-    download_links = video_data.get('downloadLinks', {})
+    # Get audio download URL
+    # The streamers/youtube-scraper returns different format than expected
+    # Try to get the best audio format (prefer MP3/M4A over WebM for Deepgram compatibility)
     
-    # Try to find audio-only format
     audio_url = None
-    extension = 'webm'
+    preferred_format = None
     
-    # Look for audio formats in order of preference
-    for quality in ['audio_high', 'audio_medium', 'audio_low', 'audio']:
-        if quality in download_links:
-            audio_url = download_links[quality]
-            break
+    # Approach 1: Check for direct audio URL
+    if 'audioUrl' in video_data:
+        audio_url = video_data['audioUrl']
     
-    # Fallback to video formats if no audio-only
+    # Approach 2: Check formats array and prefer MP3/M4A
+    elif 'formats' in video_data and video_data['formats']:
+        formats = video_data['formats']
+        
+        # First pass: Look for MP3 or M4A audio formats
+        for fmt in formats:
+            mime_type = fmt.get('mimeType', '').lower()
+            if 'audio/mp4' in mime_type or 'audio/m4a' in mime_type or 'audio/mpeg' in mime_type or 'audio/mp3' in mime_type:
+                preferred_format = fmt
+                audio_url = fmt.get('url')
+                logger.info(f"Found preferred audio format: {mime_type}")
+                break
+        
+        # Second pass: Any audio format
+        if not audio_url:
+            for fmt in formats:
+                mime_type = fmt.get('mimeType', '')
+                if 'audio' in mime_type.lower():
+                    preferred_format = fmt
+                    audio_url = fmt.get('url')
+                    logger.info(f"Found audio format: {mime_type}")
+                    break
+    
+    # Approach 3: Use any available URL field
     if not audio_url:
-        for quality in ['360p', '480p', '720p']:
-            if quality in download_links:
-                audio_url = download_links[quality]
-                extension = 'mp4'
+        for key in ['url', 'downloadUrl', 'streamUrl']:
+            if key in video_data:
+                audio_url = video_data[key]
                 break
     
     if not audio_url:
-        # Last resort - take any download link
-        if download_links:
-            audio_url = list(download_links.values())[0]
-            extension = 'mp4'
-        else:
-            raise Exception(f"No download links found. Available keys: {list(video_data.keys())}")
+        # Log the full response to debug
+        logger.error(f"No audio URL found. Video data keys: {list(video_data.keys())}")
+        logger.error(f"Full video data: {json.dumps(video_data, indent=2)}")
+        raise Exception("No audio URL found in video data")
     
     logger.info(f"Downloading audio from: {audio_url}")
     
     # Download audio file
-    audio_response = requests.get(audio_url, stream=True, timeout=300)
+    audio_response = requests.get(audio_url, stream=True)
     
     if audio_response.status_code != 200:
         raise Exception(f"Failed to download audio: {audio_response.status_code}")
+    
+    # Determine file extension from preferred format or URL
+    extension = 'm4a'  # Default to m4a for better compatibility
+    if preferred_format:
+        mime_type = preferred_format.get('mimeType', 'audio/mp4')
+        if 'mpeg' in mime_type or 'mp3' in mime_type:
+            extension = 'mp3'
+        elif 'mp4' in mime_type or 'm4a' in mime_type:
+            extension = 'm4a'
+        elif 'webm' in mime_type:
+            extension = 'webm'
+        elif 'ogg' in mime_type:
+            extension = 'ogg'
     
     # Save to temp file
     audio_path = f'/tmp/{job_id}.{extension}'
@@ -227,11 +257,7 @@ def download_with_apify(youtube_url, job_id):
         for chunk in audio_response.iter_content(chunk_size=8192):
             f.write(chunk)
     
-    file_size = os.path.getsize(audio_path)
-    logger.info(f"Audio saved to: {audio_path} ({file_size} bytes)")
-    
-    if file_size == 0:
-        raise Exception("Downloaded file is empty")
+    logger.info(f"Audio saved to: {audio_path} (format: {extension})")
     
     return audio_path, metadata
 

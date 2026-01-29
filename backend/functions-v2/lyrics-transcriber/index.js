@@ -25,7 +25,7 @@ exports.handler = async (event) => {
     await updateJobStatus(jobId, 'TRANSCRIBING', 40);
     
     // Download audio from S3
-    const audioPath = `/tmp/${jobId}.mp3`;
+    const audioPath = `/tmp/${jobId}-audio`;
     const getCommand = new GetObjectCommand({ Bucket: bucket, Key: key });
     const response = await s3Client.send(getCommand);
     
@@ -37,7 +37,20 @@ exports.handler = async (event) => {
     const buffer = Buffer.concat(chunks);
     await writeFile(audioPath, buffer);
     
-    console.log(`Audio downloaded: ${audioPath}, size: ${buffer.length} bytes`);
+    // Determine content type from file extension
+    const fileExtension = key.split('.').pop().toLowerCase();
+    let contentType = 'audio/mpeg';
+    if (fileExtension === 'webm') {
+      contentType = 'audio/webm';
+    } else if (fileExtension === 'm4a' || fileExtension === 'mp4') {
+      contentType = 'audio/mp4';
+    } else if (fileExtension === 'ogg') {
+      contentType = 'audio/ogg';
+    } else if (fileExtension === 'wav') {
+      contentType = 'audio/wav';
+    }
+    
+    console.log(`Audio downloaded: ${audioPath}, size: ${buffer.length} bytes, type: ${contentType}`);
     
     // Transcribe with Deepgram Nova-3
     const deepgramUrl = 'https://api.deepgram.com/v1/listen';
@@ -59,7 +72,7 @@ exports.handler = async (event) => {
       method: 'POST',
       headers: {
         'Authorization': `Token ${DEEPGRAM_API_KEY}`,
-        'Content-Type': 'audio/mpeg'
+        'Content-Type': contentType
       },
       body: audioStream
     });

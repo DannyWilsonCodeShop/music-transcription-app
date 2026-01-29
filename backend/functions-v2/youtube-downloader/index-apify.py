@@ -113,7 +113,7 @@ def download_with_apify(youtube_url, job_id):
     
     # Start Apify actor run
     run_response = requests.post(
-        'https://api.apify.com/v2/acts/apify~youtube-scraper/runs',
+        'https://api.apify.com/v2/acts/streamers~youtube-scraper/runs',
         json={
             'startUrls': [{'url': youtube_url}],
             'maxResults': 1,
@@ -137,7 +137,7 @@ def download_with_apify(youtube_url, job_id):
         time.sleep(2)
         
         status_response = requests.get(
-            f'https://api.apify.com/v2/acts/apify~youtube-scraper/runs/{run_id}',
+            f'https://api.apify.com/v2/acts/streamers~youtube-scraper/runs/{run_id}',
             params={'token': APIFY_API_TOKEN}
         )
         
