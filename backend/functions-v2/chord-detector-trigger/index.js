@@ -12,7 +12,7 @@ const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const CLUSTER_NAME = process.env.ECS_CLUSTER || process.env.ECS_CLUSTER_NAME;
 const TASK_DEFINITION = process.env.TASK_DEFINITION || process.env.ECS_TASK_DEFINITION;
 const SUBNET_IDS = process.env.SUBNET_IDS?.split(',') || [process.env.SUBNET_1, process.env.SUBNET_2].filter(Boolean);
-const SECURITY_GROUP = process.env.SECURITY_GROUP || 'sg-0f34e2bad6dda9b0f'; // Default VPC security group
+const SECURITY_GROUP = process.env.SECURITY_GROUP || 'sg-0ef0ddb8feae020c5'; // ChordScout VPC default security group
 const JOBS_TABLE = process.env.DYNAMODB_JOBS_TABLE;
 
 exports.handler = async (event) => {

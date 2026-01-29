@@ -62,7 +62,22 @@
                   "MaxAttempts": 2,
                   "BackoffRate": 2.0
                 }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error",
+                  "Next": "LyricsFailure"
+                }
               ]
+            },
+            "LyricsFailure": {
+              "Type": "Pass",
+              "Result": {
+                "lyrics": null,
+                "error": "Lyrics transcription failed"
+              },
+              "End": true
             }
           }
         },
@@ -91,13 +106,28 @@
                   "MaxAttempts": 2,
                   "BackoffRate": 2.0
                 }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error",
+                  "Next": "ChordsFailure"
+                }
               ]
+            },
+            "ChordsFailure": {
+              "Type": "Pass",
+              "Result": {
+                "taskArn": null,
+                "error": "Chord detection failed"
+              },
+              "End": true
             }
           }
         }
       ],
       "ResultPath": "$.processing",
-      "Next": "GeneratePDF",
+      "Next": "WaitForChordDetection",
       "Catch": [
         {
           "ErrorEquals": ["States.ALL"],
@@ -105,6 +135,13 @@
           "ResultPath": "$.error"
         }
       ]
+    },
+    
+    "WaitForChordDetection": {
+      "Type": "Wait",
+      "Seconds": 30,
+      "Comment": "Wait for ECS chord detection task to complete",
+      "Next": "GeneratePDF"
     },
     
     "GeneratePDF": {

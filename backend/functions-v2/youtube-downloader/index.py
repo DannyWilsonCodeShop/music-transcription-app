@@ -100,7 +100,9 @@ def lambda_handler(event, context):
             'statusCode': 200,
             'body': {
                 'jobId': job_id,
-                's3Key': s3_key,
+                'bucket': AUDIO_BUCKET,
+                'key': s3_key,
+                's3Key': s3_key,  # Keep for backward compatibility
                 'videoTitle': metadata.get('title', 'Unknown'),
                 'duration': metadata.get('duration', 0)
             }

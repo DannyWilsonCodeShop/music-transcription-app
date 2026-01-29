@@ -454,7 +454,7 @@ Resources:
       RoleArn: !GetAtt StepFunctionsRole.Arn
       DefinitionString: !Sub |
         {
-          "Comment": "ChordScout V2 with ECS Fargate",
+          "Comment": "ChordScout V2 with ECS Fargate and RapidAPI",
           "StartAt": "DownloadYouTubeAudio",
           "States": {
             "DownloadYouTubeAudio": {
@@ -462,10 +462,22 @@ Resources:
               "Resource": "arn:aws:states:::lambda:invoke",
               "Parameters": {
                 "FunctionName": "${YouTubeDownloaderFunction.Arn}",
-                "Payload.$": "$"
+                "Payload": {
+                  "jobId.$": "$.jobId",
+                  "youtubeUrl.$": "$.youtubeUrl",
+                  "videoId.$": "$.videoId",
+                  "userId.$": "$.userId"
+                }
               },
-              "ResultPath": "$.download",
-              "Next": "ParallelProcessing"
+              "ResultPath": "$.downloadResult",
+              "Next": "ParallelProcessing",
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleFailure",
+                  "ResultPath": "$.error"
+                }
+              ]
             },
             "ParallelProcessing": {
               "Type": "Parallel",
@@ -475,7 +487,29 @@ Resources:
                   "States": {
                     "TranscribeLyrics": {
                       "Type": "Task",
-                      "Resource": "${LyricsTranscriberFunction.Arn}",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "${LyricsTranscriberFunction.Arn}",
+                        "Payload": {
+                          "jobId.$": "$.jobId",
+                          "bucket.$": "$.downloadResult.Payload.body.bucket",
+                          "key.$": "$.downloadResult.Payload.body.key"
+                        }
+                      },
+                      "End": true,
+                      "Catch": [
+                        {
+                          "ErrorEquals": ["States.ALL"],
+                          "ResultPath": "$.error",
+                          "Next": "LyricsFailure"
+                        }
+                      ]
+                    },
+                    "LyricsFailure": {
+                      "Type": "Pass",
+                      "Result": {
+                        "error": "Lyrics transcription failed"
+                      },
                       "End": true
                     }
                   }
@@ -485,13 +519,43 @@ Resources:
                   "States": {
                     "TriggerChordDetection": {
                       "Type": "Task",
-                      "Resource": "${ChordDetectorTriggerFunction.Arn}",
+                      "Resource": "arn:aws:states:::lambda:invoke",
+                      "Parameters": {
+                        "FunctionName": "${ChordDetectorTriggerFunction.Arn}",
+                        "Payload": {
+                          "jobId.$": "$.jobId",
+                          "bucket.$": "$.downloadResult.Payload.body.bucket",
+                          "key.$": "$.downloadResult.Payload.body.key"
+                        }
+                      },
+                      "End": true,
+                      "Catch": [
+                        {
+                          "ErrorEquals": ["States.ALL"],
+                          "ResultPath": "$.error",
+                          "Next": "ChordsFailure"
+                        }
+                      ]
+                    },
+                    "ChordsFailure": {
+                      "Type": "Pass",
+                      "Result": {
+                        "error": "Chord detection failed"
+                      },
                       "End": true
                     }
                   }
                 }
               ],
-              "Next": "WaitForChordDetection"
+              "ResultPath": "$.processing",
+              "Next": "WaitForChordDetection",
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleFailure",
+                  "ResultPath": "$.error"
+                }
+              ]
             },
             "WaitForChordDetection": {
               "Type": "Wait",
@@ -500,8 +564,34 @@ Resources:
             },
             "GeneratePDF": {
               "Type": "Task",
-              "Resource": "${PDFGeneratorFunction.Arn}",
-              "End": true
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${PDFGeneratorFunction.Arn}",
+                "Payload": {
+                  "jobId.$": "$.jobId"
+                }
+              },
+              "End": true,
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "Next": "HandleFailure",
+                  "ResultPath": "$.error"
+                }
+              ]
+            },
+            "HandleFailure": {
+              "Type": "Pass",
+              "Parameters": {
+                "error.$": "$.error",
+                "jobId.$": "$.jobId"
+              },
+              "Next": "Fail"
+            },
+            "Fail": {
+              "Type": "Fail",
+              "Error": "WorkflowFailed",
+              "Cause": "Transcription workflow failed"
             }
           }
         }
