@@ -1,5 +1,6 @@
-// Lambda: PDF Generator
-// Generates PDF with chords and lyrics using jsPDF
+// Lambda: PDF Generator - MVP Version
+// Generates simple PDF with lyrics and Nashville Number System chart
+// Focus: Lyrics + NNS chart showing only root chord changes
 
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -35,13 +36,13 @@ exports.handler = async (event) => {
     
     const { lyricsData, chordsData, videoTitle } = job;
     
-    console.log('Generating PDF...');
+    console.log('Generating MVP PDF...');
     console.log('Video title:', videoTitle);
     console.log('Has lyrics:', !!lyricsData && !!lyricsData.text);
-    console.log('Has chords:', !!chordsData);
+    console.log('Has chords:', !!chordsData && !!chordsData.chords);
     
-    // Generate PDF (with or without lyrics/chords)
-    const pdfBuffer = await generatePDF(videoTitle, lyricsData || null, chordsData || null);
+    // Generate simple PDF with lyrics + NNS chart
+    const pdfBuffer = await generateMVPPDF(videoTitle, lyricsData || null, chordsData || null);
     
     // Upload to S3
     const pdfKey = `pdfs/${jobId}.pdf`;
@@ -96,7 +97,7 @@ exports.handler = async (event) => {
   }
 };
 
-async function generatePDF(title, lyricsData, chordsData) {
+async function generateMVPPDF(title, lyricsData, chordsData) {
   const doc = new jsPDF();
   
   // Title
@@ -104,69 +105,69 @@ async function generatePDF(title, lyricsData, chordsData) {
   doc.setFont('helvetica', 'bold');
   doc.text(title || 'Untitled', 20, 20);
   
-  // Key signature (if chords available)
-  if (chordsData && chordsData.key) {
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text(`Key: ${chordsData.key} ${chordsData.mode || ''}`, 20, 35);
-  }
-  
-  let yPos = 50;
+  let yPos = 35;
   const pageHeight = doc.internal.pageSize.height;
   const marginBottom = 20;
-  const staffHeight = 25;
-  const chordSpacing = 40;
+  const pageWidth = doc.internal.pageSize.width;
   
-  // Check if we have lyrics
+  // Key signature (if chords available)
+  if (chordsData && chordsData.key) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Key: ${chordsData.key}`, 20, yPos);
+    yPos += 15;
+  }
+  
+  // Nashville Number System Chart - Show only root chord changes
+  if (chordsData && chordsData.chords && chordsData.chords.length > 0) {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Nashville Number System Chart', 20, yPos);
+    yPos += 10;
+    
+    // Extract root chord changes only
+    const rootChordChanges = extractRootChordChanges(chordsData.chords);
+    
+    console.log(`Root chord changes: ${rootChordChanges.length} (from ${chordsData.chords.length} total chords)`);
+    
+    // Draw NNS chart
+    yPos = drawNNSChart(doc, rootChordChanges, chordsData.key, 20, yPos, pageWidth - 40);
+    yPos += 20;
+  }
+  
+  // Lyrics section
   const hasLyrics = lyricsData && lyricsData.text && lyricsData.text.trim().length > 0;
   
-  if (!hasLyrics) {
-    // No lyrics - show message and chords only
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'italic');
-    doc.setTextColor(128, 128, 128);
-    doc.text('No lyrics detected - this may be an instrumental track', 20, yPos);
-    yPos += 20;
+  if (hasLyrics) {
+    // Add separator
+    doc.setLineWidth(0.5);
+    doc.line(20, yPos, pageWidth - 20, yPos);
+    yPos += 10;
     
-    if (chordsData && chordsData.chords && chordsData.chords.length > 0) {
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 0, 0);
-      doc.text('Detected Chords:', 20, yPos);
-      yPos += 10;
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Lyrics', 20, yPos);
+    yPos += 10;
+    
+    // Format and display lyrics
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    
+    const lyrics = lyricsData.text || '';
+    const paragraphs = lyrics.split('\n\n');
+    
+    for (const paragraph of paragraphs) {
+      if (!paragraph.trim()) continue;
       
-      // Show all chords in a grid
-      const allChords = chordsData.chords.map(c => c.chord || c.name).filter(c => c && c !== 'N');
-      const uniqueChords = [...new Set(allChords)];
-      
-      drawChordStaff(doc, uniqueChords.slice(0, 8), chordsData.key, 20, yPos, 170);
-      yPos += staffHeight + 15;
-      
-      if (uniqueChords.length > 8) {
-        drawChordStaff(doc, uniqueChords.slice(8, 16), chordsData.key, 20, yPos, 170);
-      }
-    } else {
-      doc.setFont('helvetica', 'normal');
-      doc.text('No chords detected', 20, yPos);
-    }
-  } else {
-    // Combine lyrics and chords with Nashville numbers
-    const combined = chordsData ? combineLyricsAndChords(lyricsData, chordsData) : formatLyricsOnly(lyricsData);
-  
-    for (const section of combined) {
       // Check if we need a new page
-      if (yPos > pageHeight - marginBottom - staffHeight - 40) {
+      if (yPos > pageHeight - marginBottom - 30) {
         doc.addPage();
         yPos = 20;
       }
       
-      // Draw lyrics first
-      doc.setFontSize(12);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(0, 0, 0);
-      
-      const lines = doc.splitTextToSize(section.text, 170);
+      const lines = doc.splitTextToSize(paragraph, pageWidth - 40);
       for (const line of lines) {
-        if (yPos > pageHeight - marginBottom - staffHeight - 40) {
+        if (yPos > pageHeight - marginBottom - 10) {
           doc.addPage();
           yPos = 20;
         }
@@ -174,81 +175,169 @@ async function generatePDF(title, lyricsData, chordsData) {
         yPos += 6;
       }
       
-      yPos += 8; // Space before staff
-      
-      // Draw chord staff with Nashville numbers if chords exist
-      if (section.chords && section.chords.length > 0) {
-        drawChordStaff(doc, section.chords, chordsData ? chordsData.key : 'C', 20, yPos, 170);
-        yPos += staffHeight + 15;
-      }
-      
-      yPos += 10; // Extra space between sections
+      yPos += 8; // Space between paragraphs
     }
+  } else {
+    // No lyrics available
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(128, 128, 128);
+    doc.text('No lyrics detected - this may be an instrumental track', 20, yPos);
+    doc.setTextColor(0, 0, 0);
   }
   
   // Footer
   doc.setFontSize(8);
   doc.setTextColor(128, 128, 128);
-  doc.text('Generated by Music Transcription App - Nashville Number System', 20, pageHeight - 10);
+  const footerText = 'Generated by ChordScout - Nashville Number System';
+  doc.text(footerText, 20, pageHeight - 10);
   
   return Buffer.from(doc.output('arraybuffer'));
 }
 
-function drawChordStaff(doc, chords, key, x, y, width) {
-  const staffLines = 5;
-  const lineSpacing = 3;
-  const chordSpacing = width / Math.max(chords.length, 4);
+function extractRootChordChanges(chords) {
+  /**
+   * Extract only root chord changes (when the bass note/root changes)
+   * This filters out chord variations and focuses on fundamental harmonic movement
+   */
+  if (!chords || chords.length === 0) return [];
   
-  // Draw staff lines
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(0, 0, 0);
+  const rootChanges = [];
+  let previousRoot = null;
   
-  for (let i = 0; i < staffLines; i++) {
-    const lineY = y + (i * lineSpacing);
-    doc.line(x, lineY, x + width, lineY);
+  for (const chord of chords) {
+    const chordName = chord.chord || chord.name;
+    if (!chordName || chordName === 'N') continue;
+    
+    // Extract root note (first 1-2 characters)
+    const root = extractRootNote(chordName);
+    
+    // Only add if root changed
+    if (root !== previousRoot) {
+      rootChanges.push({
+        chord: chordName,
+        root: root,
+        start: chord.start,
+        duration: chord.duration,
+        confidence: chord.confidence
+      });
+      previousRoot = root;
+    }
   }
   
-  // Draw chords and Nashville numbers
+  console.log(`Extracted ${rootChanges.length} root changes from ${chords.length} chords`);
+  return rootChanges;
+}
+
+function extractRootNote(chordName) {
+  /**
+   * Extract the root note from a chord name
+   * Examples: "Cmaj7" -> "C", "F#m" -> "F#", "Bb7" -> "Bb"
+   */
+  if (!chordName) return '';
+  
+  // Handle sharp and flat
+  if (chordName.length >= 2 && (chordName[1] === '#' || chordName[1] === 'b')) {
+    return chordName.substring(0, 2);
+  }
+  
+  // Just the first letter
+  return chordName[0];
+}
+
+function drawNNSChart(doc, rootChordChanges, key, x, y, width) {
+  /**
+   * Draw a simple Nashville Number System chart
+   * Format: Chord Name | Nashville Number | Time
+   */
+  const startY = y;
+  const rowHeight = 8;
+  const colWidths = [60, 60, 50]; // Chord, NNS, Time
+  
+  // Header
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
+  doc.setFillColor(240, 240, 240);
+  doc.rect(x, y, width, rowHeight, 'F');
   
-  chords.forEach((chord, index) => {
-    const chordX = x + (index * chordSpacing) + 10;
+  doc.text('Chord', x + 5, y + 6);
+  doc.text('Nashville #', x + colWidths[0] + 5, y + 6);
+  doc.text('Time', x + colWidths[0] + colWidths[1] + 5, y + 6);
+  
+  y += rowHeight;
+  
+  // Draw rows
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  
+  const maxRows = 25; // Limit to prevent overflow
+  const displayChords = rootChordChanges.slice(0, maxRows);
+  
+  for (let i = 0; i < displayChords.length; i++) {
+    const chord = displayChords[i];
     
-    // Draw chord name above staff
+    // Alternate row colors
+    if (i % 2 === 0) {
+      doc.setFillColor(250, 250, 250);
+      doc.rect(x, y, width, rowHeight, 'F');
+    }
+    
+    // Chord name
     doc.setTextColor(0, 100, 200);
-    doc.text(chord, chordX, y - 5);
+    doc.setFont('helvetica', 'bold');
+    doc.text(chord.chord, x + 5, y + 6);
     
-    // Calculate and draw Nashville number below staff
-    const nashvilleNumber = getNashvilleNumber(chord, key);
+    // Nashville number
+    const nashvilleNumber = getNashvilleNumber(chord.chord, key);
     doc.setTextColor(200, 0, 0);
     doc.setFont('helvetica', 'bold');
-    doc.text(nashvilleNumber, chordX, y + (staffLines * lineSpacing) + 8);
-  });
+    doc.text(nashvilleNumber, x + colWidths[0] + 5, y + 6);
+    
+    // Time
+    doc.setTextColor(0, 0, 0);
+    doc.setFont('helvetica', 'normal');
+    const timeStr = formatTime(chord.start);
+    doc.text(timeStr, x + colWidths[0] + colWidths[1] + 5, y + 6);
+    
+    y += rowHeight;
+  }
+  
+  // Border
+  doc.setDrawColor(200, 200, 200);
+  doc.setLineWidth(0.5);
+  doc.rect(x, startY, width, (displayChords.length + 1) * rowHeight);
+  
+  if (rootChordChanges.length > maxRows) {
+    y += 5;
+    doc.setFontSize(9);
+    doc.setTextColor(128, 128, 128);
+    doc.text(`... and ${rootChordChanges.length - maxRows} more chord changes`, x + 5, y);
+    y += 5;
+  }
+  
+  return y;
+}
+
+function formatTime(seconds) {
+  /**
+   * Format seconds as MM:SS
+   */
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 function getNashvilleNumber(chord, key) {
-  // Nashville Number System mapping
-  const majorScale = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-  const minorScale = ['A', 'B', 'C', 'D', 'E', 'F', 'G'];
+  /**
+   * Convert chord to Nashville Number System notation
+   * Based on the key signature
+   */
   
   // Parse chord to get root note
-  let rootNote = chord.replace(/[^A-G#b]/g, '');
-  if (rootNote.length > 1 && rootNote[1] === '#') {
-    rootNote = rootNote.substring(0, 2);
-  } else if (rootNote.length > 1 && rootNote[1] === 'b') {
-    rootNote = rootNote.substring(0, 2);
-  } else {
-    rootNote = rootNote[0];
-  }
+  let rootNote = extractRootNote(chord);
   
   // Parse key to get tonic
-  let keyRoot = key.replace(/[^A-G#b]/g, '');
-  if (keyRoot.length > 1 && (keyRoot[1] === '#' || keyRoot[1] === 'b')) {
-    keyRoot = keyRoot.substring(0, 2);
-  } else {
-    keyRoot = keyRoot[0];
-  }
+  let keyRoot = extractRootNote(key);
   
   // Determine if key is major or minor
   const isMinor = key.toLowerCase().includes('m') || key.toLowerCase().includes('minor');
@@ -272,103 +361,30 @@ function getNashvilleNumber(chord, key) {
   let number = isMinor ? minorNumbers[interval] : majorNumbers[interval];
   
   // Add chord quality indicators
-  if (chord.includes('m') && !chord.includes('maj')) {
-    // Minor chord - use lowercase if it's not the relative minor
-    if (!isMinor || interval !== 0) {
-      number = number.toLowerCase();
-    }
+  const chordLower = chord.toLowerCase();
+  
+  if (chordLower.includes('m') && !chordLower.includes('maj')) {
+    // Minor chord
+    number += 'm';
   }
   
-  if (chord.includes('7')) {
+  if (chordLower.includes('maj7')) {
+    number += 'maj7';
+  } else if (chordLower.includes('7')) {
     number += '7';
   }
-  if (chord.includes('maj7')) {
-    number = number.replace('7', 'maj7');
-  }
-  if (chord.includes('dim')) {
+  
+  if (chordLower.includes('dim') || chordLower.includes('°')) {
     number += '°';
   }
-  if (chord.includes('aug') || chord.includes('+')) {
+  if (chordLower.includes('aug') || chordLower.includes('+')) {
     number += '+';
+  }
+  if (chordLower.includes('sus')) {
+    number += 'sus';
   }
   
   return number;
-}
-
-function combineLyricsAndChords(lyricsData, chordsData) {
-  const combined = [];
-  const chords = chordsData.chords || [];
-  const paragraphs = lyricsData.paragraphs || [];
-  
-  if (paragraphs.length === 0) {
-    // Fallback: split lyrics by lines and group chords
-    const lines = (lyricsData.text || '').split('\n');
-    let chordIndex = 0;
-    const chordsPerLine = 4; // Group chords in sets of 4
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      if (line.trim()) {
-        // Get chords for this line
-        const lineChords = [];
-        for (let j = 0; j < chordsPerLine && chordIndex < chords.length; j++) {
-          lineChords.push(chords[chordIndex].chord || chords[chordIndex].name);
-          chordIndex++;
-        }
-        
-        combined.push({
-          text: line,
-          chords: lineChords.filter(c => c && c !== 'N')
-        });
-      }
-    }
-  } else {
-    // Match chords to paragraphs by timestamp
-    for (const para of paragraphs) {
-      const matchingChords = chords.filter(c => 
-        c.start >= para.start && c.start < para.end
-      );
-      
-      const chordNames = matchingChords
-        .map(c => c.chord || c.name)
-        .filter(c => c && c !== 'N')
-        .slice(0, 6); // Limit to 6 chords per section
-      
-      combined.push({
-        text: para.text,
-        chords: chordNames
-      });
-    }
-  }
-  
-  return combined;
-}
-
-function formatLyricsOnly(lyricsData) {
-  const formatted = [];
-  const paragraphs = lyricsData.paragraphs || [];
-  
-  if (paragraphs.length === 0) {
-    // Fallback: split lyrics by lines
-    const lines = (lyricsData.text || '').split('\n');
-    for (const line of lines) {
-      if (line.trim()) {
-        formatted.push({
-          text: line,
-          chords: []
-        });
-      }
-    }
-  } else {
-    for (const para of paragraphs) {
-      formatted.push({
-        text: para.text,
-        chords: []
-      });
-    }
-  }
-  
-  return formatted;
 }
 
 async function updateJobStatus(jobId, status, progress, error = null) {
