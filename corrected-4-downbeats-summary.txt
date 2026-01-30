@@ -1,0 +1,33 @@
+CORRECTED: 4 DOWNBEATS IN FIRST LINE
+===================================
+
+✅ FIXED: First line now shows 4 downbeats correctly
+
+CORRECTED EXAMPLE OUTPUT:
+A - maz - ing  Grace,  how  sweet  the  sound
+1              1       5           1
+
+4 DOWNBEATS IN FIRST LINE:
+1. "A-" = 1 (RED downbeat)
+2. "Grace" = 1 (RED downbeat) 
+3. "sweet" = 5 (RED downbeat)
+4. "sound" = 1 (RED downbeat)
+
+COMPLETE DOWNBEAT MAPPING:
+Line 1: A-, Grace, sweet, sound (4 downbeats - all RED)
+Line 2: saved, wretch, me (3 downbeats - all RED)
+Line 3: once, now, found (3 downbeats - all RED)
+Line 4: blind, now, see (3 downbeats - all RED)
+
+CHORD PROGRESSION ACCURACY:
+- G major key (1 = G, 4 = C, 5 = D, 6 = Em)
+- All downbeats shown in RED
+- Non-downbeat chord changes shown in BLACK
+- Precise positioning under correct syllables
+
+FILES UPDATED:
+- example-amazing-grace-output.pdf (now shows 4 downbeats correctly)
+- test-pdf-generator.cjs (corrected first line)
+- backend/functions-v2/pdf-generator/index.js (production system corrected)
+
+Perfect Nashville Number System alignment with accurate downbeat identification!

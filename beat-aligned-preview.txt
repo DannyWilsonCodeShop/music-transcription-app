@@ -1,0 +1,52 @@
+BEAT-BASED PDF ALIGNMENT PREVIEW
+===============================
+
+This shows how the beat-based Nashville Number System works in the generated PDF:
+
+AMAZING GRACE
+Key: G | Tempo: 120 BPM | Meter: 3/4
+
+Verse 1
+-------
+A–maz–ing  Grace,  how  sweet  the  sound
+1  -   -   1     5   -     4   1
+
+That  saved  a  wretch  like  me
+1     5     6  4      1     3
+
+I  once  was  lost,  but  now  am  found
+1  -     -    1     5   -    4  1
+
+Was  blind,  but  now  I  see
+1    5      6    4    1  3
+
+Verse 2
+-------
+'Twas  grace  that  taught  my  heart  to  fear
+1      -      -     1       5   -      4   1
+
+And  grace  my  fears  re–lieved
+1    5      6   4      1  3
+
+BEAT-BASED ALIGNMENT SYSTEM:
+============================
+
+1. Each syllable/word is aligned to specific musical beats
+2. In 3/4 time: beats 1, 4, 7, 10 are downbeats (start of measures)
+3. Nashville numbers appear exactly when chord changes occur
+4. Dashes (-) indicate held chords or no chord change
+5. Fixed-width spacing ensures perfect vertical alignment
+6. Red numbers in PDF make chord changes visually distinct
+
+MUSICAL ACCURACY:
+================
+- Beat 1: A- (1)     - Downbeat, G chord
+- Beat 2: maz- (-)   - Hold G chord  
+- Beat 3: ing (-)    - Hold G chord
+- Beat 4: Grace, (1) - New measure, G chord
+- Beat 5: how (5)    - D chord (5th of G)
+- Beat 6: sweet (-)  - Hold D chord
+- Beat 7: the (4)    - New measure, C chord (4th of G)
+- Beat 8: sound (1)  - Back to G chord
+
+This creates musically accurate chord charts that musicians can follow!
