@@ -1,0 +1,119 @@
+{
+  "Comment": "Working Enhanced Music Transcription Workflow - Uses actual existing functions",
+  "StartAt": "AudioExtraction",
+  "States": {
+    "AudioExtraction": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-youtube-downloader-dev",
+      "Parameters": {
+        "youtubeUrl.$": "$.youtubeUrl",
+        "jobId.$": "$.jobId"
+      },
+      "ResultPath": "$.audioResult",
+      "Next": "ParallelAnalysis",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    
+    "ParallelAnalysis": {
+      "Type": "Parallel",
+      "Branches": [
+        {
+          "StartAt": "ChordDetection",
+          "States": {
+            "ChordDetection": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-chord-detector-trigger-dev",
+              "Parameters": {
+                "jobId.$": "$.jobId"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "LyricsTranscription",
+          "States": {
+            "LyricsTranscription": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-lyrics-transcriber-dev",
+              "Parameters": {
+                "jobId.$": "$.jobId"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "Next": "PDFGeneration",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    
+    "PDFGeneration": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-pdf-generator-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId"
+      },
+      "InputPath": "$",
+      "End": true,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    
+    "HandleError": {
+      "Type": "Pass",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "error": "Workflow failed",
+        "status": "FAILED"
+      },
+      "End": true
+    }
+  }
+}

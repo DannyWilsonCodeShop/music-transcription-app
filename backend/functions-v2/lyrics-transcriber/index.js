@@ -1,5 +1,5 @@
-// Lambda: Lyrics Transcriber
-// Transcribes audio using Deepgram Nova-3 API
+// Lambda: Enhanced Lyrics Transcriber
+// Transcribes audio using Deepgram Nova-3 API with syllable-level alignment
 
 const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -59,7 +59,7 @@ exports.handler = async (event) => {
     
     console.log(`Audio ready for Deepgram: ${finalAudioPath}, type: ${contentType}`);
     
-    // Transcribe with Deepgram Nova-3
+    // Transcribe with Deepgram Nova-3 with enhanced features
     const deepgramUrl = 'https://api.deepgram.com/v1/listen';
     const params = new URLSearchParams({
       model: 'nova-3',
@@ -67,7 +67,10 @@ exports.handler = async (event) => {
       punctuate: 'true',
       paragraphs: 'true',
       utterances: 'true',
-      diarize: 'false'
+      diarize: 'false',
+      word_timestamps: 'true',
+      syllable_timestamps: 'true', // Enhanced: syllable-level timestamps
+      phoneme_timestamps: 'true'   // Enhanced: phoneme-level analysis
     });
     
     console.log('Sending to Deepgram...');
@@ -94,7 +97,7 @@ exports.handler = async (event) => {
     console.log('Transcription complete');
     console.log('Full Deepgram response:', JSON.stringify(transcription, null, 2));
     
-    // Extract lyrics with timestamps
+    // Extract enhanced lyrics with syllable-level alignment
     const results = transcription.results;
     const channels = results.channels[0];
     const alternatives = channels.alternatives[0];
@@ -107,23 +110,31 @@ exports.handler = async (event) => {
     console.log('Words count:', words.length);
     console.log('Paragraphs count:', paragraphs.length);
     
+    // Enhanced: Generate syllable-aligned lyrics
+    const syllableAlignedLyrics = generateSyllableAlignment(words);
+    console.log('Syllable-aligned lyrics count:', syllableAlignedLyrics.length);
+    
     const lyricsData = {
       text: lyricsText,
       words: words.map(w => ({
         word: w.word,
         start: w.start,
         end: w.end,
-        confidence: w.confidence
+        confidence: w.confidence,
+        syllables: w.syllables || [] // Enhanced: syllable data
       })),
       paragraphs: paragraphs.map(p => ({
         text: p.sentences.map(s => s.text).join(' '),
         start: p.start,
         end: p.end
       })),
+      syllableAlignedLyrics: syllableAlignedLyrics, // Enhanced: syllable alignment
       confidence: alternatives.confidence,
       metadata: {
         duration: results.metadata?.duration || 0,
-        model: 'nova-3'
+        model: 'nova-3',
+        enhanced: true,
+        syllableCount: syllableAlignedLyrics.length
       }
     };
     
@@ -187,4 +198,79 @@ async function updateJobStatus(jobId, status, progress, error = null) {
     ExpressionAttributeNames: { '#status': 'status' },
     ExpressionAttributeValues: exprValues
   }));
+}
+
+// Enhanced: Generate syllable-level alignment for musical integration
+function generateSyllableAlignment(words) {
+  const syllables = [];
+  
+  words.forEach(word => {
+    if (word.syllables && word.syllables.length > 0) {
+      // Use Deepgram syllable data if available
+      word.syllables.forEach(syllable => {
+        syllables.push({
+          text: syllable.text,
+          startTime: syllable.start,
+          endTime: syllable.end,
+          confidence: syllable.confidence || word.confidence,
+          word: word.word
+        });
+      });
+    } else {
+      // Fallback: Split word into estimated syllables
+      const estimatedSyllables = splitIntoSyllables(word.word);
+      const syllableDuration = (word.end - word.start) / estimatedSyllables.length;
+      
+      estimatedSyllables.forEach((syllable, index) => {
+        const startTime = word.start + (index * syllableDuration);
+        const endTime = startTime + syllableDuration;
+        
+        syllables.push({
+          text: syllable,
+          startTime: startTime,
+          endTime: endTime,
+          confidence: word.confidence,
+          word: word.word,
+          estimated: true
+        });
+      });
+    }
+  });
+  
+  return syllables;
+}
+
+// Enhanced: Simple syllable splitting algorithm
+function splitIntoSyllables(word) {
+  // Simple vowel-based syllable splitting
+  const vowels = 'aeiouAEIOU';
+  const syllables = [];
+  let currentSyllable = '';
+  
+  for (let i = 0; i < word.length; i++) {
+    currentSyllable += word[i];
+    
+    // If we hit a vowel and the next character is a consonant, end syllable
+    if (vowels.includes(word[i]) && i < word.length - 1 && !vowels.includes(word[i + 1])) {
+      // Look ahead to see if we should include the next consonant
+      if (i < word.length - 2 && !vowels.includes(word[i + 2])) {
+        // Two consonants ahead, take one
+        currentSyllable += word[i + 1];
+        i++;
+      }
+      syllables.push(currentSyllable);
+      currentSyllable = '';
+    }
+  }
+  
+  // Add remaining characters
+  if (currentSyllable) {
+    if (syllables.length > 0) {
+      syllables[syllables.length - 1] += currentSyllable;
+    } else {
+      syllables.push(currentSyllable);
+    }
+  }
+  
+  return syllables.length > 0 ? syllables : [word];
 }

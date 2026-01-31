@@ -1,5 +1,5 @@
-// Lambda: Chord Detector Trigger
-// Triggers ECS Fargate task for chord detection
+// Lambda: Enhanced Chord Detector Trigger
+// Triggers ECS Fargate task for enhanced 0.2s interval chord detection
 
 const { ECSClient, RunTaskCommand } = require('@aws-sdk/client-ecs');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -50,7 +50,11 @@ exports.handler = async (event) => {
               { name: 'JOB_ID', value: jobId },
               { name: 'AUDIO_BUCKET', value: bucket },
               { name: 'AUDIO_KEY', value: key },
-              { name: 'DYNAMODB_JOBS_TABLE', value: JOBS_TABLE }
+              { name: 'DYNAMODB_JOBS_TABLE', value: JOBS_TABLE },
+              { name: 'ENHANCED_MODE', value: 'true' },
+              { name: 'DETECTION_INTERVAL', value: '0.2' },
+              { name: 'ENABLE_DOWNBEAT_DETECTION', value: 'true' },
+              { name: 'ENABLE_TEMPO_ANALYSIS', value: 'true' }
             ]
           }
         ]
