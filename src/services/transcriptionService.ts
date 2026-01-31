@@ -1,7 +1,7 @@
 // API Configuration - Music Transcription App V2 with Enhanced System
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
                      (import.meta.env.DEV ? 'http://localhost:3001' : 
-                      'https://rzx9drt3z1.execute-api.us-east-1.amazonaws.com/prod');
+                      'https://ppq03hif98.execute-api.us-east-1.amazonaws.com/dev');
 
 // Enable live API for production
 const USE_MOCK_DATA = false;

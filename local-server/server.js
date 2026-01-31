@@ -14,7 +14,7 @@ const { integrateMusicalDataLocally } = require('./modules/musical-integration-o
 const { generateEnhancedPDFLocally } = require('./modules/enhanced-pdf-generator');
 
 const app = express();
-const PORT = 3001;
+const PORT = 3002;
 
 // Middleware
 app.use(cors());
