@@ -3,8 +3,8 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
                      (import.meta.env.DEV ? 'http://localhost:3001' : 
                       'https://rzx9drt3z1.execute-api.us-east-1.amazonaws.com/prod');
 
-// Mock mode disabled - using live API for production testing
-const USE_MOCK_DATA = false;
+// TEMPORARY: Enable mock mode while fixing CORS issue
+const USE_MOCK_DATA = true;
 
 export interface TranscriptionJob {
   id: string;
