@@ -11,8 +11,5 @@ export default defineConfig({
     alias: {
       './runtimeConfig': './runtimeConfig.browser',
     },
-  },
-  optimizeDeps: {
-    exclude: ['@aws-amplify/backend']
   }
 })
