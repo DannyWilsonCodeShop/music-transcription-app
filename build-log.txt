@@ -1,0 +1,178 @@
+2026-01-31T02:32:06.235Z [INFO]: # Build environment configured with Standard build compute type: 8GiB Memory, 4vCPUs, 128GB Disk Space
+2026-01-31T02:32:06.661Z [INFO]: # Cloning repository: git@github.com:DannyWilsonCodeShop/music-transcription-app.git
+2026-01-31T02:32:16.208Z [INFO]: 
+2026-01-31T02:32:16.317Z [INFO]: Cloning into 'music-transcription-app'...
+                                 Updating files:  98% (5070/5122)Updating files:  99% (5071/5122)Updating files: 100% (5122/5122)Updating files: 100% (5122/5122), done.
+2026-01-31T02:32:16.318Z [INFO]: # Switching to commit: 4a5c70ddb86531c8ed1d9e7b145649f2b3a30fed
+2026-01-31T02:32:16.592Z [INFO]: Note: switching to '4a5c70ddb86531c8ed1d9e7b145649f2b3a30fed'.
+                                 You are in 'detached HEAD' state. You can look around, make experimental
+                                 changes and commit them, and you can discard any commits you make in this
+                                 state without impacting any branches by switching back to a branch.
+                                 If you want to create a new branch to retain commits you create, you may
+                                 do so (now or later) by using -c with the switch command. Example:
+                                 git switch -c <new-branch-name>
+                                 Or undo this operation with:
+                                 git switch -
+                                 Turn off this advice by setting config variable advice.detachedHead to false
+                                 HEAD is now at 4a5c70d docs: Add production deployment fix documentation and API test
+2026-01-31T02:32:16.670Z [INFO]: Successfully cleaned up Git credentials
+2026-01-31T02:32:16.670Z [INFO]: # Checking for Git submodules at: /codebuild/output/src1515853759/src/music-transcription-app/.gitmodules
+2026-01-31T02:32:16.679Z [INFO]: # Retrieving environment cache...
+2026-01-31T02:32:16.784Z [INFO]: # Retrieved environment cache
+2026-01-31T02:32:16.784Z [INFO]: ---- Setting Up SSM Secrets ----
+2026-01-31T02:32:16.784Z [INFO]: SSM params {"Path":"/amplify/dqg97bbmmprz/dev/","WithDecryption":true}
+2026-01-31T02:32:20.015Z [INFO]: # Patching NPM package '@aws-amplify/cli' from 14.0.0 to 14.2.5...
+2026-01-31T02:33:00.238Z [INFO]: # Installed '@aws-amplify/cli@14.2.5'
+2026-01-31T02:33:00.342Z [INFO]: # Done patching NPM package '@aws-amplify/cli' to version 14.2.5
+2026-01-31T02:33:00.348Z [INFO]: # Retrieving cache...
+2026-01-31T02:33:00.394Z [INFO]: # Retrieved cache
+2026-01-31T02:33:02.980Z [INFO]: ## Starting Backend Build
+                                 # Starting phase: build
+                                 # Executing command: npm ci
+2026-01-31T02:33:05.871Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-31T02:33:05.877Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-31T02:33:06.008Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-31T02:33:06.008Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-31T02:34:19.206Z [WARNING]: npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-01-31T02:34:19.272Z [WARNING]: npm warn deprecated @babel/plugin-proposal-class-properties@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+2026-01-31T02:34:19.559Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-31T02:34:19.568Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-31T02:34:19.597Z [WARNING]: npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-01-31T02:34:20.536Z [WARNING]: npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+2026-01-31T02:34:20.698Z [WARNING]: npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+2026-01-31T02:34:20.720Z [WARNING]: npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+2026-01-31T02:34:20.914Z [WARNING]: npm warn deprecated @babel/plugin-proposal-object-rest-spread@7.20.7: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+2026-01-31T02:34:33.107Z [WARNING]: npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+2026-01-31T02:34:36.941Z [WARNING]: npm warn deprecated core-js@2.6.12: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+2026-01-31T02:35:11.985Z [INFO]: added 1760 packages, and audited 2610 packages in 2m
+2026-01-31T02:35:11.991Z [INFO]: 228 packages are looking for funding
+                                 run `npm fund` for details
+2026-01-31T02:35:12.565Z [INFO]: 92 vulnerabilities (9 low, 9 moderate, 74 high)
+                                 To address issues that do not require attention, run:
+                                 npm audit fix
+                                 To address all issues (including breaking changes), run:
+                                 npm audit fix --force
+                                 Run `npm audit` for details.
+2026-01-31T02:35:12.609Z [INFO]: # Executing command: npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+2026-01-31T02:35:16.537Z [INFO]: 2:35:16 AM Synthesizing backend...
+2026-01-31T02:35:16.541Z [INFO]: 
+2026-01-31T02:35:17.815Z [WARNING]: Bundling asset amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c/AmplifyBranchLinker/CustomResourceLambda/Code/Stage...
+2026-01-31T02:35:18.147Z [WARNING]: ...b11a6b5b293424c8914e0397be53dba103d77a0c648886-building/index.js  932.7kb
+                                    ⚡ Done in 68ms
+2026-01-31T02:35:18.649Z [WARNING]: WARNING: owners may reassign ownership for the following model(s) and role(s): TranscriptionJob: [owner], User: [owner]. If this is not intentional, you may want to apply field-level authorization rules to these fields. To read more: https://docs.amplify.aws/cli/graphql/authorization-rules/#per-user--owner-based-data-access.
+2026-01-31T02:35:18.649Z [WARNING]: WARNING: Schema is using an @auth directive with deprecated provider 'iam'. Replace 'iam' provider with 'identityPool' provider.
+2026-01-31T02:35:19.420Z [INFO]: 2:35:19 AM ✔ Backend synthesized in 3.22 seconds
+2026-01-31T02:35:19.420Z [INFO]: 
+2026-01-31T02:35:19.421Z [INFO]: 2:35:19 AM Running type checks...
+2026-01-31T02:35:19.421Z [INFO]: 
+2026-01-31T02:35:28.771Z [INFO]: 2:35:28 AM ✔ Type checks completed in 9.35 seconds
+2026-01-31T02:35:28.785Z [INFO]: 2:35:28 AM Building and publishing assets...
+2026-01-31T02:35:29.643Z [INFO]: 2:35:29 AM ✔ Built and published assets
+2026-01-31T02:35:32.554Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   0 | 2:35:30 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c User Initiated
+2026-01-31T02:35:36.876Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   0 | 2:35:34 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | auth.NestedStack/auth.NestedStackResource (auth179371D7)
+2026-01-31T02:35:36.881Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   1 | 2:35:35 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | auth.NestedStack/auth.NestedStackResource (auth179371D7)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   1 | 2:35:36 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | storage.NestedStack/storage.NestedStackResource (storage0EC3F24A)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   1 | 2:35:36 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | data.NestedStack/data.NestedStackResource (data7552DF31)
+2026-01-31T02:35:39.080Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   2 | 2:35:37 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | storage.NestedStack/storage.NestedStackResource (storage0EC3F24A)
+2026-01-31T02:35:39.081Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   2 | 2:35:37 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 User Initiated
+2026-01-31T02:35:43.557Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   2 | 2:35:42 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | data/amplifyData/AmplifyTableManager.NestedStack/AmplifyTableManager.NestedStackResource (amplifyDataAmplifyTableManagerNestedStackAmplifyTableManagerNestedStackResource86290833)
+2026-01-31T02:35:46.023Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   3 | 2:35:43 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/AmplifyTableManager.NestedStack/AmplifyTableManager.NestedStackResource (amplifyDataAmplifyTableManagerNestedStackAmplifyTableManagerNestedStackResource86290833)
+2026-01-31T02:35:46.024Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   3 | 2:35:44 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | data/amplifyData/User.NestedStack/User.NestedStackResource (amplifyDataUserNestedStackUserNestedStackResource9488907F)
+2026-01-31T02:35:46.024Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   3 | 2:35:44 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | data/amplifyData/ProcessingQueue.NestedStack/ProcessingQueue.NestedStackResource (amplifyDataProcessingQueueNestedStackProcessingQueueNestedStackResourceC7093935)
+2026-01-31T02:35:46.024Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   3 | 2:35:44 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | data/amplifyData/AnalysisCache.NestedStack/AnalysisCache.NestedStackResource (amplifyDataAnalysisCacheNestedStackAnalysisCacheNestedStackResource2C2B4755)
+2026-01-31T02:35:46.024Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   3 | 2:35:44 AM | UPDATE_IN_PROGRESS | AWS::CloudFormation::Stack | data/amplifyData/TranscriptionJob.NestedStack/TranscriptionJob.NestedStackResource (amplifyDataTranscriptionJobNestedStackTranscriptionJobNestedStackResource93DAD35B)
+2026-01-31T02:35:46.025Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   4 | 2:35:45 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/User.NestedStack/User.NestedStackResource (amplifyDataUserNestedStackUserNestedStackResource9488907F)
+2026-01-31T02:35:46.025Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   5 | 2:35:45 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/ProcessingQueue.NestedStack/ProcessingQueue.NestedStackResource (amplifyDataProcessingQueueNestedStackProcessingQueueNestedStackResourceC7093935)
+2026-01-31T02:35:48.542Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   6 | 2:35:45 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/AnalysisCache.NestedStack/AnalysisCache.NestedStackResource (amplifyDataAnalysisCacheNestedStackAnalysisCacheNestedStackResource2C2B4755)
+2026-01-31T02:35:48.547Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   7 | 2:35:45 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/TranscriptionJob.NestedStack/TranscriptionJob.NestedStackResource (amplifyDataTranscriptionJobNestedStackTranscriptionJobNestedStackResource93DAD35B)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   8 | 2:35:47 AM | UPDATE_COMPLETE_CLEANUP_IN_PROGRESS | AWS::CloudFormation::Stack | amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   9 | 2:35:47 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data.NestedStack/data.NestedStackResource (data7552DF31)
+2026-01-31T02:35:51.043Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |  10 | 2:35:48 AM | UPDATE_COMPLETE_CLEANUP_IN_PROGRESS | AWS::CloudFormation::Stack | amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c
+2026-01-31T02:35:51.043Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   9 | 2:35:49 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | storage.NestedStack/storage.NestedStackResource (storage0EC3F24A)
+2026-01-31T02:35:53.495Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   8 | 2:35:51 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/User.NestedStack/User.NestedStackResource (amplifyDataUserNestedStackUserNestedStackResource9488907F)
+2026-01-31T02:35:53.500Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   7 | 2:35:51 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/TranscriptionJob.NestedStack/TranscriptionJob.NestedStackResource (amplifyDataTranscriptionJobNestedStackTranscriptionJobNestedStackResource93DAD35B)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   6 | 2:35:51 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/ProcessingQueue.NestedStack/ProcessingQueue.NestedStackResource (amplifyDataProcessingQueueNestedStackProcessingQueueNestedStackResourceC7093935)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   5 | 2:35:51 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/AnalysisCache.NestedStack/AnalysisCache.NestedStackResource (amplifyDataAnalysisCacheNestedStackAnalysisCacheNestedStackResource2C2B4755)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   4 | 2:35:51 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data/amplifyData/AmplifyTableManager.NestedStack/AmplifyTableManager.NestedStackResource (amplifyDataAmplifyTableManagerNestedStackAmplifyTableManagerNestedStackResource86290833)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303 |   5 | 2:35:52 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c-data7552DF31-HLERCDONV303
+2026-01-31T02:36:02.041Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   4 | 2:36:00 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | data.NestedStack/data.NestedStackResource (data7552DF31)
+2026-01-31T02:36:02.045Z [INFO]: amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   3 | 2:36:00 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | auth.NestedStack/auth.NestedStackResource (auth179371D7)
+                                 amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c |   4 | 2:36:01 AM | UPDATE_COMPLETE | AWS::CloudFormation::Stack | amplify-dqg97bbmmprz-dev-branch-0fa9c53a8c
+2026-01-31T02:36:05.891Z [INFO]: 2:36:05 AM ✔ Deployment completed in 36.248 seconds
+2026-01-31T02:36:05.895Z [INFO]: 2:36:05 AM AppSync API endpoint = https://ybimaubaanhyxbnbyoil5qwwy4.appsync-api.us-east-1.amazonaws.com/graphql
+2026-01-31T02:36:06.215Z [INFO]: 2:36:06 AM File written: amplify_outputs.json
+2026-01-31T02:36:06.432Z [INFO]: # Completed phase: build
+                                 ## Completed Backend Build
+2026-01-31T02:36:06.436Z [INFO]: ## Starting Frontend Build
+                                 # Starting phase: preBuild
+                                 # Executing command: npm ci
+2026-01-31T02:36:09.211Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-31T02:36:09.215Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/data-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-31T02:36:09.349Z [WARNING]: npm warn ERESOLVE overriding peer dependency
+2026-01-31T02:36:09.350Z [WARNING]: npm warn While resolving: @aws-amplify/plugin-types@1.10.1
+                                    npm warn Found: @aws-sdk/types@3.821.0
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types/node_modules/@aws-sdk/types
+                                    npm warn
+                                    npm warn Could not resolve dependency:
+                                    npm warn peer @aws-sdk/types@"^3.734.0" from @aws-amplify/plugin-types@1.10.1
+                                    npm warn node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs/node_modules/@aws-amplify/plugin-types
+                                    npm warn   @aws-amplify/plugin-types@"^1.10.1" from @aws-amplify/ai-constructs@1.5.3
+                                    npm warn   node_modules/@aws-amplify/graphql-api-construct/node_modules/@aws-amplify/ai-constructs
+2026-01-31T02:37:30.530Z [WARNING]: npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+2026-01-31T02:37:30.638Z [WARNING]: npm warn deprecated @babel/plugin-proposal-class-properties@7.18.6: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-class-properties instead.
+2026-01-31T02:37:30.794Z [WARNING]: npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+2026-01-31T02:37:30.845Z [WARNING]: npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+2026-01-31T02:37:31.091Z [WARNING]: npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+2026-01-31T02:37:31.099Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-31T02:37:31.144Z [WARNING]: npm warn deprecated glob@7.2.3: Glob versions prior to v9 are no longer supported
+2026-01-31T02:37:31.165Z [WARNING]: npm warn deprecated @babel/plugin-proposal-object-rest-spread@7.20.7: This proposal has been merged to the ECMAScript standard and thus this plugin is no longer maintained. Please use @babel/plugin-transform-object-rest-spread instead.
+2026-01-31T02:37:32.678Z [WARNING]: npm warn deprecated node-domexception@1.0.0: Use your platform's native DOMException instead
+2026-01-31T02:37:40.658Z [WARNING]: npm warn deprecated eslint@8.57.1: This version is no longer supported. Please see https://eslint.org/version-support for other options.
+2026-01-31T02:37:46.220Z [WARNING]: npm warn deprecated core-js@2.6.12: core-js@<3.23.3 is no longer maintained and not recommended for usage due to the number of issues. Because of the V8 engine whims, feature detection in old core-js versions could cause a slowdown up to 100x even if nothing is polyfilled. Some versions have web compatibility issues. Please, upgrade your dependencies to the actual version of core-js.
+2026-01-31T02:37:48.300Z [INFO]: added 1760 packages, and audited 2610 packages in 2m
+2026-01-31T02:37:48.300Z [INFO]: 228 packages are looking for funding
+                                 run `npm fund` for details
+2026-01-31T02:37:48.912Z [INFO]: 92 vulnerabilities (9 low, 9 moderate, 74 high)
+                                 To address issues that do not require attention, run:
+                                 npm audit fix
+                                 To address all issues (including breaking changes), run:
+                                 npm audit fix --force
+                                 Run `npm audit` for details.
+2026-01-31T02:37:48.979Z [INFO]: # Completed phase: preBuild
+                                 # Starting phase: build
+                                 # Executing command: npm run build
+2026-01-31T02:37:49.083Z [INFO]: > music-transcription-app@0.0.0 build
+                                 > tsc && vite build
+2026-01-31T02:37:50.819Z [INFO]: src/services/transcriptionService.ts(2,22): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+2026-01-31T02:37:50.823Z [INFO]: src/services/transcriptionService.ts(3,23): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+2026-01-31T02:37:50.911Z [ERROR]: !!! Build failed
+2026-01-31T02:37:50.911Z [ERROR]: !!! Error: Command failed with exit code 2
+2026-01-31T02:37:50.912Z [INFO]: # Starting environment caching...
+2026-01-31T02:37:50.912Z [INFO]: # Uploading environment cache artifact...
+2026-01-31T02:37:50.999Z [INFO]: # Uploaded environment cache artifact
+2026-01-31T02:37:50.999Z [INFO]: # Environment caching completed
+

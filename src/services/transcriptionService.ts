@@ -1,6 +1,6 @@
 // API Configuration - Music Transcription App V2 with Enhanced System
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 
-                     (process.env.NODE_ENV === 'development' ? 'http://localhost:3001' : 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+                     (import.meta.env.DEV ? 'http://localhost:3001' : 
                       'https://rzx9drt3z1.execute-api.us-east-1.amazonaws.com/prod');
 
 // Mock mode disabled - using live API for production testing
