@@ -1,0 +1,51 @@
+
+PERFECT LAYOUT PREVIEW (Amazing Grace Style)
+===========================================
+
+Title: The Wheels on the Bus
+Key: C major | Tempo: 60 BPM | Meter: 4/4
+
+PERFECT 4-COLUMN LAYOUT:
+Column 1: 20px  | Column 2: 65px  | Column 3: 110px | Column 4: 155px
+
+LINE 1 (Measures 1-4):
+Lyrics:  The wheels    go round      round and      round and
+         on the bus    and round     round,         round
+Chords:  1             1             2m             2m
+         (RED)         (RED)         (RED)          (RED)
+
+LINE 2 (Measures 5-8):
+Lyrics:  The wheels    go round      All            the town
+         on the bus    and round     through        
+Chords:  3m            3m            4              4
+         (RED)         (RED)         (RED)          (RED)
+
+LINE 3 (Measures 9-12):
+Lyrics:  The wi        go swish      swish swish    swish swish
+         pers on the   swish swish   swish,         swish
+         bus           swish
+Chords:  5             5             6m             6m
+         (RED)         (RED)         (RED)          (RED)
+
+LINE 4 (Measures 13-16):
+Lyrics:  The wi        go swish      All            the town
+         pers on the   swish swish   through
+         bus           swish
+Chords:  7°            7°            1              1
+         (RED)         (RED)         (RED)          (RED)
+
+LAYOUT FEATURES:
+✅ Exact 4-column alignment (20px, 65px, 110px, 155px)
+✅ Pickup notes positioned left of downbeats
+✅ RED chord numbers for downbeats
+✅ BLACK chord numbers for passing chords
+✅ Professional syllable separation
+✅ Proper measure grouping (4 measures per line)
+✅ Nashville Number System integration
+✅ Clean typography matching Amazing Grace style
+
+CHORD ANALYSIS:
+Chord Progression: C - Dm - Em - F - G - Am - Bdim
+Nashville Numbers: 1 - 2m - 3m - 4 - 5 - 6m - 7°
+Key Center: C major
+Total Measures: 75

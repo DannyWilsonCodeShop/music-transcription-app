@@ -1,0 +1,33 @@
+
+PERFECT LAYOUT PDF PREVIEW
+=========================
+
+Title: The Wheels on the Bus - Mock Data Test
+Key: C major
+BPM: 60
+Time Signature: 4/4
+
+MEASURE-BASED LAYOUT (First 8 measures):
+M1 @ 0:00: DB C(1) | "The wheels on the bus"
+M2 @ 0:04: DB C(1) | "go round and round"
+M3 @ 0:08: DB Dm(2m) | "round and round,"
+M4 @ 0:12: DB Dm(2m) | "round and round"
+M5 @ 0:16: DB Em(3m) | "The wheels on the bus"
+M6 @ 0:20: DB Em(3m) | "go round and round"
+M7 @ 0:24: DB F(4) | "All through"
+M8 @ 0:28: DB F(4) | "the town"
+
+SUMMARY:
+- Total Measures: 75
+- Total Chords: 300
+- Total Syllables: 280
+- Chord Progression: C - Dm - Em - F - G - Am - Bdim
+- Nashville Numbers: 1 - 2m - 3m - 4 - 5 - 6m - 7°
+
+PERFECT LAYOUT FEATURES:
+✅ Measure-based organization
+✅ Downbeat highlighting (DB = Downbeat, -- = Other beats)
+✅ Nashville Number System integration
+✅ Syllable-level lyric alignment
+✅ Precise timing information
+✅ Professional formatting

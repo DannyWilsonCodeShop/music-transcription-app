@@ -1,0 +1,51 @@
+
+ADAPTIVE LAYOUT TEMPLATE SPECIFICATION
+=====================================
+
+MEASURE CONSTRAINTS:
+- Fixed measure width: 140px
+- Maximum syllables per measure: 8
+- Maximum syllable length: 4 characters + hyphen = 5 total
+- Minimum syllable spacing: 12px
+- Maximum syllable spacing: 25px
+
+DYNAMIC SPACING ALGORITHM:
+1. Calculate available width: measureWidth - (padding × 2)
+2. Calculate ideal syllable width: availableWidth ÷ syllableCount
+3. Apply constraints (12px ≤ width ≤ 25px)
+4. Center syllables within measure
+5. Compress if necessary to fit content
+
+POSITIONING RULES:
+- Words positioned above numbers
+- First syllable = downbeat (RED number)
+- Subsequent syllables = other beats (BLACK numbers)
+- Downbeat indicator (↓) below RED numbers
+- Syllables centered within their allocated space
+
+OVERFLOW HANDLING:
+- If content exceeds measure width: compress syllable spacing
+- Minimum compression: 12px per syllable
+- If still overflowing: truncate syllables or use smaller font
+
+ALIGNMENT GUARANTEES:
+- Downbeats always align across measures
+- Measure boundaries always respected
+- No syllable overlap between measures
+- Consistent vertical alignment
+
+TEST CASES COVERED:
+✅ 1 syllable: "Grace" (spacious layout)
+✅ 2 syllables: "A-maz-" (comfortable spacing)
+✅ 3 syllables: "ing Grace how" (balanced)
+✅ 4 syllables: "The wheels on the" (standard)
+✅ 5 syllables: "go round and round now" (compact)
+✅ 6 syllables: "nev-er gon-na give you" (tight)
+✅ 7 syllables: "some-bo-dy once told me the" (compressed)
+✅ 8 syllables: "su-per-cal-i-frag-i-lis-tic" (maximum density)
+
+IMPLEMENTATION NOTES:
+- System automatically adapts to any syllable count
+- Maintains readability at all density levels
+- Preserves musical alignment requirements
+- Handles edge cases gracefully

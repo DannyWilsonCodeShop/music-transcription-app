@@ -41,13 +41,46 @@ exports.handler = async (event) => {
     await updateJobAnalysis(jobId, 'keyAnalysis', keyAnalysis);
     await updateJobStatus(jobId, 'processing', 45, 'Key analysis complete');
 
-    // Step 4: High-Resolution Chord Analysis (70% progress)
-    const chordAnalysis = await analyzeHighResolutionChords(audioUrl, {
+    // Step 4: High-Resolution Chord Analysis with Change Detection (70% progress)
+    const rawChordAnalysis = await analyzeHighResolutionChords(audioUrl, {
       interval: 0.2, // 200ms intervals
       maxPassingChords: 8
     });
-    await updateJobAnalysis(jobId, 'chordAnalysis', chordAnalysis);
-    await updateJobStatus(jobId, 'processing', 70, 'High-resolution chord analysis complete');
+    
+    // Detect chord changes to reduce data size for DynamoDB
+    console.log('🔍 Detecting chord changes from raw analysis...');
+    const chordChangeResult = detectChordChanges(rawChordAnalysis.chords, timeSignatureAnalysis);
+    const consolidatedChanges = consolidateChordChangesPerMeasure(chordChangeResult.chordChanges, 8);
+    
+    console.log(`📊 Chord analysis: ${rawChordAnalysis.chords.length} detections → ${consolidatedChanges.length} changes`);
+    console.log(`📉 Data reduction: ${chordChangeResult.summary.dataReduction}%`);
+    
+    // Create measure-based structure for PDF generation
+    const measureStructure = createMeasureBasedChordStructure(consolidatedChanges, timeSignatureAnalysis);
+    
+    // Prepare compact chord data for DynamoDB
+    const compactChordData = {
+      chordChanges: consolidatedChanges,
+      measures: measureStructure,
+      summary: {
+        totalChanges: consolidatedChanges.length,
+        totalMeasures: measureStructure.length,
+        originalDetections: rawChordAnalysis.chords.length,
+        dataReduction: chordChangeResult.summary.dataReduction,
+        analysisInterval: rawChordAnalysis.analysisInterval
+      }
+    };
+    
+    // Verify data size is under DynamoDB limit
+    const dataSize = JSON.stringify(compactChordData).length;
+    console.log(`📏 Compact chord data size: ${dataSize} bytes`);
+    
+    if (dataSize >= 400000) {
+      throw new Error(`Chord data still too large for DynamoDB: ${dataSize} bytes`);
+    }
+    
+    await updateJobAnalysis(jobId, 'chordAnalysis', compactChordData);
+    await updateJobStatus(jobId, 'processing', 70, 'Chord change analysis complete');
 
     // Step 5: Musical Structure Analysis (85% progress)
     const structureAnalysis = await analyzeMusicalStructure(audioUrl, {
@@ -503,4 +536,177 @@ async function updateJobAnalysis(jobId, analysisField, analysisData) {
       ':updated': new Date().toISOString()
     }
   }));
+}
+// 
+Chord Change Detection Functions - Solves DynamoDB Size Limit
+
+function detectChordChanges(rawChordData, timeSignature) {
+  const chordChanges = [];
+  let currentChord = null;
+  let chordStartTime = 0;
+  let chordStartMeasure = 0;
+  let chordStartBeat = 0;
+  
+  rawChordData.forEach((chord, index) => {
+    const chordName = chord.chord || chord.name;
+    const chordTime = chord.start || chord.time || chord.timestamp || (index * 0.2);
+    
+    const measureInfo = calculateMeasureAndBeat(chordTime, timeSignature);
+    
+    if (currentChord !== chordName) {
+      if (currentChord !== null) {
+        const chordChange = {
+          chord: currentChord,
+          nashvilleNumber: getPreviousNashvilleNumber(rawChordData, index - 1),
+          time: chordStartTime, // Use 'time' field for PDF compatibility
+          startTime: chordStartTime,
+          endTime: chordTime,
+          duration: chordTime - chordStartTime,
+          measure: chordStartMeasure,
+          beat: chordStartBeat,
+          measurePosition: calculateMeasurePosition(chordStartTime, timeSignature),
+          isDownbeat: chordStartBeat === 1,
+          confidence: getPreviousConfidence(rawChordData, index - 1)
+        };
+        
+        chordChanges.push(chordChange);
+      }
+      
+      currentChord = chordName;
+      chordStartTime = chordTime;
+      chordStartMeasure = measureInfo.measure;
+      chordStartBeat = measureInfo.beat;
+    }
+  });
+  
+  // Add final chord
+  if (currentChord !== null && rawChordData.length > 0) {
+    const lastChord = rawChordData[rawChordData.length - 1];
+    const endTime = (lastChord.end || lastChord.start || lastChord.time || 0) + 0.2;
+    
+    chordChanges.push({
+      chord: currentChord,
+      nashvilleNumber: lastChord.nashvilleNumber || convertChordToNashvilleNumber(currentChord, 'G', 'major'),
+      time: chordStartTime,
+      startTime: chordStartTime,
+      endTime: endTime,
+      duration: endTime - chordStartTime,
+      measure: chordStartMeasure,
+      beat: chordStartBeat,
+      measurePosition: calculateMeasurePosition(chordStartTime, timeSignature),
+      isDownbeat: chordStartBeat === 1,
+      confidence: lastChord.confidence || 0.8
+    });
+  }
+  
+  const originalSize = JSON.stringify(rawChordData).length;
+  const reducedSize = JSON.stringify(chordChanges).length;
+  const reductionPercentage = ((originalSize - reducedSize) / originalSize * 100).toFixed(1);
+  
+  return {
+    chordChanges: chordChanges,
+    summary: {
+      totalChanges: chordChanges.length,
+      originalDetections: rawChordData.length,
+      dataReduction: parseFloat(reductionPercentage),
+      originalSize: originalSize,
+      reducedSize: reducedSize
+    }
+  };
+}
+
+function consolidateChordChangesPerMeasure(chordChanges, maxChangesPerMeasure = 8) {
+  const measureGroups = {};
+  
+  chordChanges.forEach(change => {
+    const measure = change.measure;
+    if (!measureGroups[measure]) {
+      measureGroups[measure] = [];
+    }
+    measureGroups[measure].push(change);
+  });
+  
+  const consolidatedChanges = [];
+  
+  Object.keys(measureGroups).forEach(measure => {
+    const measureChanges = measureGroups[measure];
+    
+    if (measureChanges.length <= maxChangesPerMeasure) {
+      consolidatedChanges.push(...measureChanges);
+    } else {
+      const sortedChanges = measureChanges.sort((a, b) => {
+        const durationDiff = b.duration - a.duration;
+        if (Math.abs(durationDiff) > 0.1) return durationDiff;
+        return b.confidence - a.confidence;
+      });
+      
+      const selectedChanges = sortedChanges.slice(0, maxChangesPerMeasure);
+      selectedChanges.sort((a, b) => a.startTime - b.startTime);
+      consolidatedChanges.push(...selectedChanges);
+    }
+  });
+  
+  consolidatedChanges.sort((a, b) => a.startTime - b.startTime);
+  return consolidatedChanges;
+}
+
+function createMeasureBasedChordStructure(chordChanges, timeSignature) {
+  const measures = {};
+  
+  chordChanges.forEach(change => {
+    const measure = change.measure;
+    
+    if (!measures[measure]) {
+      measures[measure] = {
+        measureNumber: measure,
+        chords: [],
+        startTime: (measure - 1) * timeSignature.measureDuration,
+        endTime: measure * timeSignature.measureDuration,
+        timeSignature: `${timeSignature.numerator}/${timeSignature.denominator}`
+      };
+    }
+    
+    measures[measure].chords.push({
+      chord: change.chord,
+      nashvilleNumber: change.nashvilleNumber,
+      beat: change.beat,
+      measurePosition: change.measurePosition,
+      duration: change.duration,
+      isDownbeat: change.isDownbeat,
+      confidence: change.confidence
+    });
+  });
+  
+  return Object.values(measures).sort((a, b) => a.measureNumber - b.measureNumber);
+}
+
+function calculateMeasureAndBeat(time, timeSignature) {
+  const { measureDuration, numerator } = timeSignature;
+  const beatDuration = measureDuration / numerator;
+  
+  const measure = Math.floor(time / measureDuration) + 1;
+  const timeInMeasure = time % measureDuration;
+  const beat = Math.floor(timeInMeasure / beatDuration) + 1;
+  
+  return { measure, beat, timeInMeasure, beatDuration };
+}
+
+function calculateMeasurePosition(time, timeSignature) {
+  const { measureDuration } = timeSignature;
+  const timeInMeasure = time % measureDuration;
+  return timeInMeasure / measureDuration;
+}
+
+function getPreviousNashvilleNumber(rawChordData, index) {
+  if (index >= 0 && index < rawChordData.length) {
+    return rawChordData[index].nashvilleNumber || convertChordToNashvilleNumber(rawChordData[index].chord, 'G', 'major');
+  }
+  return '?';
+}
+
+function getPreviousConfidence(rawChordData, index) {
+  if (index >= 0 && index < rawChordData.length) {
+    return rawChordData[index].confidence || 0.8;
+  }
+  return 0.8;
 }

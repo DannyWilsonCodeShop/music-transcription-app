@@ -36,8 +36,10 @@ exports.handler = async (event) => {
       hasEnhancedLyrics: jobData.lyricsData?.syllableAlignedLyrics ? jobData.lyricsData.syllableAlignedLyrics.length : 0
     });
 
-    // Extract enhanced data
+    // Extract enhanced data - now using chord changes instead of all detections
     const chords = jobData.chords || [];
+    const chordAnalysis = jobData.chordAnalysis || {};
+    const chordChanges = chordAnalysis.chordChanges || chords; // Use chord changes if available
     const lyricsData = jobData.lyricsData || {};
     const syllableAlignedLyrics = lyricsData.syllableAlignedLyrics || [];
     const key = jobData.key || 'C';
@@ -45,21 +47,26 @@ exports.handler = async (event) => {
     const timeSignature = jobData.timeSignature || '4/4';
 
     console.log('🎼 Processing Data:');
-    console.log(`Chords: ${chords.length} detected`);
+    console.log(`Chord Changes: ${chordChanges.length} detected`);
     console.log(`Syllable Lyrics: ${syllableAlignedLyrics.length} segments`);
     console.log(`Key: ${key}`);
     console.log(`Tempo: ${tempo} BPM`);
+    
+    if (chordAnalysis.summary) {
+      console.log(`📉 Data reduction: ${chordAnalysis.summary.dataReduction}% (${chordAnalysis.summary.originalDetections} → ${chordAnalysis.summary.totalChanges} changes)`);
+    }
 
     // Generate enhanced PDF
     const pdfBuffer = await generateEnhancedPDF({
       title: jobData.videoTitle || jobData.title || 'Untitled',
-      chords,
+      chords: chordChanges, // Use chord changes instead of all detections
       syllableAlignedLyrics,
       lyrics: lyricsData.text || '',
       key,
       tempo,
       timeSignature,
-      jobId
+      jobId,
+      chordAnalysis: chordAnalysis // Pass full analysis for metadata
     });
 
     // Upload to S3
@@ -95,7 +102,9 @@ exports.handler = async (event) => {
         message: 'Enhanced PDF generated successfully',
         pdfUrl,
         enhancedFeatures: {
-          chordsDetected: chords.length,
+          chordsDetected: chordChanges.length,
+          chordChangesUsed: true,
+          dataReduction: chordAnalysis.summary?.dataReduction || 0,
           measureBasedLayout: syllableAlignedLyrics.length > 0,
           syllableAlignment: syllableAlignedLyrics.length > 0,
           colorCodedChords: true,

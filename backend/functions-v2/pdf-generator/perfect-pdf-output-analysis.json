@@ -1,0 +1,39 @@
+{
+  "input": {
+    "jobId": "mock-wheels-bus-1769907253958",
+    "title": "The Wheels on the Bus - Mock Data Test",
+    "duration": 300,
+    "key": "C",
+    "bpm": 60,
+    "timeSignature": "4/4",
+    "totalMeasures": 75,
+    "totalChords": 300,
+    "totalSyllables": 280,
+    "downbeats": 75
+  },
+  "output": {
+    "pages": 6,
+    "contentElements": 90,
+    "systemsProcessed": 19,
+    "features": [
+      "Measure-based layout",
+      "Downbeat highlighting",
+      "Nashville Number System",
+      "Syllable alignment",
+      "Timing information",
+      "Chord progression analysis",
+      "Professional formatting"
+    ],
+    "fileSize": 1024
+  },
+  "perfectLayoutFeatures": {
+    "measureBasedOrganization": true,
+    "downbeatHighlighting": true,
+    "nashvilleNumberSystem": true,
+    "syllableAlignment": true,
+    "timingInformation": true,
+    "chordProgressionAnalysis": true,
+    "professionalFormatting": true,
+    "multiPageSupport": true
+  }
+}
