@@ -253,19 +253,19 @@ function generateMeasureBasedLayout(doc, data, startY) {
 }
 
 function generateEnhancedChordChart(doc, chords, startY) {
-  console.log('🎵 Generating Nashville Number System with proper 4-measure layout');
+  console.log('🎵 Generating PROPER Nashville Number System (no tables)');
   
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.text('Nashville Number System', 20, startY);
-  let yPosition = startY + 20;
+  let yPosition = startY + 25;
   
   // Convert chord changes to measure-based format
-  const measureData = convertChordsToMeasureFormat(chords);
+  const measures = convertChordsToMeasureFormat(chords);
   
-  // Generate 4-measure lines (like Amazing Grace format)
+  // Generate clean 4-measure lines (NO TABLES, NO GRIDS)
   const measuresPerLine = 4;
-  const totalLines = Math.ceil(measureData.length / measuresPerLine);
+  const totalLines = Math.ceil(measures.length / measuresPerLine);
   
   for (let lineIndex = 0; lineIndex < totalLines; lineIndex++) {
     // Check for page break
@@ -274,130 +274,67 @@ function generateEnhancedChordChart(doc, chords, startY) {
       yPosition = 30;
     }
     
-    // Add verse label every 2 lines
+    // Add phrase label (clean, no clutter)
     if (lineIndex % 2 === 0) {
       yPosition += 8;
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(`Section ${Math.floor(lineIndex / 2) + 1}`, 20, yPosition);
-      yPosition += 12;
+      doc.text(`Verse ${Math.floor(lineIndex / 2) + 1}:`, 20, yPosition);
+      yPosition += 15;
     }
     
     // Get 4 measures for this line
     const lineMeasures = [];
     for (let i = 0; i < measuresPerLine; i++) {
       const measureIndex = lineIndex * measuresPerLine + i;
-      if (measureIndex < measureData.length) {
-        lineMeasures.push(measureData[measureIndex]);
-      } else {
-        // Fill empty measures
-        lineMeasures.push({
-          measureNumber: measureIndex + 1,
-          chords: [{ chord: '1', nashvilleNumber: '1', isDownbeat: true }],
-          beats: [
-            { chord: '1', isDownbeat: true },
-            { chord: '1', isDownbeat: false },
-            { chord: '1', isDownbeat: false },
-            { chord: '1', isDownbeat: false }
-          ]
-        });
+      if (measureIndex < measures.length) {
+        lineMeasures.push(measures[measureIndex]);
       }
     }
     
-    // Generate proper 4-measure line with beat grid
-    generateProper4MeasureLine(doc, lineMeasures, yPosition, lineIndex + 1);
-    yPosition += 35; // Space between lines
+    // Generate CLEAN Nashville line (NO TABLES)
+    generateCleanNashvilleLine(doc, lineMeasures, yPosition);
+    yPosition += 30; // Clean spacing between lines
     
-    console.log(`✅ Line ${lineIndex + 1}: 4 measures with proper Nashville layout`);
+    console.log(`✅ Line ${lineIndex + 1}: Clean Nashville format (no tables)`);
   }
   
   return yPosition;
 }
 
-function generateProper4MeasureLine(doc, measures, yPosition, lineNumber) {
-  // PROPER 4-MEASURE LAYOUT CONSTANTS (matching Amazing Grace format)
-  const lineStartX = 20;
-  const beatWidth = 12; // Width per beat position
-  const measureWidth = beatWidth * 4; // 4 beats per measure = 48px
-  const totalLineWidth = measureWidth * 4; // 4 measures = 192px
+function generateCleanNashvilleLine(doc, measures, yPosition) {
+  // CLEAN TEXT-BASED LAYOUT (like Amazing Grace)
+  const startX = 40;
+  const numberSpacing = 60; // Clean spacing between numbers
   
-  // Y positions
-  const numbersY = yPosition;
-  const measureLabelY = yPosition + 12;
-  
-  console.log(`  📏 Line ${lineNumber}: 4 measures × 4 beats × ${beatWidth}px = ${totalLineWidth}px total`);
-  
-  // Draw measure boundaries
-  doc.setDrawColor(150, 150, 150);
-  doc.setLineWidth(0.5);
-  for (let i = 0; i <= 4; i++) {
-    const x = lineStartX + (i * measureWidth);
-    doc.line(x, yPosition - 5, x, yPosition + 18);
-  }
-  
-  // Draw beat grid (lighter lines)
-  doc.setDrawColor(220, 220, 220);
-  doc.setLineWidth(0.3);
-  for (let measureIndex = 0; measureIndex < 4; measureIndex++) {
-    for (let beat = 1; beat <= 3; beat++) { // Don't draw line after beat 4
-      const x = lineStartX + (measureIndex * measureWidth) + (beat * beatWidth);
-      doc.line(x, yPosition - 2, x, yPosition + 15);
+  measures.forEach((measure, index) => {
+    if (measure && index < 4) { // Only show 4 measures per line
+      const x = startX + (index * numberSpacing);
+      
+      // Get the primary chord for this measure
+      const primaryChord = measure.chords && measure.chords.length > 0 ? measure.chords[0] : null;
+      const nashvilleNumber = primaryChord?.nashvilleNumber || measure.nashvilleNumber || '1';
+      const isDownbeat = primaryChord?.isDownbeat || measure.isDownbeat || (index === 0);
+      
+      // Main Nashville number (clean, large)
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      
+      // Subtle color coding for downbeats
+      if (isDownbeat) {
+        doc.setTextColor(200, 0, 0); // Subtle red for downbeats
+      } else {
+        doc.setTextColor(0, 0, 0); // Black for other chords
+      }
+      
+      doc.text(nashvilleNumber, x, yPosition, { align: 'center' });
+      
+      // Small measure number below (very subtle)
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`${measure.measureNumber || index + 1}`, x, yPosition + 12, { align: 'center' });
     }
-  }
-  
-  // Process each measure with 4 beats
-  for (let measureIndex = 0; measureIndex < 4; measureIndex++) {
-    const measure = measures[measureIndex];
-    if (!measure) continue;
-    
-    const measureStartX = lineStartX + (measureIndex * measureWidth);
-    
-    // Generate 4-beat measure content
-    generateProperMeasureContent(doc, measure, measureStartX, beatWidth, numbersY);
-    
-    // Add measure number below
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 100, 100);
-    doc.text(`M${measure.measureNumber || measureIndex + 1}`, measureStartX + (measureWidth / 2), measureLabelY, { align: 'center' });
-  }
-  
-  // Reset drawing properties
-  doc.setDrawColor(0, 0, 0);
-  doc.setLineWidth(0.2);
-  doc.setTextColor(0, 0, 0);
-}
-
-function generateProperMeasureContent(doc, measure, startX, beatWidth, numbersY) {
-  const beats = measure.beats || [];
-  
-  // Ensure we have 4 beats
-  while (beats.length < 4) {
-    beats.push({ chord: beats[beats.length - 1]?.chord || '1', isDownbeat: false });
-  }
-  
-  // Process each of the 4 beats
-  for (let beatIndex = 0; beatIndex < 4; beatIndex++) {
-    const beat = beats[beatIndex];
-    if (!beat) continue;
-    
-    const beatX = startX + (beatIndex * beatWidth) + (beatWidth / 2);
-    const isDownbeat = beatIndex === 0; // Beat 1 is downbeat
-    
-    // Draw chord number for this beat
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    
-    if (isDownbeat) {
-      doc.setTextColor(255, 0, 0); // RED for downbeat
-    } else {
-      doc.setTextColor(0, 0, 0); // BLACK for other beats
-    }
-    
-    // Use Nashville number if available, otherwise convert chord name
-    const displayChord = beat.nashvilleNumber || beat.chord || '1';
-    doc.text(displayChord, beatX, numbersY, { align: 'center' });
-  }
+  });
   
   // Reset color
   doc.setTextColor(0, 0, 0);
@@ -419,37 +356,23 @@ function convertChordsToMeasureFormat(chords) {
       measureMap[measureNum] = {
         measureNumber: measureNum,
         chords: [],
-        beats: []
+        nashvilleNumber: null,
+        isDownbeat: false
       };
     }
     
     measureMap[measureNum].chords.push(chord);
+    
+    // Set the primary Nashville number for this measure
+    if (chord.isDownbeat || !measureMap[measureNum].nashvilleNumber) {
+      measureMap[measureNum].nashvilleNumber = chord.nashvilleNumber || convertChordToNashvilleNumber(chord.chord, 'C');
+      measureMap[measureNum].isDownbeat = chord.isDownbeat || false;
+    }
   });
   
-  // Convert to proper measure format with 4 beats each
+  // Convert to array format
   Object.keys(measureMap).sort((a, b) => parseInt(a) - parseInt(b)).forEach(measureNum => {
-    const measure = measureMap[measureNum];
-    const primaryChord = measure.chords.find(c => c.isDownbeat) || measure.chords[0];
-    
-    if (primaryChord) {
-      // Create 4 beats for this measure
-      const nashvilleNumber = primaryChord.nashvilleNumber || convertChordToNashvilleNumber(primaryChord.chord, 'C');
-      
-      measure.beats = [
-        { chord: nashvilleNumber, nashvilleNumber: nashvilleNumber, isDownbeat: true },  // Beat 1 (downbeat)
-        { chord: nashvilleNumber, nashvilleNumber: nashvilleNumber, isDownbeat: false }, // Beat 2
-        { chord: nashvilleNumber, nashvilleNumber: nashvilleNumber, isDownbeat: false }, // Beat 3
-        { chord: nashvilleNumber, nashvilleNumber: nashvilleNumber, isDownbeat: false }  // Beat 4
-      ];
-      
-      // If there are chord changes within the measure, update the appropriate beats
-      if (measure.chords.length > 1) {
-        // For now, keep it simple - use the primary chord for all beats
-        // In a more advanced version, we could map chord changes to specific beats
-      }
-    }
-    
-    measures.push(measure);
+    measures.push(measureMap[measureNum]);
   });
   
   return measures;
@@ -483,43 +406,6 @@ function convertChordToNashvilleNumber(chordName, keyRoot = 'C') {
   }
   
   return number;
-}
-          doc.setTextColor(0, 0, 0); // Black for passing chords
-        }
-        
-        // Display Nashville number
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        const nashvilleNumber = primaryChord.nashvilleNumber || primaryChord.number || '?';
-        doc.text(nashvilleNumber, xPosition, yPosition);
-        
-        // Display chord name below (smaller)
-        doc.setFontSize(9);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(100, 100, 100); // Gray
-        const chordName = primaryChord.chord || primaryChord.name || '';
-        doc.text(`(${chordName})`, xPosition, yPosition + 8);
-        
-        // Show measure number
-        doc.setFontSize(8);
-        doc.setTextColor(150, 150, 150); // Light gray
-        doc.text(`M${measure.measureNumber}`, xPosition, yPosition + 15);
-        
-      } else {
-        // Empty measure
-        doc.setTextColor(200, 200, 200); // Very light gray
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'normal');
-        doc.text('-', xPosition, yPosition);
-        
-        doc.setFontSize(8);
-        doc.text(`M${measure.measureNumber}`, xPosition, yPosition + 15);
-      }
-      
-      // Reset color
-      doc.setTextColor(0, 0, 0);
-    }
-  });
 }
 
 function createMeasures(syllableAlignedLyrics, chords) {
