@@ -96,6 +96,8 @@ class ChordProgression:
     scale: str
     confidence_scores: List[float]
     total_duration: float
+    tempo: float = 120.0
+    time_signature: str = '4/4'
     sections: List[SongSection] = None
     
     @property
@@ -112,6 +114,8 @@ class ChordProgression:
             'totalChords': len(self.chords),
             'duration': round(self.total_duration, 2),
             'averageConfidence': round(self.average_confidence, 3),
+            'tempo': round(self.tempo, 1),
+            'timeSignature': self.time_signature,
             'model': 'essentia-ml'
         }
         if self.sections:
@@ -157,6 +161,19 @@ class ChordDetectionService:
             
             logger.info(f"Audio loaded: duration={total_duration:.2f}s, sr={sr}Hz")
             
+            # Detect tempo
+            logger.info("Detecting tempo...")
+            tempo = 120.0  # Default
+            try:
+                tempo_detected, _ = librosa.beat.beat_track(y=audio, sr=sr)
+                if 60 <= tempo_detected <= 200:  # Sanity check
+                    tempo = float(tempo_detected)
+                    logger.info(f"Tempo detected: {tempo:.1f} BPM")
+                else:
+                    logger.warning(f"Tempo {tempo_detected:.1f} out of range, using default 120 BPM")
+            except Exception as e:
+                logger.warning(f"Tempo detection failed, using default 120 BPM: {e}")
+            
             # Detect key
             logger.info("Detecting key signature...")
             chroma = librosa.feature.chroma_cqt(y=audio, sr=sr)
@@ -188,7 +205,9 @@ class ChordDetectionService:
                 key=f"{key} {scale}",
                 scale=scale,
                 confidence_scores=[c.confidence for c in refined_chords],
-                total_duration=total_duration
+                total_duration=total_duration,
+                tempo=tempo,
+                time_signature='4/4'
             )
             
             logger.info(f"Chord detection complete: {len(refined_chords)} chords, "
