@@ -336,27 +336,73 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
     
     if (chordsInMeasure.length === 0) return;
     
-    // Position chords based on their beat within the measure
-    chordsInMeasure.forEach((chordInfo, chordIndex) => {
-      // Calculate X position based on beat (0-4 for 4/4 time)
-      // Spread chords across the measure width proportionally
-      const beatOffset = (chordInfo.beat / 4) * measureWidth;
-      const chordX = xPosition + beatOffset;
+    // Dynamic spacing: calculate how much space each chord needs
+    const chordCount = chordsInMeasure.length;
+    const avgChordWidth = 4; // Average width of a chord symbol in points
+    const minSpacing = 2; // Minimum spacing between chords
+    const totalChordWidth = chordCount * avgChordWidth;
+    const totalSpacing = (chordCount - 1) * minSpacing;
+    const requiredWidth = totalChordWidth + totalSpacing;
+    
+    // If chords would overflow, use even spacing instead of beat-based positioning
+    const useEvenSpacing = requiredWidth > measureWidth;
+    
+    if (useEvenSpacing) {
+      // Even spacing mode: distribute chords evenly across measure width
+      const spacing = measureWidth / (chordCount + 1);
       
-      // First chord (downbeat) in RED and bold
-      if (chordIndex === 0 || chordInfo.isDownbeat) {
-        doc.setTextColor(255, 0, 0); // RED
-        doc.setFontSize(12);
-        doc.setFont('helvetica', 'bold');
-      } else {
-        // Passing chords in BLACK and normal
-        doc.setTextColor(0, 0, 0); // BLACK
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-      }
-      
-      doc.text(chordInfo.nashvilleNumber, chordX, chordY);
-    });
+      chordsInMeasure.forEach((chordInfo, chordIndex) => {
+        const chordX = xPosition + (spacing * (chordIndex + 1));
+        
+        // First chord (downbeat) in RED and bold
+        if (chordIndex === 0) {
+          doc.setTextColor(255, 0, 0); // RED
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+        } else {
+          // Passing chords in BLACK and normal
+          doc.setTextColor(0, 0, 0); // BLACK
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+        }
+        
+        doc.text(chordInfo.nashvilleNumber, chordX, chordY);
+      });
+    } else {
+      // Beat-based positioning mode: position chords by their beat
+      chordsInMeasure.forEach((chordInfo, chordIndex) => {
+        // Calculate X position based on beat (0-4 for 4/4 time)
+        const beatOffset = (chordInfo.beat / 4) * measureWidth;
+        let chordX = xPosition + beatOffset;
+        
+        // Check for overlap with previous chord
+        if (chordIndex > 0) {
+          const prevChordInfo = chordsInMeasure[chordIndex - 1];
+          const prevBeatOffset = (prevChordInfo.beat / 4) * measureWidth;
+          const prevChordX = xPosition + prevBeatOffset;
+          const minDistance = avgChordWidth + minSpacing;
+          
+          // If too close, shift right
+          if (chordX - prevChordX < minDistance) {
+            chordX = prevChordX + minDistance;
+          }
+        }
+        
+        // First chord (downbeat) in RED and bold
+        if (chordIndex === 0 || chordInfo.isDownbeat) {
+          doc.setTextColor(255, 0, 0); // RED
+          doc.setFontSize(11);
+          doc.setFont('helvetica', 'bold');
+        } else {
+          // Passing chords in BLACK and normal
+          doc.setTextColor(0, 0, 0); // BLACK
+          doc.setFontSize(9);
+          doc.setFont('helvetica', 'normal');
+        }
+        
+        doc.text(chordInfo.nashvilleNumber, chordX, chordY);
+      });
+    }
     
     // LYRICS below chords
     doc.setTextColor(0, 0, 0);
