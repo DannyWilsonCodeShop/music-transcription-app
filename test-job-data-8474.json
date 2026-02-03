@@ -1,0 +1,1464 @@
+{
+    "Item": {
+        "chordsData": {
+            "M": {
+                "duration": {
+                    "N": "281.52"
+                },
+                "averageConfidence": {
+                    "N": "0.429"
+                },
+                "scale": {
+                    "S": "major"
+                },
+                "chords": {
+                    "L": [
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "Bm"
+                                },
+                                "start": {
+                                    "N": "0.65"
+                                },
+                                "duration": {
+                                    "N": "1.49"
+                                },
+                                "confidence": {
+                                    "N": "0.423"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "6.5"
+                                },
+                                "duration": {
+                                    "N": "1.58"
+                                },
+                                "confidence": {
+                                    "N": "0.41"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "8.27"
+                                },
+                                "duration": {
+                                    "N": "1.3"
+                                },
+                                "confidence": {
+                                    "N": "0.377"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "B"
+                                },
+                                "start": {
+                                    "N": "12.26"
+                                },
+                                "duration": {
+                                    "N": "0.74"
+                                },
+                                "confidence": {
+                                    "N": "0.436"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "14.02"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.411"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "15.23"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.332"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "16.72"
+                                },
+                                "duration": {
+                                    "N": "0.74"
+                                },
+                                "confidence": {
+                                    "N": "0.409"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "17.55"
+                                },
+                                "duration": {
+                                    "N": "1.76"
+                                },
+                                "confidence": {
+                                    "N": "0.431"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "19.32"
+                                },
+                                "duration": {
+                                    "N": "1.67"
+                                },
+                                "confidence": {
+                                    "N": "0.43"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "26.94"
+                                },
+                                "duration": {
+                                    "N": "0.74"
+                                },
+                                "confidence": {
+                                    "N": "0.534"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "Bm"
+                                },
+                                "start": {
+                                    "N": "32.51"
+                                },
+                                "duration": {
+                                    "N": "0.93"
+                                },
+                                "confidence": {
+                                    "N": "0.47"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "33.72"
+                                },
+                                "duration": {
+                                    "N": "0.74"
+                                },
+                                "confidence": {
+                                    "N": "0.417"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "34.55"
+                                },
+                                "duration": {
+                                    "N": "1.11"
+                                },
+                                "confidence": {
+                                    "N": "0.449"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "36.32"
+                                },
+                                "duration": {
+                                    "N": "1.21"
+                                },
+                                "confidence": {
+                                    "N": "0.428"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "37.71"
+                                },
+                                "duration": {
+                                    "N": "0.84"
+                                },
+                                "confidence": {
+                                    "N": "0.654"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "38.64"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.431"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "39.2"
+                                },
+                                "duration": {
+                                    "N": "1.21"
+                                },
+                                "confidence": {
+                                    "N": "0.444"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "40.68"
+                                },
+                                "duration": {
+                                    "N": "0.65"
+                                },
+                                "confidence": {
+                                    "N": "0.47"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "48.58"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.542"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "50.16"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.509"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "56.56"
+                                },
+                                "duration": {
+                                    "N": "1.21"
+                                },
+                                "confidence": {
+                                    "N": "0.506"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "57.96"
+                                },
+                                "duration": {
+                                    "N": "1.95"
+                                },
+                                "confidence": {
+                                    "N": "0.476"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "60.46"
+                                },
+                                "duration": {
+                                    "N": "0.84"
+                                },
+                                "confidence": {
+                                    "N": "0.51"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "Bm"
+                                },
+                                "start": {
+                                    "N": "73.19"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.471"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "Bm"
+                                },
+                                "start": {
+                                    "N": "74.58"
+                                },
+                                "duration": {
+                                    "N": "0.84"
+                                },
+                                "confidence": {
+                                    "N": "0.422"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "76.9"
+                                },
+                                "duration": {
+                                    "N": "1.3"
+                                },
+                                "confidence": {
+                                    "N": "0.416"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "78.48"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.44"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "79.41"
+                                },
+                                "duration": {
+                                    "N": "1.02"
+                                },
+                                "confidence": {
+                                    "N": "0.466"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "81.46"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.457"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "82.57"
+                                },
+                                "duration": {
+                                    "N": "1.02"
+                                },
+                                "confidence": {
+                                    "N": "0.414"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "112.38"
+                                },
+                                "duration": {
+                                    "N": "1.3"
+                                },
+                                "confidence": {
+                                    "N": "0.38"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "113.78"
+                                },
+                                "duration": {
+                                    "N": "1.11"
+                                },
+                                "confidence": {
+                                    "N": "0.372"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "124.55"
+                                },
+                                "duration": {
+                                    "N": "0.93"
+                                },
+                                "confidence": {
+                                    "N": "0.378"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "A"
+                                },
+                                "start": {
+                                    "N": "125.95"
+                                },
+                                "duration": {
+                                    "N": "0.65"
+                                },
+                                "confidence": {
+                                    "N": "0.392"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "139.78"
+                                },
+                                "duration": {
+                                    "N": "0.65"
+                                },
+                                "confidence": {
+                                    "N": "0.343"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "180.09"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.358"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "187.25"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.4"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "189.1"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.329"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "197.46"
+                                },
+                                "duration": {
+                                    "N": "0.65"
+                                },
+                                "confidence": {
+                                    "N": "0.398"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "200.16"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.415"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "200.9"
+                                },
+                                "duration": {
+                                    "N": "1.11"
+                                },
+                                "confidence": {
+                                    "N": "0.385"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "210.47"
+                                },
+                                "duration": {
+                                    "N": "0.74"
+                                },
+                                "confidence": {
+                                    "N": "0.374"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "211.3"
+                                },
+                                "duration": {
+                                    "N": "0.84"
+                                },
+                                "confidence": {
+                                    "N": "0.35"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "212.23"
+                                },
+                                "duration": {
+                                    "N": "0.84"
+                                },
+                                "confidence": {
+                                    "N": "0.384"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "Bm"
+                                },
+                                "start": {
+                                    "N": "217.8"
+                                },
+                                "duration": {
+                                    "N": "0.65"
+                                },
+                                "confidence": {
+                                    "N": "0.422"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "232.76"
+                                },
+                                "duration": {
+                                    "N": "0.93"
+                                },
+                                "confidence": {
+                                    "N": "0.368"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "D"
+                                },
+                                "start": {
+                                    "N": "233.78"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.415"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "Bm"
+                                },
+                                "start": {
+                                    "N": "240.09"
+                                },
+                                "duration": {
+                                    "N": "0.65"
+                                },
+                                "confidence": {
+                                    "N": "0.45"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "chord": {
+                                    "S": "G"
+                                },
+                                "start": {
+                                    "N": "242.14"
+                                },
+                                "duration": {
+                                    "N": "0.56"
+                                },
+                                "confidence": {
+                                    "N": "0.526"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "model": {
+                    "S": "essentia-ml"
+                },
+                "totalChords": {
+                    "N": "49"
+                },
+                "key": {
+                    "S": "F# major"
+                },
+                "sections": {
+                    "L": [
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "0.14"
+                                },
+                                "label": {
+                                    "S": "Intro"
+                                },
+                                "endTime": {
+                                    "N": "11.01"
+                                },
+                                "measureStart": {
+                                    "N": "1"
+                                },
+                                "measureEnd": {
+                                    "N": "4"
+                                },
+                                "confidence": {
+                                    "N": "0.9"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "11.01"
+                                },
+                                "label": {
+                                    "S": "Verse 1"
+                                },
+                                "endTime": {
+                                    "N": "22.04"
+                                },
+                                "measureStart": {
+                                    "N": "5"
+                                },
+                                "measureEnd": {
+                                    "N": "8"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "22.04"
+                                },
+                                "label": {
+                                    "S": "Verse 2"
+                                },
+                                "endTime": {
+                                    "N": "32.65"
+                                },
+                                "measureStart": {
+                                    "N": "9"
+                                },
+                                "measureEnd": {
+                                    "N": "12"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "32.65"
+                                },
+                                "label": {
+                                    "S": "Verse 3"
+                                },
+                                "endTime": {
+                                    "N": "43.37"
+                                },
+                                "measureStart": {
+                                    "N": "13"
+                                },
+                                "measureEnd": {
+                                    "N": "16"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "43.37"
+                                },
+                                "label": {
+                                    "S": "Verse 4"
+                                },
+                                "endTime": {
+                                    "N": "54.13"
+                                },
+                                "measureStart": {
+                                    "N": "17"
+                                },
+                                "measureEnd": {
+                                    "N": "20"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "54.13"
+                                },
+                                "label": {
+                                    "S": "Verse 5"
+                                },
+                                "endTime": {
+                                    "N": "64.99"
+                                },
+                                "measureStart": {
+                                    "N": "21"
+                                },
+                                "measureEnd": {
+                                    "N": "24"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "64.99"
+                                },
+                                "label": {
+                                    "S": "Verse 6"
+                                },
+                                "endTime": {
+                                    "N": "75.77"
+                                },
+                                "measureStart": {
+                                    "N": "25"
+                                },
+                                "measureEnd": {
+                                    "N": "28"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "75.77"
+                                },
+                                "label": {
+                                    "S": "Verse 7"
+                                },
+                                "endTime": {
+                                    "N": "86.38"
+                                },
+                                "measureStart": {
+                                    "N": "29"
+                                },
+                                "measureEnd": {
+                                    "N": "32"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "86.38"
+                                },
+                                "label": {
+                                    "S": "Chorus"
+                                },
+                                "endTime": {
+                                    "N": "97.18"
+                                },
+                                "measureStart": {
+                                    "N": "33"
+                                },
+                                "measureEnd": {
+                                    "N": "36"
+                                },
+                                "confidence": {
+                                    "N": "0.85"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "97.18"
+                                },
+                                "label": {
+                                    "S": "Chorus"
+                                },
+                                "endTime": {
+                                    "N": "107.95"
+                                },
+                                "measureStart": {
+                                    "N": "37"
+                                },
+                                "measureEnd": {
+                                    "N": "40"
+                                },
+                                "confidence": {
+                                    "N": "0.85"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "107.95"
+                                },
+                                "label": {
+                                    "S": "Verse 8"
+                                },
+                                "endTime": {
+                                    "N": "118.75"
+                                },
+                                "measureStart": {
+                                    "N": "41"
+                                },
+                                "measureEnd": {
+                                    "N": "44"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "118.75"
+                                },
+                                "label": {
+                                    "S": "Verse 9"
+                                },
+                                "endTime": {
+                                    "N": "129.52"
+                                },
+                                "measureStart": {
+                                    "N": "45"
+                                },
+                                "measureEnd": {
+                                    "N": "48"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "129.52"
+                                },
+                                "label": {
+                                    "S": "Verse 10"
+                                },
+                                "endTime": {
+                                    "N": "140.32"
+                                },
+                                "measureStart": {
+                                    "N": "49"
+                                },
+                                "measureEnd": {
+                                    "N": "52"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "140.32"
+                                },
+                                "label": {
+                                    "S": "Chorus"
+                                },
+                                "endTime": {
+                                    "N": "151.09"
+                                },
+                                "measureStart": {
+                                    "N": "53"
+                                },
+                                "measureEnd": {
+                                    "N": "56"
+                                },
+                                "confidence": {
+                                    "N": "0.85"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "151.09"
+                                },
+                                "label": {
+                                    "S": "Chorus"
+                                },
+                                "endTime": {
+                                    "N": "161.89"
+                                },
+                                "measureStart": {
+                                    "N": "57"
+                                },
+                                "measureEnd": {
+                                    "N": "60"
+                                },
+                                "confidence": {
+                                    "N": "0.85"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "161.89"
+                                },
+                                "label": {
+                                    "S": "Chorus"
+                                },
+                                "endTime": {
+                                    "N": "172.66"
+                                },
+                                "measureStart": {
+                                    "N": "61"
+                                },
+                                "measureEnd": {
+                                    "N": "64"
+                                },
+                                "confidence": {
+                                    "N": "0.85"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "172.66"
+                                },
+                                "label": {
+                                    "S": "Verse 11"
+                                },
+                                "endTime": {
+                                    "N": "183.48"
+                                },
+                                "measureStart": {
+                                    "N": "65"
+                                },
+                                "measureEnd": {
+                                    "N": "68"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "183.48"
+                                },
+                                "label": {
+                                    "S": "Verse 12"
+                                },
+                                "endTime": {
+                                    "N": "194.26"
+                                },
+                                "measureStart": {
+                                    "N": "69"
+                                },
+                                "measureEnd": {
+                                    "N": "72"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "194.26"
+                                },
+                                "label": {
+                                    "S": "Verse 13"
+                                },
+                                "endTime": {
+                                    "N": "205.03"
+                                },
+                                "measureStart": {
+                                    "N": "73"
+                                },
+                                "measureEnd": {
+                                    "N": "76"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "205.03"
+                                },
+                                "label": {
+                                    "S": "Verse 14"
+                                },
+                                "endTime": {
+                                    "N": "215.48"
+                                },
+                                "measureStart": {
+                                    "N": "77"
+                                },
+                                "measureEnd": {
+                                    "N": "80"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "215.48"
+                                },
+                                "label": {
+                                    "S": "Verse 15"
+                                },
+                                "endTime": {
+                                    "N": "226.63"
+                                },
+                                "measureStart": {
+                                    "N": "81"
+                                },
+                                "measureEnd": {
+                                    "N": "84"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "226.63"
+                                },
+                                "label": {
+                                    "S": "Verse 16"
+                                },
+                                "endTime": {
+                                    "N": "237.4"
+                                },
+                                "measureStart": {
+                                    "N": "85"
+                                },
+                                "measureEnd": {
+                                    "N": "88"
+                                },
+                                "confidence": {
+                                    "N": "0.7"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "237.4"
+                                },
+                                "label": {
+                                    "S": "Bridge"
+                                },
+                                "endTime": {
+                                    "N": "247.83"
+                                },
+                                "measureStart": {
+                                    "N": "89"
+                                },
+                                "measureEnd": {
+                                    "N": "92"
+                                },
+                                "confidence": {
+                                    "N": "0.75"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "247.83"
+                                },
+                                "label": {
+                                    "S": "Chorus"
+                                },
+                                "endTime": {
+                                    "N": "258.44"
+                                },
+                                "measureStart": {
+                                    "N": "93"
+                                },
+                                "measureEnd": {
+                                    "N": "95"
+                                },
+                                "confidence": {
+                                    "N": "0.85"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "258.44"
+                                },
+                                "label": {
+                                    "S": "Chorus"
+                                },
+                                "endTime": {
+                                    "N": "269.31"
+                                },
+                                "measureStart": {
+                                    "N": "96"
+                                },
+                                "measureEnd": {
+                                    "N": "99"
+                                },
+                                "confidence": {
+                                    "N": "0.85"
+                                }
+                            }
+                        },
+                        {
+                            "M": {
+                                "startTime": {
+                                    "N": "269.31"
+                                },
+                                "label": {
+                                    "S": "Outro"
+                                },
+                                "endTime": {
+                                    "N": "271.98"
+                                },
+                                "measureStart": {
+                                    "N": "100"
+                                },
+                                "measureEnd": {
+                                    "N": "100"
+                                },
+                                "confidence": {
+                                    "N": "0.9"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "completedAt": {
+            "S": "2026-02-03T02:56:40.026Z"
+        },
+        "createdAt": {
+            "S": "2026-02-03T02:56:33.617Z"
+        },
+        "ecsTaskArn": {
+            "S": "arn:aws:ecs:us-east-1:090130568474:task/ChordScout-dev/0190e7f50a0e4274ab5b318e61846cc8"
+        },
+        "jobId": {
+            "S": "8fc160ca-a1cc-4d03-8181-1b0aa91846cf"
+        },
+        "lyricsData": {
+            "M": {
+                "words": {
+                    "L": []
+                },
+                "metadata": {
+                    "M": {
+                        "duration": {
+                            "N": "0"
+                        },
+                        "enhanced": {
+                            "BOOL": true
+                        },
+                        "model": {
+                            "S": "nova-3"
+                        },
+                        "syllableCount": {
+                            "N": "0"
+                        }
+                    }
+                },
+                "text": {
+                    "S": ""
+                },
+                "syllableAlignedLyrics": {
+                    "L": []
+                },
+                "paragraphs": {
+                    "L": []
+                },
+                "confidence": {
+                    "N": "0"
+                }
+            }
+        },
+        "pdfUrl": {
+            "S": "https://chordscout-pdfs-dev-090130568474.s3.amazonaws.com/pdfs/8fc160ca-a1cc-4d03-8181-1b0aa91846cf.pdf"
+        },
+        "progress": {
+            "N": "85"
+        },
+        "status": {
+            "S": "CHORDS_DETECTED"
+        },
+        "updatedAt": {
+            "S": "ecs-task"
+        },
+        "userId": {
+            "S": "anonymous"
+        },
+        "videoDuration": {
+            "N": "0"
+        },
+        "videoId": {
+            "S": "kJQP7kiw5Fk"
+        },
+        "videoTitle": {
+            "S": "Luis Fonsi - Despacito ft. Daddy Yankee"
+        },
+        "youtubeUrl": {
+            "S": "https://www.youtube.com/watch?v=kJQP7kiw5Fk"
+        }
+    }
+}

@@ -336,24 +336,33 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
     
     if (chordsInMeasure.length === 0) return;
     
-    // Dynamic spacing: calculate how much space each chord needs
-    const chordCount = chordsInMeasure.length;
-    const avgChordWidth = 4; // Average width of a chord symbol in points
-    const minSpacing = 2; // Minimum spacing between chords
-    const totalChordWidth = chordCount * avgChordWidth;
-    const totalSpacing = (chordCount - 1) * minSpacing;
-    const requiredWidth = totalChordWidth + totalSpacing;
+    // Calculate actual character widths for each chord
+    // Font size 11 bold ≈ 3.5 pts/char, font size 9 normal ≈ 2.8 pts/char
+    const getChordWidth = (nashvilleNumber, isDownbeat) => {
+      const charWidth = isDownbeat ? 3.5 : 2.8; // Bold vs normal font
+      return nashvilleNumber.length * charWidth;
+    };
     
-    // If chords would overflow, use even spacing instead of beat-based positioning
-    const useEvenSpacing = requiredWidth > measureWidth;
+    // Calculate total width needed with actual chord widths
+    const chordWidths = chordsInMeasure.map((chord, idx) => 
+      getChordWidth(chord.nashvilleNumber, idx === 0 || chord.isDownbeat)
+    );
+    const totalChordWidth = chordWidths.reduce((sum, w) => sum + w, 0);
+    const minSpacing = 4; // Minimum spacing between chords
+    const totalMinSpacing = (chordsInMeasure.length - 1) * minSpacing;
+    const requiredWidth = totalChordWidth + totalMinSpacing;
+    
+    // Decide spacing strategy
+    const useEvenSpacing = requiredWidth > measureWidth * 0.9; // Use 90% of width as threshold
     
     if (useEvenSpacing) {
-      // Even spacing mode: distribute chords evenly across measure width
-      const spacing = measureWidth / (chordCount + 1);
+      // Even spacing mode: distribute chords with dynamic spacing
+      const availableSpace = measureWidth - totalChordWidth;
+      const spacing = availableSpace / (chordsInMeasure.length + 1);
+      
+      let currentX = xPosition + spacing;
       
       chordsInMeasure.forEach((chordInfo, chordIndex) => {
-        const chordX = xPosition + (spacing * (chordIndex + 1));
-        
         // First chord (downbeat) in RED and bold
         if (chordIndex === 0) {
           doc.setTextColor(255, 0, 0); // RED
@@ -366,27 +375,43 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
           doc.setFont('helvetica', 'normal');
         }
         
-        doc.text(chordInfo.nashvilleNumber, chordX, chordY);
+        doc.text(chordInfo.nashvilleNumber, currentX, chordY);
+        
+        // Move to next position: current chord width + spacing
+        currentX += chordWidths[chordIndex] + spacing;
       });
     } else {
-      // Beat-based positioning mode: position chords by their beat
+      // Beat-based positioning mode: position chords by their beat with collision detection
+      const positions = [];
+      
       chordsInMeasure.forEach((chordInfo, chordIndex) => {
-        // Calculate X position based on beat (0-4 for 4/4 time)
+        // Calculate ideal X position based on beat (0-4 for 4/4 time)
         const beatOffset = (chordInfo.beat / 4) * measureWidth;
         let chordX = xPosition + beatOffset;
         
-        // Check for overlap with previous chord
-        if (chordIndex > 0) {
-          const prevChordInfo = chordsInMeasure[chordIndex - 1];
-          const prevBeatOffset = (prevChordInfo.beat / 4) * measureWidth;
-          const prevChordX = xPosition + prevBeatOffset;
-          const minDistance = avgChordWidth + minSpacing;
+        // Check for overlap with previous chords
+        for (let i = 0; i < positions.length; i++) {
+          const prevPos = positions[i];
+          const prevChordEnd = prevPos.x + prevPos.width;
+          const minDistance = minSpacing;
           
-          // If too close, shift right
-          if (chordX - prevChordX < minDistance) {
-            chordX = prevChordX + minDistance;
+          // If overlapping, shift right
+          if (chordX < prevChordEnd + minDistance) {
+            chordX = prevChordEnd + minDistance;
           }
         }
+        
+        // Ensure we don't exceed measure boundary
+        const maxX = xPosition + measureWidth - chordWidths[chordIndex];
+        if (chordX > maxX) {
+          chordX = maxX;
+        }
+        
+        // Store position for collision detection
+        positions.push({
+          x: chordX,
+          width: chordWidths[chordIndex]
+        });
         
         // First chord (downbeat) in RED and bold
         if (chordIndex === 0 || chordInfo.isDownbeat) {
@@ -497,8 +522,8 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
       // Sort chords within measure by beat
       allChords.sort((a, b) => a.beat - b.beat);
       
-      // Intelligently select up to 8 most important chords
-      const selectedChords = selectBestChords(allChords, 8);
+      // Intelligently select up to 4 most important chords
+      const selectedChords = selectBestChords(allChords, 4);
       
       return {
         measureNumber: measure.measureNumber,
@@ -519,13 +544,15 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
   return measures;
 }
 
-function selectBestChords(allChords, maxChords = 8) {
+function selectBestChords(allChords, maxChords = 4) {
   /**
    * Intelligently select the most important chords based on:
    * 1. Confidence score (higher = better)
    * 2. Beat alignment (on-beat chords are more important)
    * 3. Chord changes (when chord actually changes)
    * 4. Position (first chord always included)
+   * 
+   * For maxChords=4: downbeat + 3 best chords
    */
   
   if (allChords.length <= maxChords) {
