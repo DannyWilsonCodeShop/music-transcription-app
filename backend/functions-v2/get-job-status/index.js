@@ -45,7 +45,7 @@ exports.handler = async (event) => {
     
     const job = result.Item;
     
-    // Return job status
+    // Return job status with all data
     return {
       statusCode: 200,
       headers: {
@@ -59,6 +59,8 @@ exports.handler = async (event) => {
         videoTitle: job.videoTitle,
         youtubeUrl: job.youtubeUrl,
         pdfUrl: job.pdfUrl,
+        chordsData: job.chordsData,
+        lyricsData: job.lyricsData,
         error: job.errorMessage,
         createdAt: job.createdAt,
         updatedAt: job.updatedAt,

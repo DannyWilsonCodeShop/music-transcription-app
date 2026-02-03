@@ -4,15 +4,19 @@ import react from '@vitejs/plugin-react'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  define: {
-    global: 'globalThis',
-  },
-  resolve: {
-    alias: {
-      './runtimeConfig': './runtimeConfig.browser',
+  build: {
+    target: 'es2020',
+    minify: 'terser',
+    rollupOptions: {
+      output: {
+        manualChunks: undefined,
+      },
     },
   },
   optimizeDeps: {
-    exclude: ['@aws-amplify/backend']
+    force: true,
+  },
+  esbuild: {
+    target: 'es2020'
   }
 })

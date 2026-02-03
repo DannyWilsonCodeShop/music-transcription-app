@@ -1,0 +1,163 @@
+{
+  "Comment": "Enhanced Music Transcription Pipeline with 0.2s Chord Detection and Syllable Analysis",
+  "StartAt": "StartTranscription",
+  "States": {
+    "StartTranscription": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-youtube-downloader-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "youtubeUrl.$": "$.youtubeUrl"
+      },
+      "ResultPath": "$.downloadResult",
+      "Next": "ParallelAnalysis",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    
+    "ParallelAnalysis": {
+      "Type": "Parallel",
+      "Comment": "Run enhanced audio and lyrics analysis in parallel",
+      "Branches": [
+        {
+          "StartAt": "EnhancedAudioAnalysis",
+          "States": {
+            "EnhancedAudioAnalysis": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-enhanced-audio-analyzer-dev",
+              "Parameters": {
+                "jobId.$": "$.jobId",
+                "audioUrl.$": "$.downloadResult.audioUrl"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "LyricsTranscription",
+          "States": {
+            "LyricsTranscription": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-deepgram-transcriber-dev",
+              "Parameters": {
+                "jobId.$": "$.jobId",
+                "audioUrl.$": "$.downloadResult.audioUrl"
+              },
+              "Next": "EnhancedLyricsAnalysis",
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            },
+            "EnhancedLyricsAnalysis": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-enhanced-lyrics-analyzer-dev",
+              "Parameters": {
+                "jobId.$": "$.jobId",
+                "lyricsText.$": "$.lyricsResult.text"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "Next": "MusicalIntegration",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    
+    "MusicalIntegration": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-musical-integration-orchestrator-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId"
+      },
+      "ResultPath": "$.integrationResult",
+      "Next": "EnhancedPDFGeneration",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 3,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    
+    "EnhancedPDFGeneration": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-pdf-generator-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId"
+      },
+      "End": true,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    
+    "HandleError": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-error-handler-dev",
+      "Parameters": {
+        "jobId.$": "$.jobId",
+        "error.$": "$.Error",
+        "cause.$": "$.Cause"
+      },
+      "End": true
+    }
+  }
+}

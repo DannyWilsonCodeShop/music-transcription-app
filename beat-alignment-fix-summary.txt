@@ -1,0 +1,38 @@
+BEAT-BASED PDF ALIGNMENT FIX SUMMARY
+====================================
+
+PROBLEM IDENTIFIED:
+- PDF alignment looked messy because jsPDF's default Helvetica font is proportional
+- Padded strings with spaces don't align properly in proportional fonts
+- Nashville numbers weren't lining up under the correct lyrics
+
+SOLUTION IMPLEMENTED:
+- Switched from padded string approach to positioned text rendering
+- Each beat gets an exact X-coordinate position (20pt intervals)
+- Beat positions: [20, 40, 60, 80, 100, 120, 140, 160]
+- Both lyrics and numbers use the same position array for perfect alignment
+
+TECHNICAL CHANGES:
+1. Updated generateAlignedLyricsAndNumbers() to return arrays instead of padded strings
+2. Modified PDF rendering to use doc.text(text, x, y) with exact positions
+3. Applied fix to both test files and backend PDF generator
+
+RESULT:
+- Perfect vertical alignment between lyrics and Nashville numbers
+- Clean, professional appearance matching musical notation standards
+- Beat-based system maintains musical accuracy for 3/4 time signature
+
+EXAMPLE ALIGNMENT:
+Beat:    1     2     3     4     5     6     7     8
+Lyrics:  A-    maz-  ing   Grace, how   sweet the   sound
+Numbers: 1     -     -     1     5     -     4     1
+X-pos:   20    40    60    80    100   120   140   160
+
+FILES UPDATED:
+- example-amazing-grace-output.pdf (main example)
+- beat-aligned-amazing-grace.pdf (pure beat-based version)
+- test-pdf-generator.cjs (positioned text rendering)
+- test-beat-alignment.cjs (positioned text rendering)
+- backend/functions-v2/pdf-generator/index.js (positioned text rendering)
+
+The PDF now shows true beat-based alignment with perfect visual formatting!

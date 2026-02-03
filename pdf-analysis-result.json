@@ -1,0 +1,31 @@
+{
+  "success": true,
+  "pdfStructure": {
+    "title": "The Wheels on the Bus - Mock Data Test",
+    "key": "C major",
+    "bpm": 60,
+    "timeSignature": "4/4",
+    "totalMeasures": 75,
+    "totalChords": 300,
+    "totalSyllables": 280,
+    "downbeats": 75,
+    "chordProgression": [
+      "C",
+      "Dm",
+      "Em",
+      "F",
+      "G",
+      "Am",
+      "Bdim"
+    ],
+    "nashvilleNumbers": [
+      "1",
+      "2m",
+      "3m",
+      "4",
+      "5",
+      "6m",
+      "7°"
+    ]
+  }
+}

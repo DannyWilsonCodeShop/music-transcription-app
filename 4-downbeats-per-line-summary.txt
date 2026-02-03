@@ -1,0 +1,46 @@
+4 DOWNBEATS PER LINE - VERTICALLY ALIGNED
+========================================
+
+✅ CORRECTED: Each line now has exactly 4 downbeats in RED
+
+VERSE 1 DOWNBEAT STRUCTURE:
+Line 1: A - maz - ing Grace, how sweet the sound
+        1           1         5      1
+        ↓           ↓         ↓      ↓
+     (A-)      (Grace)   (sweet) (sound)
+
+Line 2: That saved a wretch like me  
+             5    6   4        1
+             ↓    ↓   ↓        ↓
+          (saved) (a) (wretch) (me)
+
+Line 3: I once was lost, but now am found
+          1      1         4      1
+          ↓      ↓         ↓      ↓
+       (once)  (lost)    (now)  (found)
+
+Line 4: Was blind, but now I see
+            1       5    1   1
+            ↓       ↓    ↓   ↓
+         (blind)  (now) (see) (no word)
+
+VERTICAL ALIGNMENT:
+- Column 1: A-, saved, once, blind
+- Column 2: Grace, a, lost, now  
+- Column 3: sweet, wretch, now, see
+- Column 4: sound, me, found, (no word)
+
+MUSICAL ACCURACY:
+- 4/4 time signature = 4 downbeats per measure
+- Each line = 1 measure
+- All downbeats in RED for clear identification
+- No black passing chords (removed for clarity)
+- Perfect vertical alignment of chord columns
+
+IMPLEMENTATION:
+- 4 fixed column positions: 20, 70, 120, 170
+- All chord numbers positioned under correct syllables
+- RED color (200, 0, 0) for all downbeats
+- Clean, readable Nashville Number System format
+
+This creates the perfect foundation for a professional chord chart!

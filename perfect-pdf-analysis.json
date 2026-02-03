@@ -1,0 +1,18 @@
+{
+  "totalPages": 5,
+  "totalElements": 89,
+  "contentSummary": {
+    "headers": 4,
+    "chordLines": 19,
+    "lyricsLines": 19,
+    "timingLines": 20
+  },
+  "perfectFeatures": {
+    "measureBasedLayout": true,
+    "downbeatHighlighting": true,
+    "nashvilleNumbers": true,
+    "syllableAlignment": true,
+    "professionalFormatting": true,
+    "timingInformation": true
+  }
+}

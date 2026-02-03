@@ -3,13 +3,17 @@ backend:
   phases:
     build:
       commands:
-        - npm ci
-        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+        - '# Execute Amplify CLI with the helper script'
+        - amplifyPush --simple
 frontend:
   phases:
     preBuild:
       commands:
-        - npm ci
+        - node --version
+        - npm --version
+        - rm -rf node_modules package-lock.json
+        - npm install --legacy-peer-deps
+        - npm install @rollup/rollup-linux-x64-gnu --save-dev --legacy-peer-deps
     build:
       commands:
         - npm run build
@@ -18,4 +22,5 @@ frontend:
     files:
       - '**/*'
   cache:
-    paths: []
+    paths:
+      - node_modules/**/*

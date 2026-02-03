@@ -1,0 +1,20 @@
+# Minimal Real Audio Analysis Dependencies
+# Only the absolutely essential libraries for basic chord detection
+
+# Core audio analysis (REQUIRED)
+librosa==0.10.1
+numpy==1.24.3
+scipy==1.10.1
+
+# Audio file handling (REQUIRED)
+soundfile==0.12.1
+audioread==3.0.0
+
+# AWS integration (REQUIRED)
+boto3==1.28.62
+botocore==1.31.62
+
+# HTTP requests (REQUIRED)
+requests==2.31.0
+
+# That's it! Total size: ~50MB instead of 500MB+

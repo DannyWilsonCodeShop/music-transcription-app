@@ -1,0 +1,43 @@
+DOWNBEAT-ONLY ALIGNMENT SYSTEM
+==============================
+
+IMPROVEMENT MADE:
+- Switched from "every syllable gets a position" to "only downbeats get chord numbers"
+- Much cleaner, more readable, and musically accurate
+- Natural text flow with precise chord placement only where needed
+
+DOWNBEAT POSITIONS (as specified):
+Line 1: a-, grace, sweet, sound
+Line 2: saved, wretch, me  
+Line 3: once, now, found
+Line 4: blind, now, see
+Line 5: grace, taught, heart, fear
+Line 6: grace, fears, lieved
+
+TECHNICAL APPROACH:
+1. Lyrics flow naturally as regular text
+2. Chord numbers positioned precisely above downbeat syllables
+3. Red color for chord numbers to make them stand out
+4. X-coordinates calculated based on approximate syllable positions
+
+EXAMPLE OUTPUT:
+Amazing Grace, how sweet the sound
+1      1         5      4    1
+
+That saved a wretch like me
+1    5      6       1
+
+Much cleaner than the previous tabbed approach!
+
+MUSICAL ACCURACY:
+- Only shows chord changes on actual downbeats
+- Follows the natural rhythm of Amazing Grace
+- Matches how musicians actually read chord charts
+- Eliminates visual clutter from non-chord beats
+
+FILES UPDATED:
+- example-amazing-grace-output.pdf (now with downbeat-only alignment)
+- test-pdf-generator.cjs (downbeat positioning system)
+- backend/functions-v2/pdf-generator/index.js (production-ready downbeat system)
+
+This creates a much more professional and readable Nashville Number chart!

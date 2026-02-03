@@ -63,6 +63,16 @@ function App() {
         
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '48px' }}>
+          <h1 className="Cipher" style={{
+            fontSize: '24px',
+            fontWeight: 'bold',
+            color: '#00ffff',
+            textShadow: '0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff',
+            marginBottom: '16px',
+            letterSpacing: '2px'
+          }}>
+            Cipher
+          </h1>
           <h1 style={{
             fontSize: '48px',
             fontWeight: 'bold',

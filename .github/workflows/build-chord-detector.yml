@@ -4,8 +4,9 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
-      - 'backend/functions/chord-detector-ml/**'
+      - 'backend/functions-v2/chord-detector-ecs/**'
   workflow_dispatch: # Allow manual trigger
 
 env:
@@ -38,7 +39,7 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend/functions/chord-detector-ml
+          context: ./backend/functions-v2/chord-detector-ecs
           platforms: linux/amd64
           push: true
           tags: |
