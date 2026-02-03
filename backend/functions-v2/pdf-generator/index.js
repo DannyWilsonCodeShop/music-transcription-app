@@ -421,7 +421,7 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
     if (!measureMap[measureNum]) {
       measureMap[measureNum] = {
         measureNumber: measureNum,
-        chords: [], // All chords in this measure with beat positions
+        allChords: [], // All chords before filtering
         startTime: (measureNum - 1) * secondsPerMeasure,
         endTime: measureNum * secondsPerMeasure
       };
@@ -429,36 +429,98 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
     
     const chordName = chord.chord || chord.name;
     const nashvilleNumber = chord.nashvilleNumber || convertChordToNashvilleNumber(chordName, keyRoot);
+    const confidence = chord.confidence || 0.5;
     
-    measureMap[measureNum].chords.push({
+    measureMap[measureNum].allChords.push({
       chord: chordName,
       nashvilleNumber: nashvilleNumber,
       beat: beatInMeasure,
       time: chordTime,
+      confidence: confidence,
       isDownbeat: beatInMeasure < 0.5 // First beat of measure
     });
   });
   
-  // Convert to array and sort by measure number
+  // Convert to array and intelligently select best chords per measure
   const measures = Object.keys(measureMap)
     .sort((a, b) => parseInt(a) - parseInt(b))
     .map(measureNum => {
       const measure = measureMap[measureNum];
+      const allChords = measure.allChords;
+      
       // Sort chords within measure by beat
-      measure.chords.sort((a, b) => a.beat - b.beat);
-      return measure;
+      allChords.sort((a, b) => a.beat - b.beat);
+      
+      // Intelligently select up to 8 most important chords
+      const selectedChords = selectBestChords(allChords, 8);
+      
+      return {
+        measureNumber: measure.measureNumber,
+        chords: selectedChords,
+        startTime: measure.startTime,
+        endTime: measure.endTime
+      };
     });
   
   console.log(`✅ Created ${measures.length} measures`);
-  console.log(`📊 Avg chords per measure: ${(chords.length / measures.length).toFixed(1)}`);
   
   // Log some examples
   if (measures.length > 0) {
     const firstMeasure = measures[0];
-    console.log(`📊 First measure has ${firstMeasure.chords.length} chords: ${firstMeasure.chords.map(c => `${c.nashvilleNumber}@beat${c.beat.toFixed(1)}`).join(', ')}`);
+    console.log(`📊 First measure: ${firstMeasure.chords.length} chords selected from ${measureMap[1].allChords.length} total`);
   }
   
   return measures;
+}
+
+function selectBestChords(allChords, maxChords = 8) {
+  /**
+   * Intelligently select the most important chords based on:
+   * 1. Confidence score (higher = better)
+   * 2. Beat alignment (on-beat chords are more important)
+   * 3. Chord changes (when chord actually changes)
+   * 4. Position (first chord always included)
+   */
+  
+  if (allChords.length <= maxChords) {
+    return allChords;
+  }
+  
+  // Always include first chord (downbeat)
+  const selected = [allChords[0]];
+  const remaining = allChords.slice(1);
+  
+  // Score each remaining chord
+  const scoredChords = remaining.map((chord, index) => {
+    let score = 0;
+    
+    // 1. Confidence score (0-1, weight: 30%)
+    score += chord.confidence * 0.3;
+    
+    // 2. Beat alignment (on-beat = higher score, weight: 40%)
+    const beatRounded = Math.round(chord.beat);
+    const beatDistance = Math.abs(chord.beat - beatRounded);
+    const beatScore = 1 - (beatDistance / 0.5); // 1.0 if exactly on beat, 0.0 if halfway between
+    score += beatScore * 0.4;
+    
+    // 3. Chord change (different from previous chord, weight: 30%)
+    const prevChord = index > 0 ? remaining[index - 1] : allChords[0];
+    if (chord.chord !== prevChord.chord) {
+      score += 0.3;
+    }
+    
+    return { ...chord, score };
+  });
+  
+  // Sort by score (descending) and take top (maxChords - 1)
+  scoredChords.sort((a, b) => b.score - a.score);
+  const topChords = scoredChords.slice(0, maxChords - 1);
+  
+  // Add to selected and re-sort by beat position
+  selected.push(...topChords);
+  selected.sort((a, b) => a.beat - b.beat);
+  
+  return selected;
 }
 
 function convertChordToNashvilleNumber(chordName, keyRoot = 'C') {
