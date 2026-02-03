@@ -11,7 +11,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_REPOSITORY: chordscout-chord-detector-dev
+  ECR_REPOSITORY: chordscout-chord-detector
 
 jobs:
   build-and-push:
