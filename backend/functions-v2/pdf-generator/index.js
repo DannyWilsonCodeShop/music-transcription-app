@@ -338,13 +338,13 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
     
     // Dynamic spacing: calculate how much space each chord needs
     const chordCount = chordsInMeasure.length;
-    const avgChordWidth = 4; // Average width of a chord symbol in points
-    const minSpacing = 2; // Minimum spacing between chords
+    const avgChordWidth = 5; // Average width of a chord symbol in points
+    const minSpacing = 3; // Minimum spacing between chords
     const totalChordWidth = chordCount * avgChordWidth;
     const totalSpacing = (chordCount - 1) * minSpacing;
     const requiredWidth = totalChordWidth + totalSpacing;
     
-    // If chords would overflow, use even spacing instead of beat-based positioning
+    // With 4 chords, we should almost always use beat-based positioning
     const useEvenSpacing = requiredWidth > measureWidth;
     
     if (useEvenSpacing) {
@@ -497,8 +497,8 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
       // Sort chords within measure by beat
       allChords.sort((a, b) => a.beat - b.beat);
       
-      // Intelligently select up to 8 most important chords
-      const selectedChords = selectBestChords(allChords, 8);
+      // Intelligently select up to 4 most important chords
+      const selectedChords = selectBestChords(allChords, 4);
       
       return {
         measureNumber: measure.measureNumber,
@@ -519,13 +519,15 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
   return measures;
 }
 
-function selectBestChords(allChords, maxChords = 8) {
+function selectBestChords(allChords, maxChords = 4) {
   /**
    * Intelligently select the most important chords based on:
    * 1. Confidence score (higher = better)
    * 2. Beat alignment (on-beat chords are more important)
    * 3. Chord changes (when chord actually changes)
    * 4. Position (first chord always included)
+   * 
+   * For maxChords=4: downbeat + 3 best chords
    */
   
   if (allChords.length <= maxChords) {
