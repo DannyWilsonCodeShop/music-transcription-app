@@ -307,69 +307,60 @@ class ChordDetectionService:
         sr: int = 22050
     ) -> List[Chord]:
         """
-        Post-processing to improve accuracy
+        Post-processing to output chords at 0.2s intervals
+        This ensures we capture all chord changes including fast progressions
         """
         if not chords or not strengths:
             return []
         
         hop_size = 2048
-        frame_duration = hop_size / sr
+        frame_duration = hop_size / sr  # ~0.093s per frame
+        
+        # Target: output chord every 0.2 seconds
+        target_interval = 0.2
+        frames_per_interval = int(target_interval / frame_duration)  # ~2 frames per 0.2s
+        
+        logger.info(f"Refining chords: {len(chords)} frames, outputting every {target_interval}s ({frames_per_interval} frames)")
         
         refined = []
-        current_chord = None
-        current_start = 0.0
-        current_confidences = []
         
-        for i, (chord, strength) in enumerate(zip(chords, strengths)):
-            time = i * frame_duration
+        # Sample at 0.2s intervals
+        for i in range(0, len(chords), frames_per_interval):
+            # Get the most common chord in this interval
+            interval_end = min(i + frames_per_interval, len(chords))
+            interval_chords = chords[i:interval_end]
+            interval_strengths = strengths[i:interval_end]
             
-            # Skip low-confidence detections
-            if strength < 0.3:
-                if current_chord and len(current_confidences) > 0:
-                    duration = time - current_start
-                    if duration >= 0.5:
-                        avg_confidence = np.mean(current_confidences)
-                        refined.append(Chord(
-                            name=current_chord,
-                            start_time=current_start,
-                            duration=duration,
-                            confidence=avg_confidence
-                        ))
-                current_chord = None
-                current_confidences = []
+            # Filter out low-confidence detections
+            valid_chords = [(c, s) for c, s in zip(interval_chords, interval_strengths) if s >= 0.25]
+            
+            if not valid_chords:
                 continue
             
-            # Check if chord changed
-            if chord != current_chord:
-                if current_chord and len(current_confidences) > 0:
-                    duration = time - current_start
-                    if duration >= 0.5:
-                        avg_confidence = np.mean(current_confidences)
-                        refined.append(Chord(
-                            name=current_chord,
-                            start_time=current_start,
-                            duration=duration,
-                            confidence=avg_confidence
-                        ))
-                
-                current_chord = chord
-                current_start = time
-                current_confidences = [strength]
-            else:
-                current_confidences.append(strength)
+            # Find most common chord in this interval
+            chord_counts = {}
+            chord_strengths = {}
+            for chord, strength in valid_chords:
+                chord_counts[chord] = chord_counts.get(chord, 0) + 1
+                if chord not in chord_strengths:
+                    chord_strengths[chord] = []
+                chord_strengths[chord].append(strength)
+            
+            # Get chord with highest count (and highest avg strength as tiebreaker)
+            best_chord = max(chord_counts.keys(), 
+                           key=lambda c: (chord_counts[c], np.mean(chord_strengths[c])))
+            
+            avg_confidence = np.mean(chord_strengths[best_chord])
+            start_time = i * frame_duration
+            
+            refined.append(Chord(
+                name=best_chord,
+                start_time=start_time,
+                duration=target_interval,
+                confidence=avg_confidence
+            ))
         
-        # Add final chord
-        if current_chord and len(current_confidences) > 0:
-            duration = len(chords) * frame_duration - current_start
-            if duration >= 0.5:
-                avg_confidence = np.mean(current_confidences)
-                refined.append(Chord(
-                    name=current_chord,
-                    start_time=current_start,
-                    duration=duration,
-                    confidence=avg_confidence
-                ))
-        
+        logger.info(f"Refined to {len(refined)} chord segments at 0.2s intervals")
         return refined
 
 
