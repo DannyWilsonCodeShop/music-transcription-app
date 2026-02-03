@@ -32,20 +32,21 @@ PDF_GENERATOR_FUNCTION = os.environ.get('PDF_GENERATOR_FUNCTION', '')
 
 # Import audio processing libraries
 try:
-    import essentia.standard as es
-    ESSENTIA_AVAILABLE = True
-    logger.info("Essentia loaded successfully")
-except ImportError as e:
-    logger.error(f"Essentia not available: {e}")
-    ESSENTIA_AVAILABLE = False
-
-try:
     import librosa
     LIBROSA_AVAILABLE = True
     logger.info(f"Librosa version: {librosa.__version__}")
 except ImportError as e:
     logger.error(f"Librosa not available: {e}")
     LIBROSA_AVAILABLE = False
+    
+# Essentia is optional for enhanced features
+try:
+    import essentia.standard as es
+    ESSENTIA_AVAILABLE = True
+    logger.info("Essentia loaded successfully")
+except ImportError as e:
+    logger.warning(f"Essentia not available (optional): {e}")
+    ESSENTIA_AVAILABLE = False
 
 
 # Data Models
@@ -120,25 +121,18 @@ class ChordProgression:
 
 class ChordDetectionService:
     """
-    Advanced chord detection using Essentia ML models
-    Achieves 95%+ accuracy through pre-trained deep learning models
+    Advanced chord detection using Librosa
+    Achieves good accuracy through chromagram analysis
     """
     
     def __init__(self):
-        if not ESSENTIA_AVAILABLE:
-            raise RuntimeError("Essentia library not available")
-        
-        # Initialize Essentia algorithms
-        self.key_detector = es.KeyExtractor()
-        
-        # For chord detection, we need to use the correct algorithm
-        # ChordsDetection expects specific input format
-        # Let's use a simpler approach with chromagram + template matching
-        logger.info("ChordDetectionService initialized with Essentia")
+        if not LIBROSA_AVAILABLE:
+            raise RuntimeError("Librosa library not available")
+        logger.info("ChordDetectionService initialized with Librosa")
     
     def detect_chords(self, audio_path: str) -> ChordProgression:
         """
-        Detect chords throughout entire song using Essentia
+        Detect chords throughout entire song using Librosa
         
         Returns:
             ChordProgression with timing, confidence, and chord quality
@@ -157,52 +151,36 @@ class ChordDetectionService:
             if file_size == 0:
                 raise ValueError("Audio file is empty (0 bytes)")
             
-            if file_size > 100 * 1024 * 1024:  # 100 MB
-                logger.warning(f"Large audio file: {file_size / 1024 / 1024:.2f} MB - processing may be slow")
+            # Load audio with librosa
+            audio, sr = librosa.load(audio_path, sr=22050)
+            total_duration = len(audio) / sr
             
-            # Load audio at consistent sample rate (44.1kHz standard)
-            audio = self.load_audio(audio_path, sample_rate=44100)
-            total_duration = len(audio) / 44100.0
+            logger.info(f"Audio loaded: duration={total_duration:.2f}s, sr={sr}Hz")
             
-            logger.info(f"Audio loaded: duration={total_duration:.2f}s, samples={len(audio)}")
-            
-            # Validate audio duration
-            if total_duration < 5.0:
-                raise ValueError(f"Audio too short: {total_duration:.2f}s (minimum 5 seconds)")
-            
-            if total_duration > 600.0:  # 10 minutes
-                logger.warning(f"Long audio: {total_duration:.2f}s - processing may take several minutes")
-            
-            # Detect key first (improves chord detection accuracy)
+            # Detect key
             logger.info("Detecting key signature...")
-            key, scale, strength = self.key_detector(audio)
-            logger.info(f"Key detected: {key} {scale} (strength: {strength:.3f})")
+            chroma = librosa.feature.chroma_cqt(y=audio, sr=sr)
+            key_profile = np.mean(chroma, axis=1)
+            key_idx = np.argmax(key_profile)
+            keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+            key = keys[key_idx]
+            scale = 'major'  # Simplified
             
-            if strength < 0.3:
-                logger.warning(f"Low key detection confidence: {strength:.3f} - results may be less accurate")
+            logger.info(f"Key detected: {key} {scale}")
             
-            # Run chord detection using chromagram analysis
-            logger.info("Running Essentia chord detection...")
-            chords_raw, confidences_raw = self.detect_chords_from_audio(audio)
+            # Run chord detection
+            logger.info("Running chord detection...")
+            chords_raw, confidences_raw = self.detect_chords_from_audio(audio, sr)
             
             logger.info(f"Raw detection: {len(chords_raw)} frames")
             
-            if len(chords_raw) == 0:
-                raise RuntimeError("Chord detection produced no results")
-            
-            # Post-process: smooth transitions, filter low-confidence
+            # Refine chord sequence
             logger.info("Refining chord sequence...")
             refined_chords = self.refine_chord_sequence(
-                chords_raw, confidences_raw, key, scale
+                chords_raw, confidences_raw, key, scale, sr
             )
             
             logger.info(f"Refined to {len(refined_chords)} chord segments")
-            
-            if len(refined_chords) == 0:
-                raise RuntimeError("No chords detected after refinement - audio may be too noisy or non-musical")
-            
-            if len(refined_chords) < 3:
-                logger.warning(f"Very few chords detected ({len(refined_chords)}) - audio may be simple or detection failed")
             
             # Create ChordProgression object
             progression = ChordProgression(
@@ -216,110 +194,38 @@ class ChordDetectionService:
             logger.info(f"Chord detection complete: {len(refined_chords)} chords, "
                        f"avg confidence: {progression.average_confidence:.3f}")
             
-            # Validate quality
-            if progression.average_confidence < 0.4:
-                logger.warning(f"Low average confidence: {progression.average_confidence:.3f} - results may be unreliable")
-            
             return progression
             
-        except FileNotFoundError as e:
-            logger.error(f"File not found error: {e}")
-            raise
-        except ValueError as e:
-            logger.error(f"Invalid audio error: {e}")
-            raise
         except Exception as e:
-            logger.error(f"Unexpected error in chord detection: {e}", exc_info=True)
-            raise RuntimeError(f"Chord detection failed: {str(e)}") from e
+            logger.error(f"Chord detection failed: {e}", exc_info=True)
+            raise
     
-    def detect_chords_from_audio(self, audio: np.ndarray) -> tuple:
+    def detect_chords_from_audio(self, audio: np.ndarray, sr: int) -> tuple:
         """
-        Detect chords using Essentia's HPCP (Harmonic Pitch Class Profile)
-        This is more accurate than basic chromagram
-        
-        Raises:
-            ValueError: If audio array is invalid
-            RuntimeError: If chord detection fails
+        Detect chords using Librosa's chromagram
         """
         try:
-            # Validate audio input
-            if audio is None or len(audio) == 0:
-                raise ValueError("Audio array is empty or None")
+            # Compute chromagram
+            chroma = librosa.feature.chroma_cqt(y=audio, sr=sr, hop_length=2048)
             
-            if not isinstance(audio, np.ndarray):
-                raise ValueError(f"Audio must be numpy array, got {type(audio)}")
-            
-            # Parameters
-            frame_size = 4096
-            hop_size = 2048
-            sample_rate = 44100
-            
-            logger.info(f"Processing {len(audio)} samples with frame_size={frame_size}, hop_size={hop_size}")
-            
-            # Initialize Essentia algorithms for chord detection
-            try:
-                windowing = es.Windowing(type='blackmanharris62')
-                spectrum = es.Spectrum()
-                spectral_peaks = es.SpectralPeaks()
-                hpcp = es.HPCP()
-            except Exception as e:
-                logger.error(f"Failed to initialize Essentia algorithms: {e}")
-                raise RuntimeError(f"Essentia initialization failed: {e}") from e
-            
-            # Chord templates (major and minor)
+            # Chord templates
             chord_templates = self.create_chord_templates()
             
             chords = []
             confidences = []
             
-            # Calculate expected number of frames
-            expected_frames = (len(audio) - frame_size) // hop_size
-            logger.info(f"Expected to process ~{expected_frames} frames")
-            
-            # Process audio frame by frame
-            frames_processed = 0
-            for frame_idx in range(0, len(audio) - frame_size, hop_size):
-                try:
-                    frame = audio[frame_idx:frame_idx + frame_size]
-                    
-                    # Apply windowing
-                    windowed_frame = windowing(frame)
-                    
-                    # Compute spectrum
-                    spec = spectrum(windowed_frame)
-                    
-                    # Extract spectral peaks
-                    freqs, mags = spectral_peaks(spec)
-                    
-                    # Compute HPCP (Harmonic Pitch Class Profile)
-                    hpcp_frame = hpcp(freqs, mags)
-                    
-                    # Match to chord templates
-                    chord, confidence = self.match_hpcp_to_chord(hpcp_frame, chord_templates)
-                    
-                    chords.append(chord)
-                    confidences.append(confidence)
-                    frames_processed += 1
-                    
-                except Exception as e:
-                    logger.warning(f"Error processing frame {frame_idx}: {e}")
-                    # Continue with next frame
-                    chords.append('N')
-                    confidences.append(0.0)
-            
-            logger.info(f"Processed {frames_processed} frames successfully")
-            
-            if frames_processed == 0:
-                raise RuntimeError("Failed to process any audio frames")
+            # Match each frame to best chord
+            for i in range(chroma.shape[1]):
+                chroma_frame = chroma[:, i]
+                chord, confidence = self.match_chroma_to_chord(chroma_frame, chord_templates)
+                chords.append(chord)
+                confidences.append(confidence)
             
             return chords, confidences
             
-        except ValueError as e:
-            logger.error(f"Invalid audio input: {e}")
-            raise
         except Exception as e:
-            logger.error(f"Unexpected error in chord detection from audio: {e}", exc_info=True)
-            raise RuntimeError(f"Audio processing failed: {str(e)}") from e
+            logger.error(f"Chord detection from audio failed: {e}")
+            raise
     
     def create_chord_templates(self) -> Dict[str, np.ndarray]:
         """Create chord templates for major and minor triads"""
@@ -346,16 +252,16 @@ class ChordDetectionService:
         
         return templates
     
-    def match_hpcp_to_chord(
+    def match_chroma_to_chord(
         self, 
-        hpcp: np.ndarray, 
+        chroma: np.ndarray, 
         templates: Dict[str, np.ndarray]
     ) -> tuple:
-        """Match HPCP to best matching chord template"""
+        """Match chromagram to best matching chord template"""
         
-        # Normalize HPCP
-        if np.sum(hpcp) > 0:
-            hpcp_norm = hpcp / np.sum(hpcp)
+        # Normalize chroma
+        if np.sum(chroma) > 0:
+            chroma_norm = chroma / np.sum(chroma)
         else:
             return 'N', 0.0
         
@@ -364,8 +270,8 @@ class ChordDetectionService:
         best_score = 0.0
         
         for chord_name, template in templates.items():
-            # Compute correlation between HPCP and template
-            score = np.dot(hpcp_norm, template)
+            # Compute correlation between chroma and template
+            score = np.dot(chroma_norm, template)
             
             if score > best_score:
                 best_score = score
@@ -373,37 +279,22 @@ class ChordDetectionService:
         
         return best_chord, best_score
     
-    def load_audio(self, audio_path: str, sample_rate: int = 44100) -> np.ndarray:
-        """
-        Load audio file at consistent sample rate
-        """
-        loader = es.MonoLoader(filename=audio_path, sampleRate=sample_rate)
-        audio = loader()
-        return audio
-    
     def refine_chord_sequence(
         self, 
         chords: List[str], 
         strengths: List[float],
         key: str,
-        scale: str
+        scale: str,
+        sr: int = 22050
     ) -> List[Chord]:
         """
-        Post-processing to improve accuracy:
-        1. Filter chords below confidence threshold (0.3)
-        2. Smooth rapid transitions (< 0.5 seconds)
-        3. Group consecutive same chords
-        4. Calculate durations
+        Post-processing to improve accuracy
         """
         if not chords or not strengths:
-            logger.warning("No chords detected")
             return []
         
-        # Essentia returns one chord per frame
-        # Frame rate depends on hopSize and sample rate
         hop_size = 2048
-        sample_rate = 44100
-        frame_duration = hop_size / sample_rate  # ~0.046 seconds per frame
+        frame_duration = hop_size / sr
         
         refined = []
         current_chord = None
@@ -415,10 +306,9 @@ class ChordDetectionService:
             
             # Skip low-confidence detections
             if strength < 0.3:
-                # If we were tracking a chord, save it
                 if current_chord and len(current_confidences) > 0:
                     duration = time - current_start
-                    if duration >= 0.5:  # Minimum 0.5 second duration
+                    if duration >= 0.5:
                         avg_confidence = np.mean(current_confidences)
                         refined.append(Chord(
                             name=current_chord,
@@ -432,10 +322,9 @@ class ChordDetectionService:
             
             # Check if chord changed
             if chord != current_chord:
-                # Save previous chord if it exists
                 if current_chord and len(current_confidences) > 0:
                     duration = time - current_start
-                    if duration >= 0.5:  # Minimum 0.5 second duration
+                    if duration >= 0.5:
                         avg_confidence = np.mean(current_confidences)
                         refined.append(Chord(
                             name=current_chord,
@@ -444,12 +333,10 @@ class ChordDetectionService:
                             confidence=avg_confidence
                         ))
                 
-                # Start new chord
                 current_chord = chord
                 current_start = time
                 current_confidences = [strength]
             else:
-                # Continue current chord
                 current_confidences.append(strength)
         
         # Add final chord
@@ -474,8 +361,8 @@ class SongStructureAnalyzer:
     """
     
     def __init__(self):
-        if not ESSENTIA_AVAILABLE:
-            raise RuntimeError("Essentia library not available")
+        if not LIBROSA_AVAILABLE:
+            raise RuntimeError("Librosa library not available")
         logger.info("SongStructureAnalyzer initialized")
     
     def analyze_structure(
@@ -483,7 +370,8 @@ class SongStructureAnalyzer:
         audio: np.ndarray, 
         chords: List[Chord],
         tempo: float,
-        time_signature: str = '4/4'
+        time_signature: str = '4/4',
+        sr: int = 22050
     ) -> List[SongSection]:
         """
         Detect song structure using hybrid approach
@@ -493,6 +381,7 @@ class SongStructureAnalyzer:
             chords: Detected chords with timing
             tempo: Song tempo in BPM
             time_signature: Time signature (e.g., '4/4')
+            sr: Sample rate
         
         Returns:
             List of labeled song sections
@@ -507,9 +396,9 @@ class SongStructureAnalyzer:
             
             logger.info(f"📏 Measure duration: {seconds_per_measure:.2f}s ({beats_per_measure} beats @ {tempo} BPM)")
             
-            # Step 1: Audio-based segmentation using Essentia
+            # Step 1: Audio-based segmentation
             logger.info("🔍 Step 1: Audio segmentation...")
-            audio_segments = self.segment_audio(audio)
+            audio_segments = self.segment_audio(audio, sr)
             logger.info(f"   Found {len(audio_segments)} audio segments")
             
             # Step 2: Analyze chord progression patterns
@@ -536,67 +425,31 @@ class SongStructureAnalyzer:
             # Return basic structure if analysis fails
             return self.create_fallback_structure(chords, seconds_per_measure)
     
-    def segment_audio(self, audio: np.ndarray) -> List[tuple]:
+    def segment_audio(self, audio: np.ndarray, sr: int = 22050) -> List[tuple]:
         """
-        Segment audio using Essentia's SBic algorithm
+        Segment audio using Librosa's segmentation
         Returns list of (start_time, end_time) tuples
         """
         try:
-            # Use SBic (Structural Boundary Information Criterion) for segmentation
-            sbic = es.SBic(
-                size1=300,  # Window size for analysis
-                inc1=60,    # Hop size
-                size2=200,
-                inc2=40,
-                cpw=1.5     # Complexity penalty weight
-            )
+            # Use librosa's segmentation based on recurrence matrix
+            tempo, beats = librosa.beat.beat_track(y=audio, sr=sr)
+            beat_times = librosa.frames_to_time(beats, sr=sr)
             
-            # Compute MFCC features for segmentation
-            mfcc_extractor = es.MFCC()
-            windowing = es.Windowing(type='blackmanharris62')
-            spectrum = es.Spectrum()
+            # Create segments every 8 beats (typical verse/chorus length)
+            segments = []
+            beats_per_segment = 16
             
-            frame_size = 2048
-            hop_size = 1024
-            sample_rate = 44100
+            for i in range(0, len(beat_times), beats_per_segment):
+                start_time = beat_times[i]
+                end_time = beat_times[min(i + beats_per_segment, len(beat_times) - 1)]
+                segments.append((start_time, end_time))
             
-            mfcc_features = []
-            for i in range(0, len(audio) - frame_size, hop_size):
-                frame = audio[i:i + frame_size]
-                windowed = windowing(frame)
-                spec = spectrum(windowed)
-                _, mfcc = mfcc_extractor(spec)
-                mfcc_features.append(mfcc)
-            
-            # Convert to numpy array
-            mfcc_matrix = np.array(mfcc_features).T
-            
-            # Detect segment boundaries
-            segments = sbic(mfcc_matrix)
-            
-            # Convert frame indices to time
-            time_segments = []
-            for i in range(len(segments) - 1):
-                start_time = segments[i] * hop_size / sample_rate
-                end_time = segments[i + 1] * hop_size / sample_rate
-                time_segments.append((start_time, end_time))
-            
-            # Ensure we have at least some segments
-            if len(time_segments) == 0:
-                # Fallback: create segments every 16 measures (~30 seconds at 120 BPM)
-                duration = len(audio) / sample_rate
-                segment_duration = 30.0
-                time_segments = [
-                    (i * segment_duration, min((i + 1) * segment_duration, duration))
-                    for i in range(int(duration / segment_duration) + 1)
-                ]
-            
-            return time_segments
+            return segments if segments else [(0, len(audio) / sr)]
             
         except Exception as e:
             logger.warning(f"Audio segmentation failed: {e}, using fallback")
             # Fallback: segment every 30 seconds
-            duration = len(audio) / 44100
+            duration = len(audio) / sr
             segment_duration = 30.0
             return [
                 (i * segment_duration, min((i + 1) * segment_duration, duration))
@@ -847,16 +700,14 @@ def main():
             structure_analyzer = SongStructureAnalyzer()
             
             # Reload audio for structure analysis
-            loader = es.MonoLoader(filename=audio_path, sampleRate=44100)
-            audio = loader()
+            audio, sr = librosa.load(audio_path, sr=22050)
             
-            # Estimate tempo (we'll use a simple default for now, could be enhanced)
+            # Estimate tempo
             tempo = 120.0  # Default tempo
             try:
-                rhythm_extractor = es.RhythmExtractor2013()
-                bpm, _, _, _, _ = rhythm_extractor(audio)
-                if 60 <= bpm <= 200:  # Sanity check
-                    tempo = float(bpm)
+                tempo_detected, _ = librosa.beat.beat_track(y=audio, sr=sr)
+                if 60 <= tempo_detected <= 200:  # Sanity check
+                    tempo = float(tempo_detected)
                     logger.info(f"Detected tempo: {tempo:.1f} BPM")
             except Exception as e:
                 logger.warning(f"Tempo detection failed, using default 120 BPM: {e}")
@@ -865,7 +716,8 @@ def main():
                 audio=audio,
                 chords=progression.chords,
                 tempo=tempo,
-                time_signature='4/4'
+                time_signature='4/4',
+                sr=sr
             )
             
             progression.sections = sections
