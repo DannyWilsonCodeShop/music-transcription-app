@@ -161,13 +161,15 @@ class ChordDetectionService:
         """
         Separate audio into stems and extract harmonic content (bass + other)
         Returns (harmonic_audio, sr) or (original_audio, sr) if separation fails
+        
+        NOTE: Demucs separation takes 2-5 minutes for a 6-minute song
         """
         if not self.demucs_model:
             logger.info("Demucs not available, using full mix for chord detection")
             return librosa.load(audio_path, sr=22050)
         
         try:
-            logger.info("🎵 Separating audio stems with Demucs...")
+            logger.info("🎵 Separating audio stems with Demucs (this will take 2-5 minutes)...")
             
             # Load audio for Demucs
             wav, sr = torchaudio.load(audio_path)
@@ -183,7 +185,7 @@ class ChordDetectionService:
                 sr = self.demucs_model.samplerate
             
             # Apply source separation
-            logger.info("   Running Demucs separation (this may take a minute)...")
+            logger.info("   Running Demucs separation...")
             with torch.no_grad():
                 sources = apply_model(self.demucs_model, wav[None], device='cpu')[0]
             
@@ -213,6 +215,7 @@ class ChordDetectionService:
             
         except Exception as e:
             logger.warning(f"Source separation failed: {e}, using full mix")
+            logger.warning("This is expected if memory is limited - continuing with full audio")
             return librosa.load(audio_path, sr=22050)
     
     def detect_chords(self, audio_path: str) -> ChordProgression:
