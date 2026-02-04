@@ -14,29 +14,43 @@ const JOBS_TABLE = process.env.DYNAMODB_JOBS_TABLE || 'ChordScout-Jobs-dev';
 const PDF_BUCKET = process.env.S3_PDF_BUCKET || 'chordscout-pdfs-dev-463470937777';
 
 exports.handler = async (event) => {
-  console.log('🎵 Enhanced PDF Generator - Starting...', JSON.stringify(event, null, 2));
+  const timestamp = new Date().toISOString();
+  console.log('=' .repeat(80));
+  console.log(`[${timestamp}] 🎵 PDF GENERATOR STARTING`);
+  console.log('=' .repeat(80));
+  console.log('Event:', JSON.stringify(event, null, 2));
   
   try {
     const { jobId } = event;
     
     if (!jobId) {
+      console.error('[ERROR] Missing jobId in event');
       throw new Error('Missing jobId in event');
     }
 
+    console.log(`[INFO] Processing job: ${jobId}`);
+
     // Update status
+    console.log('[STEP 1] Updating job status to GENERATING_PDF (90%)');
     await updateJobStatus(jobId, 'GENERATING_PDF', 90);
+    console.log('[STEP 1] ✓ Status updated successfully');
 
     // Get job data from DynamoDB
+    console.log('[STEP 2] Fetching job data from DynamoDB');
     const jobData = await getJobData(jobId);
-    console.log('📋 Job Data Retrieved:', {
+    console.log('[STEP 2] ✓ Job data retrieved successfully');
+    console.log('📋 Job Data:', {
       title: jobData.videoTitle || jobData.title,
       status: jobData.status,
+      progress: jobData.progress,
       hasChords: jobData.chords ? jobData.chords.length : 0,
+      hasChordsData: jobData.chordsData ? 'Present' : 'Missing',
       hasLyrics: jobData.lyricsData ? 'Present' : 'Missing',
       hasEnhancedLyrics: jobData.lyricsData?.syllableAlignedLyrics ? jobData.lyricsData.syllableAlignedLyrics.length : 0
     });
 
     // Extract enhanced data - now using chord changes instead of all detections
+    console.log('[STEP 3] Extracting chord and lyrics data');
     const chordsData = jobData.chordsData || {};
     const chords = chordsData.chords || jobData.chords || [];
     const chordAnalysis = jobData.chordAnalysis || {};
@@ -47,19 +61,21 @@ exports.handler = async (event) => {
     const tempo = chordsData.tempo || jobData.tempo || 120; // Read from chordsData first
     const timeSignature = chordsData.timeSignature || jobData.timeSignature || '4/4';
 
+    console.log('[STEP 3] ✓ Data extracted successfully');
     console.log('🎼 Processing Data:');
-    console.log(`Chord Changes: ${chordChanges.length} detected`);
-    console.log(`Syllable Lyrics: ${syllableAlignedLyrics.length} segments`);
-    console.log(`Lyrics text: ${lyricsData.text ? lyricsData.text.substring(0, 100) + '...' : 'None'}`);
-    console.log(`Key: ${key}`);
-    console.log(`Tempo: ${tempo} BPM`);
-    console.log(`Time Signature: ${timeSignature}`);
+    console.log(`  Chord Changes: ${chordChanges.length} detected`);
+    console.log(`  Syllable Lyrics: ${syllableAlignedLyrics.length} segments`);
+    console.log(`  Lyrics text: ${lyricsData.text ? lyricsData.text.substring(0, 100) + '...' : 'None'}`);
+    console.log(`  Key: ${key}`);
+    console.log(`  Tempo: ${tempo} BPM`);
+    console.log(`  Time Signature: ${timeSignature}`);
     
     if (chordAnalysis.summary) {
-      console.log(`📉 Data reduction: ${chordAnalysis.summary.dataReduction}% (${chordAnalysis.summary.originalDetections} → ${chordAnalysis.summary.totalChanges} changes)`);
+      console.log(`  📉 Data reduction: ${chordAnalysis.summary.dataReduction}% (${chordAnalysis.summary.originalDetections} → ${chordAnalysis.summary.totalChanges} changes)`);
     }
 
     // Generate enhanced PDF
+    console.log('[STEP 4] Generating PDF document');
     const pdfBuffer = await generateEnhancedPDF({
       title: jobData.videoTitle || jobData.title || 'Untitled',
       chords: chordChanges, // Use chord changes instead of all detections
@@ -72,8 +88,10 @@ exports.handler = async (event) => {
       jobId,
       chordAnalysis: chordAnalysis // Pass full analysis for metadata
     });
+    console.log(`[STEP 4] ✓ PDF generated successfully (${pdfBuffer.length} bytes)`);
 
     // Upload to S3
+    console.log('[STEP 5] Uploading PDF to S3');
     const s3Key = `pdfs/${jobId}.pdf`;
     await s3Client.send(new PutObjectCommand({
       Bucket: PDF_BUCKET,
@@ -83,9 +101,10 @@ exports.handler = async (event) => {
     }));
 
     const pdfUrl = `https://${PDF_BUCKET}.s3.amazonaws.com/${s3Key}`;
-    console.log('📄 Enhanced PDF uploaded:', pdfUrl);
+    console.log(`[STEP 5] ✓ PDF uploaded to S3: ${pdfUrl}`);
 
     // Update job as complete
+    console.log('[STEP 6] Updating job status to COMPLETE (100%)');
     await docClient.send(new UpdateCommand({
       TableName: JOBS_TABLE,
       Key: { jobId },
@@ -99,6 +118,11 @@ exports.handler = async (event) => {
         ':updated': new Date().toISOString()
       }
     }));
+    console.log('[STEP 6] ✓ Job marked as COMPLETE');
+
+    console.log('=' .repeat(80));
+    console.log('✅ PDF GENERATION COMPLETED SUCCESSFULLY');
+    console.log('=' .repeat(80));
 
     return {
       statusCode: 200,
@@ -118,10 +142,15 @@ exports.handler = async (event) => {
     };
 
   } catch (error) {
-    console.error('❌ Enhanced PDF generation failed:', error);
+    console.error('=' .repeat(80));
+    console.error('❌ PDF GENERATION FAILED');
+    console.error('=' .repeat(80));
+    console.error('Error:', error);
+    console.error('Stack:', error.stack);
     
     // Update job status to failed
     if (event.jobId) {
+      console.log(`[ERROR] Updating job ${event.jobId} to FAILED status`);
       await updateJobStatus(event.jobId, 'FAILED', 0, error.message);
     }
     
@@ -662,6 +691,8 @@ async function getJobData(jobId) {
 }
 
 async function updateJobStatus(jobId, status, progress, errorMessage) {
+  console.log(`[DynamoDB] Updating job ${jobId}: status=${status}, progress=${progress}%`);
+  
   const updateExpr = errorMessage
     ? 'SET #status = :status, progress = :progress, errorMessage = :error, updatedAt = :updated'
     : 'SET #status = :status, progress = :progress, updatedAt = :updated';
@@ -674,13 +705,20 @@ async function updateJobStatus(jobId, status, progress, errorMessage) {
   
   if (errorMessage) {
     exprValues[':error'] = errorMessage;
+    console.log(`[DynamoDB] Error message: ${errorMessage}`);
   }
   
-  await docClient.send(new UpdateCommand({
-    TableName: JOBS_TABLE,
-    Key: { jobId },
-    UpdateExpression: updateExpr,
-    ExpressionAttributeNames: { '#status': 'status' },
-    ExpressionAttributeValues: exprValues
-  }));
+  try {
+    await docClient.send(new UpdateCommand({
+      TableName: JOBS_TABLE,
+      Key: { jobId },
+      UpdateExpression: updateExpr,
+      ExpressionAttributeNames: { '#status': 'status' },
+      ExpressionAttributeValues: exprValues
+    }));
+    console.log(`[DynamoDB] ✓ Update successful`);
+  } catch (error) {
+    console.error(`[DynamoDB] ❌ Update failed:`, error);
+    throw error;
+  }
 }
