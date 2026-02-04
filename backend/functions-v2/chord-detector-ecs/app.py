@@ -38,6 +38,18 @@ try:
 except ImportError as e:
     logger.error(f"Librosa not available: {e}")
     LIBROSA_AVAILABLE = False
+
+# Demucs for source separation
+try:
+    import torch
+    import torchaudio
+    from demucs.pretrained import get_model
+    from demucs.apply import apply_model
+    DEMUCS_AVAILABLE = True
+    logger.info("Demucs loaded successfully for source separation")
+except ImportError as e:
+    logger.warning(f"Demucs not available (optional): {e}")
+    DEMUCS_AVAILABLE = False
     
 # Essentia is optional for enhanced features
 try:
@@ -125,14 +137,83 @@ class ChordProgression:
 
 class ChordDetectionService:
     """
-    Advanced chord detection using Librosa
-    Achieves good accuracy through chromagram analysis
+    Advanced chord detection using Librosa with source separation
+    Uses Demucs to isolate harmonic instruments for better accuracy
     """
     
     def __init__(self):
         if not LIBROSA_AVAILABLE:
             raise RuntimeError("Librosa library not available")
         logger.info("ChordDetectionService initialized with Librosa")
+        
+        # Initialize Demucs model if available
+        self.demucs_model = None
+        if DEMUCS_AVAILABLE:
+            try:
+                logger.info("Loading Demucs model for source separation...")
+                self.demucs_model = get_model('htdemucs')
+                logger.info("✓ Demucs model loaded successfully")
+            except Exception as e:
+                logger.warning(f"Failed to load Demucs model: {e}")
+                self.demucs_model = None
+    
+    def separate_harmonic_stem(self, audio_path: str) -> tuple:
+        """
+        Separate audio into stems and extract harmonic content (bass + other)
+        Returns (harmonic_audio, sr) or (original_audio, sr) if separation fails
+        """
+        if not self.demucs_model:
+            logger.info("Demucs not available, using full mix for chord detection")
+            return librosa.load(audio_path, sr=22050)
+        
+        try:
+            logger.info("🎵 Separating audio stems with Demucs...")
+            
+            # Load audio for Demucs
+            wav, sr = torchaudio.load(audio_path)
+            
+            # Demucs expects stereo, convert if mono
+            if wav.shape[0] == 1:
+                wav = wav.repeat(2, 1)
+            
+            # Resample to model's expected rate if needed
+            if sr != self.demucs_model.samplerate:
+                resampler = torchaudio.transforms.Resample(sr, self.demucs_model.samplerate)
+                wav = resampler(wav)
+                sr = self.demucs_model.samplerate
+            
+            # Apply source separation
+            logger.info("   Running Demucs separation (this may take a minute)...")
+            with torch.no_grad():
+                sources = apply_model(self.demucs_model, wav[None], device='cpu')[0]
+            
+            # Demucs outputs: [drums, bass, other, vocals]
+            # We want bass + other (harmonic content without drums/vocals)
+            drums = sources[0]
+            bass = sources[1]
+            other = sources[2]  # Contains piano, strings, synths, etc.
+            vocals = sources[3]
+            
+            logger.info("   ✓ Separation complete")
+            logger.info(f"   Stems: drums, bass, other (harmonic), vocals")
+            
+            # Combine bass + other for chord detection
+            harmonic = bass + other
+            
+            # Convert to mono and numpy
+            harmonic_mono = torch.mean(harmonic, dim=0).numpy()
+            
+            # Resample to 22050 for librosa
+            if sr != 22050:
+                harmonic_mono = librosa.resample(harmonic_mono, orig_sr=sr, target_sr=22050)
+                sr = 22050
+            
+            logger.info(f"   ✓ Using harmonic stem (bass + other) for chord detection")
+            return harmonic_mono, sr
+            
+        except Exception as e:
+            logger.warning(f"Source separation failed: {e}, using full mix")
+            return librosa.load(audio_path, sr=22050)
     
     def detect_chords(self, audio_path: str) -> ChordProgression:
         """
@@ -155,8 +236,8 @@ class ChordDetectionService:
             if file_size == 0:
                 raise ValueError("Audio file is empty (0 bytes)")
             
-            # Load audio with librosa
-            audio, sr = librosa.load(audio_path, sr=22050)
+            # Separate harmonic stem for better chord detection
+            audio, sr = self.separate_harmonic_stem(audio_path)
             total_duration = len(audio) / sr
             
             logger.info(f"Audio loaded: duration={total_duration:.2f}s, sr={sr}Hz")
@@ -165,15 +246,32 @@ class ChordDetectionService:
             logger.info("Detecting tempo...")
             tempo = 120.0  # Default
             try:
-                # Use onset strength for more accurate tempo detection
+                # Method 1: Onset-based tempo detection
                 onset_env = librosa.onset.onset_strength(y=audio, sr=sr)
-                tempo_detected = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)[0]
+                tempo_onset = librosa.feature.rhythm.tempo(onset_envelope=onset_env, sr=sr)[0]
                 
-                if 60 <= tempo_detected <= 200:  # Sanity check
-                    tempo = float(tempo_detected)
-                    logger.info(f"✓ Tempo detected: {tempo:.1f} BPM")
+                # Method 2: Beat tracking
+                _, beats = librosa.beat.beat_track(y=audio, sr=sr)
+                if len(beats) > 1:
+                    beat_times = librosa.frames_to_time(beats, sr=sr)
+                    beat_intervals = np.diff(beat_times)
+                    median_interval = np.median(beat_intervals)
+                    tempo_beats = 60.0 / median_interval if median_interval > 0 else 120.0
                 else:
-                    logger.warning(f"Tempo {tempo_detected:.1f} out of range, using default 120 BPM")
+                    tempo_beats = tempo_onset
+                
+                # Average the two methods
+                tempo_avg = (tempo_onset + tempo_beats) / 2
+                
+                # Sanity check and use the most reasonable value
+                if 60 <= tempo_avg <= 200:
+                    tempo = float(tempo_avg)
+                    logger.info(f"✓ Tempo detected: {tempo:.1f} BPM (onset: {tempo_onset:.1f}, beats: {tempo_beats:.1f})")
+                elif 60 <= tempo_onset <= 200:
+                    tempo = float(tempo_onset)
+                    logger.info(f"✓ Tempo detected: {tempo:.1f} BPM (using onset method)")
+                else:
+                    logger.warning(f"Tempo {tempo_avg:.1f} out of range, using default 120 BPM")
             except Exception as e:
                 logger.warning(f"Tempo detection failed, using default 120 BPM: {e}")
             
@@ -391,8 +489,8 @@ class ChordDetectionService:
         sr: int = 22050
     ) -> List[Chord]:
         """
-        Post-processing to output chords at 0.2s intervals
-        This ensures we capture all chord changes including fast progressions
+        Post-processing to detect actual chord changes
+        Only outputs when the chord changes to a new chord
         """
         if not chords or not strengths:
             return []
@@ -400,56 +498,73 @@ class ChordDetectionService:
         hop_size = 2048
         frame_duration = hop_size / sr  # ~0.093s per frame
         
-        # Target: output chord every 0.2 seconds
-        target_interval = 0.2
-        frames_per_interval = int(target_interval / frame_duration)  # ~2 frames per 0.2s
-        
-        logger.info(f"Refining chords: {len(chords)} frames, outputting every {target_interval}s ({frames_per_interval} frames)")
+        logger.info(f"Detecting chord changes from {len(chords)} frames...")
         
         refined = []
+        current_chord = None
+        chord_start_time = 0.0
+        chord_start_frame = 0
         
-        # Sample at 0.2s intervals
-        for i in range(0, len(chords), frames_per_interval):
-            # Get the most common chord in this interval
-            interval_end = min(i + frames_per_interval, len(chords))
-            interval_chords = chords[i:interval_end]
-            interval_strengths = strengths[i:interval_end]
-            
-            # Filter out very low-confidence detections (lower threshold)
-            valid_chords = [(c, s) for c, s in zip(interval_chords, interval_strengths) if s >= 0.15]
-            
-            if not valid_chords:
-                # If no valid chords, take the best one anyway
-                if interval_chords and interval_strengths:
-                    best_idx = np.argmax(interval_strengths)
-                    valid_chords = [(interval_chords[best_idx], interval_strengths[best_idx])]
-                else:
-                    continue
-            
-            # Find most common chord in this interval
-            chord_counts = {}
-            chord_strengths = {}
-            for chord, strength in valid_chords:
-                chord_counts[chord] = chord_counts.get(chord, 0) + 1
-                if chord not in chord_strengths:
-                    chord_strengths[chord] = []
-                chord_strengths[chord].append(strength)
-            
-            # Get chord with highest count (and highest avg strength as tiebreaker)
-            best_chord = max(chord_counts.keys(), 
-                           key=lambda c: (chord_counts[c], np.mean(chord_strengths[c])))
-            
-            avg_confidence = np.mean(chord_strengths[best_chord])
-            start_time = i * frame_duration
-            
-            refined.append(Chord(
-                name=best_chord,
-                start_time=start_time,
-                duration=target_interval,
-                confidence=avg_confidence
-            ))
+        # Minimum duration for a chord (avoid very short blips)
+        min_chord_duration = 0.3  # seconds
+        min_frames = int(min_chord_duration / frame_duration)
         
-        logger.info(f"Refined to {len(refined)} chord segments at 0.2s intervals")
+        # Process each frame
+        for i in range(len(chords)):
+            chord = chords[i]
+            strength = strengths[i]
+            time = i * frame_duration
+            
+            # Skip very low confidence detections
+            if strength < 0.15:
+                continue
+            
+            # Check if chord changed
+            if chord != current_chord:
+                # Save previous chord if it existed and was long enough
+                if current_chord is not None:
+                    duration = time - chord_start_time
+                    frames_in_chord = i - chord_start_frame
+                    
+                    if frames_in_chord >= min_frames:
+                        # Calculate average confidence for this chord
+                        avg_confidence = np.mean(strengths[chord_start_frame:i])
+                        
+                        refined.append(Chord(
+                            name=current_chord,
+                            start_time=chord_start_time,
+                            duration=duration,
+                            confidence=avg_confidence
+                        ))
+                
+                # Start new chord
+                current_chord = chord
+                chord_start_time = time
+                chord_start_frame = i
+        
+        # Add final chord
+        if current_chord is not None:
+            duration = (len(chords) * frame_duration) - chord_start_time
+            frames_in_chord = len(chords) - chord_start_frame
+            
+            if frames_in_chord >= min_frames:
+                avg_confidence = np.mean(strengths[chord_start_frame:])
+                
+                refined.append(Chord(
+                    name=current_chord,
+                    start_time=chord_start_time,
+                    duration=duration,
+                    confidence=avg_confidence
+                ))
+        
+        logger.info(f"✓ Detected {len(refined)} chord changes")
+        
+        # Log first few chords for debugging
+        if refined:
+            logger.info("First 5 chords:")
+            for chord in refined[:5]:
+                logger.info(f"  {chord.name} @ {chord.start_time:.1f}s (duration: {chord.duration:.1f}s, confidence: {chord.confidence:.2f})")
+        
         return refined
 
 
