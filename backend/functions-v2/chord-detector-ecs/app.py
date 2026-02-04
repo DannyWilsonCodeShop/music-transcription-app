@@ -415,11 +415,16 @@ class ChordDetectionService:
             interval_chords = chords[i:interval_end]
             interval_strengths = strengths[i:interval_end]
             
-            # Filter out low-confidence detections
-            valid_chords = [(c, s) for c, s in zip(interval_chords, interval_strengths) if s >= 0.25]
+            # Filter out very low-confidence detections (lower threshold)
+            valid_chords = [(c, s) for c, s in zip(interval_chords, interval_strengths) if s >= 0.15]
             
             if not valid_chords:
-                continue
+                # If no valid chords, take the best one anyway
+                if interval_chords and interval_strengths:
+                    best_idx = np.argmax(interval_strengths)
+                    valid_chords = [(interval_chords[best_idx], interval_strengths[best_idx])]
+                else:
+                    continue
             
             # Find most common chord in this interval
             chord_counts = {}
