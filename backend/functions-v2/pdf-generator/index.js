@@ -44,14 +44,16 @@ exports.handler = async (event) => {
     const lyricsData = jobData.lyricsData || {};
     const syllableAlignedLyrics = lyricsData.syllableAlignedLyrics || [];
     const key = chordsData.key || jobData.key || 'C';
-    const tempo = jobData.tempo || 120;
-    const timeSignature = jobData.timeSignature || '4/4';
+    const tempo = chordsData.tempo || jobData.tempo || 120; // Read from chordsData first
+    const timeSignature = chordsData.timeSignature || jobData.timeSignature || '4/4';
 
     console.log('🎼 Processing Data:');
     console.log(`Chord Changes: ${chordChanges.length} detected`);
     console.log(`Syllable Lyrics: ${syllableAlignedLyrics.length} segments`);
+    console.log(`Lyrics text: ${lyricsData.text ? lyricsData.text.substring(0, 100) + '...' : 'None'}`);
     console.log(`Key: ${key}`);
     console.log(`Tempo: ${tempo} BPM`);
+    console.log(`Time Signature: ${timeSignature}`);
     
     if (chordAnalysis.summary) {
       console.log(`📉 Data reduction: ${chordAnalysis.summary.dataReduction}% (${chordAnalysis.summary.originalDetections} → ${chordAnalysis.summary.totalChanges} changes)`);
@@ -436,18 +438,30 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
     
     // Get lyrics for this measure's time range
     let measureLyrics = '';
-    if (lyricsData && lyricsData.words) {
+    if (lyricsData && lyricsData.words && lyricsData.words.length > 0) {
       // Find words that fall within this measure's time range
       const wordsInMeasure = lyricsData.words.filter(word => 
         word.start >= measure.startTime && word.start < measure.endTime
       );
       measureLyrics = wordsInMeasure.map(w => w.word).join(' ');
+      
+      // Debug: log first measure lyrics
+      if (measure.measureNumber === 1 && measureLyrics) {
+        console.log(`📝 First measure lyrics: "${measureLyrics}" (${wordsInMeasure.length} words)`);
+      }
     } else if (lyricsData && lyricsData.text) {
       // Fallback: try to split lyrics evenly across measures
-      const words = lyricsData.text.split(/\s+/);
-      const wordsPerMeasure = Math.ceil(words.length / 50); // Assume ~50 measures
-      const startIdx = (measure.measureNumber - 1) * wordsPerMeasure;
-      measureLyrics = words.slice(startIdx, startIdx + wordsPerMeasure).join(' ');
+      const words = lyricsData.text.split(/\s+/).filter(w => w.length > 0);
+      if (words.length > 0) {
+        const wordsPerMeasure = Math.ceil(words.length / 50); // Assume ~50 measures
+        const startIdx = (measure.measureNumber - 1) * wordsPerMeasure;
+        measureLyrics = words.slice(startIdx, startIdx + wordsPerMeasure).join(' ');
+        
+        // Debug: log first measure lyrics
+        if (measure.measureNumber === 1 && measureLyrics) {
+          console.log(`📝 First measure lyrics (fallback): "${measureLyrics}"`);
+        }
+      }
     }
     
     // Truncate if too long to fit in measure column
@@ -455,7 +469,9 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
       measureLyrics = measureLyrics.substring(0, 12) + '...';
     }
     
-    doc.text(measureLyrics, xPosition, lyricsY);
+    if (measureLyrics) {
+      doc.text(measureLyrics, xPosition, lyricsY);
+    }
   });
   
   // Reset color
