@@ -103,12 +103,35 @@ exports.handler = async (event) => {
     const alternatives = channels.alternatives[0];
     
     const lyricsText = alternatives.transcript;
-    const words = alternatives.words || [];
+    let words = alternatives.words || [];
     const paragraphs = alternatives.paragraphs?.paragraphs || [];
     
     console.log('Transcript text:', lyricsText);
     console.log('Words count:', words.length);
     console.log('Paragraphs count:', paragraphs.length);
+    
+    // FIX: Detect and correct timestamp offset
+    if (words.length > 0) {
+      const firstWordStart = words[0].start;
+      console.log(`First word "${words[0].word}" starts at: ${firstWordStart}s`);
+      
+      // If first word starts after 30 seconds, likely a timestamp offset issue
+      // This happens when Deepgram detects silence/instrumental intro incorrectly
+      if (firstWordStart > 30) {
+        const offset = firstWordStart;
+        console.log(`⚠️ TIMESTAMP OFFSET DETECTED: ${offset}s`);
+        console.log(`Adjusting all timestamps by -${offset}s to align with actual audio`);
+        
+        // Adjust all word timestamps
+        words = words.map(word => ({
+          ...word,
+          start: Math.max(0, word.start - offset),
+          end: Math.max(0, word.end - offset)
+        }));
+        
+        console.log(`✓ Timestamps adjusted. First word now starts at: ${words[0].start}s`);
+      }
+    }
     
     // Enhanced: Generate syllable-aligned lyrics
     const syllableAlignedLyrics = generateSyllableAlignment(words);

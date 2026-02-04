@@ -231,6 +231,53 @@ class ChordDetector:
 # Initialize detector globally
 detector = ChordDetector()
 
+def detect_key_improved(chroma):
+    """
+    Improved key detection using Krumhansl-Schmuckler algorithm
+    Returns: (key, mode, confidence)
+    """
+    # Krumhansl-Schmuckler key profiles
+    major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+    minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+    
+    # Average chroma over time
+    chroma_mean = np.mean(chroma, axis=1)
+    
+    # Normalize
+    if np.sum(chroma_mean) > 0:
+        chroma_mean = chroma_mean / np.sum(chroma_mean)
+    
+    # Calculate correlation with each key
+    chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    best_corr = -1
+    best_key = 'C'
+    best_mode = 'major'
+    
+    for i in range(12):
+        # Rotate profiles to match each key
+        major_rot = np.roll(major_profile, i)
+        minor_rot = np.roll(minor_profile, i)
+        
+        # Normalize profiles
+        major_rot = major_rot / np.sum(major_rot)
+        minor_rot = minor_rot / np.sum(minor_rot)
+        
+        # Calculate correlation
+        major_corr = np.corrcoef(chroma_mean, major_rot)[0, 1]
+        minor_corr = np.corrcoef(chroma_mean, minor_rot)[0, 1]
+        
+        if major_corr > best_corr:
+            best_corr = major_corr
+            best_key = chord_names[i]
+            best_mode = 'major'
+        
+        if minor_corr > best_corr:
+            best_corr = minor_corr
+            best_key = chord_names[i]
+            best_mode = 'minor'
+    
+    return best_key, best_mode, best_corr
+
 def detect_chords(audio_path, job_id):
     """Detect chords using librosa chromagram analysis with optional stem separation"""
     log("Loading audio file...")
@@ -251,6 +298,17 @@ def detect_chords(audio_path, job_id):
     log(f"  Sample rate: {sr}Hz")
     log(f"  Samples: {len(y)}")
     log(f"  Load time: {load_time:.2f}s")
+    
+    # Detect tempo using beat tracking
+    log("Detecting tempo...")
+    tempo_start = time.time()
+    tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
+    tempo_time = time.time() - tempo_start
+    # Extract tempo value (librosa returns array, take first element)
+    tempo_value = float(tempo) if isinstance(tempo, (int, float)) else float(tempo[0]) if hasattr(tempo, '__len__') else float(tempo)
+    log(f"✓ Tempo detected: {tempo_value:.1f} BPM")
+    log(f"  Beats detected: {len(beats)}")
+    log(f"  Detection time: {tempo_time:.2f}s")
     
     # Compute chromagram
     log("Computing chromagram...")
@@ -299,15 +357,16 @@ def detect_chords(audio_path, job_id):
     
     detection_time = time.time() - start_time
     
-    # Estimate key
-    overall_chroma = np.mean(chroma, axis=1)
-    key_index = np.argmax(overall_chroma)
-    key = chord_names[key_index]
+    # Estimate key using improved Krumhansl-Schmuckler algorithm
+    log("Detecting key...")
+    key_start = time.time()
+    key, mode, confidence = detect_key_improved(chroma)
+    key_time = time.time() - key_start
     
-    log(f"✓ Chord detection complete")
-    log(f"  Total chords: {len(chords)}")
-    log(f"  Detected key: {key}")
-    log(f"  Detection time: {detection_time:.2f}s")
+    log(f"✓ Key detection complete")
+    log(f"  Detected key: {key} {mode}")
+    log(f"  Confidence: {confidence:.2f}")
+    log(f"  Detection time: {key_time:.2f}s")
     
     if len(chords) > 0:
         log(f"  First chord: {chords[0]['chord']} at {chords[0]['start']}s")
@@ -316,9 +375,12 @@ def detect_chords(audio_path, job_id):
     return {
         'chords': chords,
         'key': key,
+        'mode': mode,
+        'keyConfidence': round(confidence, 2),
+        'tempo': round(tempo_value, 1),
         'duration': round(duration, 2),
         'totalChords': len(chords),
-        'model': 'librosa-chromagram'
+        'model': 'librosa-chromagram-enhanced'
     }
 
 def update_job_status(job_id, status, progress, error=None):
