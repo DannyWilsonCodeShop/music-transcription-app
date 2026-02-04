@@ -161,29 +161,26 @@ class ChordDetectionService:
             
             logger.info(f"Audio loaded: duration={total_duration:.2f}s, sr={sr}Hz")
             
-            # Detect tempo
+            # Detect tempo using multiple methods for accuracy
             logger.info("Detecting tempo...")
             tempo = 120.0  # Default
             try:
-                tempo_detected, _ = librosa.beat.beat_track(y=audio, sr=sr)
+                # Use onset strength for more accurate tempo detection
+                onset_env = librosa.onset.onset_strength(y=audio, sr=sr)
+                tempo_detected = librosa.beat.tempo(onset_envelope=onset_env, sr=sr)[0]
+                
                 if 60 <= tempo_detected <= 200:  # Sanity check
                     tempo = float(tempo_detected)
-                    logger.info(f"Tempo detected: {tempo:.1f} BPM")
+                    logger.info(f"✓ Tempo detected: {tempo:.1f} BPM")
                 else:
                     logger.warning(f"Tempo {tempo_detected:.1f} out of range, using default 120 BPM")
             except Exception as e:
                 logger.warning(f"Tempo detection failed, using default 120 BPM: {e}")
             
-            # Detect key
+            # Detect key using Krumhansl-Schmuckler algorithm
             logger.info("Detecting key signature...")
-            chroma = librosa.feature.chroma_cqt(y=audio, sr=sr)
-            key_profile = np.mean(chroma, axis=1)
-            key_idx = np.argmax(key_profile)
-            keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-            key = keys[key_idx]
-            scale = 'major'  # Simplified
-            
-            logger.info(f"Key detected: {key} {scale}")
+            key, scale = self.detect_key_advanced(audio, sr)
+            logger.info(f"✓ Key detected: {key} {scale}")
             
             # Run chord detection
             logger.info("Running chord detection...")
@@ -219,6 +216,74 @@ class ChordDetectionService:
             logger.error(f"Chord detection failed: {e}", exc_info=True)
             raise
     
+    def detect_key_advanced(self, audio: np.ndarray, sr: int) -> tuple:
+        """
+        Advanced key detection using Krumhansl-Schmuckler algorithm
+        More accurate than simple chroma peak detection
+        """
+        try:
+            # Compute chromagram
+            chroma = librosa.feature.chroma_cqt(y=audio, sr=sr)
+            
+            # Average chroma across time
+            chroma_mean = np.mean(chroma, axis=1)
+            
+            # Krumhansl-Schmuckler key profiles
+            # Major key profile (correlation weights for each pitch class)
+            major_profile = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+            
+            # Minor key profile
+            minor_profile = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
+            
+            # Normalize profiles
+            major_profile = major_profile / np.sum(major_profile)
+            minor_profile = minor_profile / np.sum(minor_profile)
+            
+            # Normalize chroma
+            chroma_norm = chroma_mean / np.sum(chroma_mean) if np.sum(chroma_mean) > 0 else chroma_mean
+            
+            # Test all 24 keys (12 major + 12 minor)
+            keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+            best_correlation = -1
+            best_key = 'C'
+            best_scale = 'major'
+            
+            # Test major keys
+            for i, key_name in enumerate(keys):
+                # Rotate profile to match key
+                rotated_profile = np.roll(major_profile, i)
+                # Compute correlation
+                correlation = np.corrcoef(chroma_norm, rotated_profile)[0, 1]
+                
+                if correlation > best_correlation:
+                    best_correlation = correlation
+                    best_key = key_name
+                    best_scale = 'major'
+            
+            # Test minor keys
+            for i, key_name in enumerate(keys):
+                # Rotate profile to match key
+                rotated_profile = np.roll(minor_profile, i)
+                # Compute correlation
+                correlation = np.corrcoef(chroma_norm, rotated_profile)[0, 1]
+                
+                if correlation > best_correlation:
+                    best_correlation = correlation
+                    best_key = key_name
+                    best_scale = 'minor'
+            
+            logger.info(f"Key detection confidence: {best_correlation:.3f}")
+            return best_key, best_scale
+            
+        except Exception as e:
+            logger.warning(f"Advanced key detection failed: {e}, using fallback")
+            # Fallback to simple method
+            chroma = librosa.feature.chroma_cqt(y=audio, sr=sr)
+            key_profile = np.mean(chroma, axis=1)
+            key_idx = np.argmax(key_profile)
+            keys = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+            return keys[key_idx], 'major'
+    
     def detect_chords_from_audio(self, audio: np.ndarray, sr: int) -> tuple:
         """
         Detect chords using Librosa's chromagram
@@ -247,28 +312,47 @@ class ChordDetectionService:
             raise
     
     def create_chord_templates(self) -> Dict[str, np.ndarray]:
-        """Create chord templates for major and minor triads"""
+        """Create comprehensive chord templates including 7ths, sus, dim, aug"""
         templates = {}
         
         # Chord names
         notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
         
-        # Major chord template: root, major third, perfect fifth (0, 4, 7 semitones)
-        major_template = np.zeros(12)
-        major_template[[0, 4, 7]] = 1.0
+        # Define chord intervals (semitones from root)
+        chord_types = {
+            '': [0, 4, 7],              # Major triad
+            'm': [0, 3, 7],             # Minor triad
+            '7': [0, 4, 7, 10],         # Dominant 7th
+            'maj7': [0, 4, 7, 11],      # Major 7th
+            'm7': [0, 3, 7, 10],        # Minor 7th
+            'dim': [0, 3, 6],           # Diminished
+            'aug': [0, 4, 8],           # Augmented
+            'sus2': [0, 2, 7],          # Suspended 2nd
+            'sus4': [0, 5, 7],          # Suspended 4th
+            '6': [0, 4, 7, 9],          # Major 6th
+            'm6': [0, 3, 7, 9],         # Minor 6th
+            'dim7': [0, 3, 6, 9],       # Diminished 7th
+            'm7b5': [0, 3, 6, 10],      # Half-diminished 7th
+        }
         
-        # Minor chord template: root, minor third, perfect fifth (0, 3, 7 semitones)
-        minor_template = np.zeros(12)
-        minor_template[[0, 3, 7]] = 1.0
+        # Create templates for all chord types
+        for note_idx, note in enumerate(notes):
+            for suffix, intervals in chord_types.items():
+                chord_name = f"{note}{suffix}"
+                template = np.zeros(12)
+                
+                # Set weights for chord tones (higher weight for root)
+                for i, interval in enumerate(intervals):
+                    weight = 1.0 if i == 0 else 0.8  # Root gets full weight
+                    template[(note_idx + interval) % 12] = weight
+                
+                # Normalize
+                if np.sum(template) > 0:
+                    template = template / np.sum(template)
+                
+                templates[chord_name] = template
         
-        # Create templates for all 12 major chords
-        for i, note in enumerate(notes):
-            templates[note] = np.roll(major_template, i)
-        
-        # Create templates for all 12 minor chords
-        for i, note in enumerate(notes):
-            templates[f"{note}m"] = np.roll(minor_template, i)
-        
+        logger.info(f"Created {len(templates)} chord templates")
         return templates
     
     def match_chroma_to_chord(
@@ -712,15 +796,9 @@ def main():
             # Reload audio for structure analysis
             audio, sr = librosa.load(audio_path, sr=22050)
             
-            # Estimate tempo
-            tempo = 120.0  # Default tempo
-            try:
-                tempo_detected, _ = librosa.beat.beat_track(y=audio, sr=sr)
-                if 60 <= tempo_detected <= 200:  # Sanity check
-                    tempo = float(tempo_detected)
-                    logger.info(f"Detected tempo: {tempo:.1f} BPM")
-            except Exception as e:
-                logger.warning(f"Tempo detection failed, using default 120 BPM: {e}")
+            # Use tempo from chord detection (already calculated)
+            tempo = progression.tempo
+            logger.info(f"Using detected tempo: {tempo:.1f} BPM")
             
             sections = structure_analyzer.analyze_structure(
                 audio=audio,
