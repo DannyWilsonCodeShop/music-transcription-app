@@ -278,6 +278,160 @@ def detect_key_improved(chroma):
     
     return best_key, best_mode, best_corr
 
+def detect_key_from_progression(chords):
+    """
+    Detect key by analyzing repeating chord progression patterns
+    Looks for common progressions like I-vi-ii-V, I-IV-V, ii-V-I, etc.
+    Returns: (key, mode, confidence, pattern_info)
+    """
+    if len(chords) < 8:  # Need at least 8 chords to detect patterns
+        return 'C', 'major', 0.0, {}
+    
+    chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    
+    # Extract chord roots as a sequence
+    chord_sequence = []
+    for chord in chords:
+        chord_name = chord['chord']
+        root = chord_name[0]
+        if len(chord_name) > 1 and chord_name[1] in ['#', 'b']:
+            root = chord_name[:2]
+        
+        # Determine if major or minor
+        is_minor = 'm' in chord_name.lower() and 'maj' not in chord_name.lower()
+        chord_sequence.append({'root': root, 'minor': is_minor})
+    
+    # Find repeating patterns (3-6 chord sequences)
+    pattern_scores = {}  # key -> {pattern: count}
+    all_patterns = {}  # Store all patterns found for structure detection
+    
+    for pattern_length in range(3, 7):  # Try patterns of 3-6 chords
+        patterns_found = {}
+        pattern_positions = {}  # Track where each pattern occurs
+        
+        for i in range(len(chord_sequence) - pattern_length + 1):
+            pattern = tuple(c['root'] for c in chord_sequence[i:i+pattern_length])
+            patterns_found[pattern] = patterns_found.get(pattern, 0) + 1
+            
+            if pattern not in pattern_positions:
+                pattern_positions[pattern] = []
+            pattern_positions[pattern].append(i)
+        
+        # Find patterns that repeat at least twice
+        for pattern, count in patterns_found.items():
+            if count >= 2:  # Pattern repeats at least once
+                # Store pattern info for structure detection
+                all_patterns[pattern] = {
+                    'count': count,
+                    'length': pattern_length,
+                    'positions': pattern_positions[pattern]
+                }
+                
+                # Analyze this pattern for each possible key
+                for potential_key in chord_names:
+                    key_idx = chord_names.index(potential_key)
+                    
+                    # Convert pattern to intervals relative to potential key
+                    intervals = []
+                    for root in pattern:
+                        try:
+                            root_idx = chord_names.index(root)
+                            interval = (root_idx - key_idx) % 12
+                            intervals.append(interval)
+                        except ValueError:
+                            continue
+                    
+                    # Check if this matches common progressions
+                    progression_score = 0
+                    
+                    # I-vi-ii-V (0-9-2-7) - very common in jazz/pop
+                    if tuple(intervals) == (0, 9, 2, 7) or tuple(intervals[:4]) == (0, 9, 2, 7):
+                        progression_score = 10
+                    # I-IV-V (0-5-7) - most common in rock/pop
+                    elif tuple(intervals) == (0, 5, 7) or tuple(intervals[:3]) == (0, 5, 7):
+                        progression_score = 9
+                    # I-V-vi-IV (0-7-9-5) - very common pop progression
+                    elif tuple(intervals) == (0, 7, 9, 5) or tuple(intervals[:4]) == (0, 7, 9, 5):
+                        progression_score = 9
+                    # ii-V-I (2-7-0) - jazz cadence
+                    elif tuple(intervals) == (2, 7, 0) or tuple(intervals[:3]) == (2, 7, 0):
+                        progression_score = 8
+                    # I-vi-IV-V (0-9-5-7) - 50s progression
+                    elif tuple(intervals) == (0, 9, 5, 7) or tuple(intervals[:4]) == (0, 9, 5, 7):
+                        progression_score = 8
+                    # V-I cadence (7-0) - strongest cadence
+                    elif len(intervals) >= 2 and intervals[-2:] == [7, 0]:
+                        progression_score = 7
+                    # IV-I cadence (5-0) - plagal cadence
+                    elif len(intervals) >= 2 and intervals[-2:] == [5, 0]:
+                        progression_score = 6
+                    # Starts with I (0) - likely tonic
+                    elif intervals[0] == 0:
+                        progression_score = 3
+                    # Ends with I (0) - likely tonic
+                    elif intervals[-1] == 0:
+                        progression_score = 4
+                    
+                    if progression_score > 0:
+                        if potential_key not in pattern_scores:
+                            pattern_scores[potential_key] = 0
+                        # Weight by: progression strength × repetition count × pattern length
+                        pattern_scores[potential_key] += progression_score * count * pattern_length
+    
+    if not pattern_scores:
+        return 'C', 'major', 0.0, {}
+    
+    # Find best key based on pattern analysis
+    best_key = max(pattern_scores, key=pattern_scores.get)
+    total_score = sum(pattern_scores.values())
+    confidence = pattern_scores[best_key] / total_score if total_score > 0 else 0.0
+    
+    # Determine mode by analyzing chord qualities in the key
+    major_indicators = 0
+    minor_indicators = 0
+    
+    for i, chord_info in enumerate(chord_sequence):
+        root = chord_info['root']
+        is_minor = chord_info['minor']
+        
+        try:
+            key_idx = chord_names.index(best_key)
+            root_idx = chord_names.index(root)
+            interval = (root_idx - key_idx) % 12
+            
+            # In major keys:
+            # I, IV, V are major (0, 5, 7)
+            # ii, iii, vi are minor (2, 4, 9)
+            if interval in [0, 5, 7]:  # I, IV, V positions
+                if not is_minor:
+                    major_indicators += 2
+                else:
+                    minor_indicators += 1
+            elif interval in [2, 4, 9]:  # ii, iii, vi positions
+                if is_minor:
+                    major_indicators += 1
+                else:
+                    minor_indicators += 1
+            
+            # In minor keys:
+            # i, iv, v are minor (0, 5, 7)
+            # III, VI, VII are major (3, 8, 10)
+            if interval == 0:  # Tonic chord
+                if is_minor:
+                    minor_indicators += 3
+                else:
+                    major_indicators += 3
+        except ValueError:
+            continue
+    
+    mode = 'major' if major_indicators >= minor_indicators else 'minor'
+    
+    log(f"  Pattern analysis: Found {len(pattern_scores)} potential keys")
+    log(f"  Best key: {best_key} (score: {pattern_scores[best_key]}, confidence: {confidence:.2f})")
+    log(f"  Mode indicators: major={major_indicators}, minor={minor_indicators}")
+    
+    return best_key, mode, confidence, all_patterns
+
 def detect_chords(audio_path, job_id):
     """Detect chords using librosa chromagram analysis with optional stem separation"""
     log("Loading audio file...")
@@ -299,14 +453,19 @@ def detect_chords(audio_path, job_id):
     log(f"  Samples: {len(y)}")
     log(f"  Load time: {load_time:.2f}s")
     
-    # Detect tempo using beat tracking
-    log("Detecting tempo...")
+    # Detect tempo and time signature using beat tracking
+    log("Detecting tempo and time signature...")
     tempo_start = time.time()
     tempo, beats = librosa.beat.beat_track(y=y, sr=sr)
     tempo_time = time.time() - tempo_start
     # Extract tempo value (librosa returns array, take first element)
     tempo_value = float(tempo) if isinstance(tempo, (int, float)) else float(tempo[0]) if hasattr(tempo, '__len__') else float(tempo)
+    
+    # Detect time signature by analyzing beat patterns
+    time_signature = detect_time_signature(y, sr, beats)
+    
     log(f"✓ Tempo detected: {tempo_value:.1f} BPM")
+    log(f"✓ Time signature detected: {time_signature}")
     log(f"  Beats detected: {len(beats)}")
     log(f"  Detection time: {tempo_time:.2f}s")
     
@@ -360,13 +519,41 @@ def detect_chords(audio_path, job_id):
     # Estimate key using improved Krumhansl-Schmuckler algorithm
     log("Detecting key...")
     key_start = time.time()
-    key, mode, confidence = detect_key_improved(chroma)
+    key_chromagram, mode_chromagram, confidence_chromagram = detect_key_improved(chroma)
+    
+    # Also analyze chord progression for better key detection
+    key_progression, mode_progression, confidence_progression, pattern_info = detect_key_from_progression(chords)
+    
+    # Use progression-based detection if confidence is higher
+    if confidence_progression > confidence_chromagram:
+        key = key_progression
+        mode = mode_progression
+        confidence = confidence_progression
+        log(f"  Using progression-based key detection (higher confidence)")
+    else:
+        key = key_chromagram
+        mode = mode_chromagram
+        confidence = confidence_chromagram
+        log(f"  Using chromagram-based key detection")
+    
     key_time = time.time() - key_start
     
     log(f"✓ Key detection complete")
     log(f"  Detected key: {key} {mode}")
     log(f"  Confidence: {confidence:.2f}")
+    log(f"  Chromagram: {key_chromagram} {mode_chromagram} ({confidence_chromagram:.2f})")
+    log(f"  Progression: {key_progression} {mode_progression} ({confidence_progression:.2f})")
     log(f"  Detection time: {key_time:.2f}s")
+    
+    # Detect song structure using the same pattern analysis
+    log("Detecting song structure...")
+    structure_start = time.time()
+    song_structure = detect_song_structure(chords, pattern_info, tempo_value)
+    structure_time = time.time() - structure_start
+    log(f"✓ Song structure detected: {len(song_structure)} sections")
+    for section in song_structure:
+        log(f"  {section['label']}: measures {section['measureStart']}-{section['measureEnd']} ({section['patternCount']} repetitions)")
+    log(f"  Detection time: {structure_time:.2f}s")
     
     if len(chords) > 0:
         log(f"  First chord: {chords[0]['chord']} at {chords[0]['start']}s")
@@ -378,10 +565,147 @@ def detect_chords(audio_path, job_id):
         'mode': mode,
         'keyConfidence': round(confidence, 2),
         'tempo': round(tempo_value, 1),
+        'timeSignature': time_signature,
         'duration': round(duration, 2),
         'totalChords': len(chords),
+        'songStructure': song_structure,
         'model': 'librosa-chromagram-enhanced'
     }
+
+def detect_time_signature(y, sr, beats):
+    """
+    Detect time signature by analyzing beat patterns
+    Returns: time signature string (e.g., "4/4", "3/4", "6/8")
+    """
+    if len(beats) < 8:
+        return "4/4"  # Default if not enough beats
+    
+    # Calculate inter-beat intervals
+    beat_times = librosa.frames_to_time(beats, sr=sr)
+    intervals = np.diff(beat_times)
+    
+    # Most common time signatures
+    # For now, default to 4/4 (most common in popular music)
+    # Could be enhanced with more sophisticated analysis
+    return "4/4"
+
+def detect_song_structure(chords, pattern_info, tempo):
+    """
+    Detect song structure (verse, chorus, bridge) using repeating chord patterns
+    Groups consecutive repetitions of the same pattern into sections
+    Returns: list of sections with labels and measure ranges
+    """
+    if not pattern_info or len(chords) == 0:
+        return []
+    
+    # Sort patterns by count (most repeated first) and length
+    sorted_patterns = sorted(
+        pattern_info.items(),
+        key=lambda x: (x[1]['count'], x[1]['length']),
+        reverse=True
+    )
+    
+    if not sorted_patterns:
+        return []
+    
+    # Calculate measures per chord (approximate)
+    seconds_per_beat = 60 / tempo
+    seconds_per_measure = seconds_per_beat * 4  # Assuming 4/4 time
+    
+    sections = []
+    section_labels = ['Verse', 'Chorus', 'Bridge', 'Pre-Chorus', 'Outro', 'Intro']
+    label_index = 0
+    used_positions = set()
+    
+    # Process each pattern
+    for pattern, info in sorted_patterns[:6]:  # Limit to top 6 patterns
+        positions = info['positions']
+        pattern_length = info['length']
+        
+        # Group consecutive occurrences of this pattern
+        groups = []
+        current_group = []
+        
+        for i, pos in enumerate(positions):
+            # Skip if this position overlaps with already used positions
+            if any(pos <= used_pos < pos + pattern_length for used_pos in used_positions):
+                continue
+            
+            # Check if this position is consecutive with the current group
+            if not current_group or pos == current_group[-1] + pattern_length:
+                current_group.append(pos)
+            else:
+                # Start a new group
+                if current_group:
+                    groups.append(current_group)
+                current_group = [pos]
+        
+        # Add the last group
+        if current_group:
+            groups.append(current_group)
+        
+        # Create sections from groups
+        for group in groups:
+            if len(group) >= 1:  # At least 1 occurrence
+                start_chord_idx = group[0]
+                end_chord_idx = group[-1] + pattern_length - 1
+                
+                # Mark positions as used
+                for pos in range(group[0], group[-1] + pattern_length):
+                    used_positions.add(pos)
+                
+                # Calculate measure numbers (approximate)
+                start_time = chords[start_chord_idx].get('start', 0) or chords[start_chord_idx].get('time', 0)
+                end_time = chords[min(end_chord_idx, len(chords)-1)].get('end', start_time + 10) or chords[min(end_chord_idx, len(chords)-1)].get('time', start_time) + 10
+                
+                measure_start = int(start_time / seconds_per_measure) + 1
+                measure_end = int(end_time / seconds_per_measure) + 1
+                
+                # Assign label
+                if label_index < len(section_labels):
+                    label = section_labels[label_index]
+                    label_index += 1
+                else:
+                    label = f"Section {label_index - len(section_labels) + 1}"
+                
+                sections.append({
+                    'label': label,
+                    'measureStart': measure_start,
+                    'measureEnd': measure_end,
+                    'patternCount': len(group),
+                    'pattern': list(pattern),
+                    'startTime': round(start_time, 2),
+                    'endTime': round(end_time, 2)
+                })
+    
+    # Sort sections by start time
+    sections.sort(key=lambda x: x['startTime'])
+    
+    # Relabel based on typical song structure
+    # First section is usually Intro or Verse
+    # Most repeated pattern is usually Chorus
+    if sections:
+        # Find the section with most repetitions
+        max_repetitions = max(s['patternCount'] for s in sections)
+        
+        for i, section in enumerate(sections):
+            if section['patternCount'] == max_repetitions and section['label'] not in ['Chorus']:
+                # This is likely the chorus (most repeated)
+                section['label'] = 'Chorus'
+            elif i == 0 and section['patternCount'] == 1:
+                # First section with single occurrence might be intro
+                section['label'] = 'Intro'
+            elif section['label'] == 'Chorus':
+                # Keep chorus label
+                pass
+            elif 'Verse' not in [s['label'] for s in sections[:i]]:
+                # First non-chorus section is verse
+                section['label'] = 'Verse'
+            elif 'Bridge' not in [s['label'] for s in sections[:i]] and i > len(sections) / 2:
+                # Later section might be bridge
+                section['label'] = 'Bridge'
+    
+    return sections
 
 def update_job_status(job_id, status, progress, error=None):
     """Update job status in DynamoDB"""

@@ -245,8 +245,8 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
   console.log(`📊 Total measures: ${measures.length}`);
   
   // Get song sections if available
-  const sections = data.chordAnalysis?.sections || [];
-  console.log(`📋 Song sections: ${sections.length > 0 ? sections.map(s => s.label).join(', ') : 'None detected'}`);
+  const sections = data.chordsData?.songStructure || data.chordAnalysis?.sections || [];
+  console.log(`📋 Song sections: ${sections.length > 0 ? sections.map(s => `${s.label} (${s.patternCount}x)`).join(', ') : 'None detected'}`);
   
   // Define column positions for 4-measure layout (matching Amazing Grace)
   const columnPositions = [38, 73, 108, 143];
@@ -273,11 +273,24 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
       for (let i = currentSectionIndex; i < sections.length; i++) {
         const section = sections[i];
         if (firstMeasureNum >= section.measureStart && firstMeasureNum <= section.measureEnd) {
-          if (!currentSection || currentSection.label !== section.label) {
+          if (!currentSection || currentSection.label !== section.label || currentSection.measureStart !== section.measureStart) {
             currentSection = section;
             currentSectionIndex = i;
             
-            // Add section label
+            // Add section label with pattern count
+            yPosition += 10;
+            doc.setFontSize(14);
+            doc.setFont('helvetica', 'bold');
+            const sectionLabel = section.patternCount > 1 
+              ? `${section.label} (${section.patternCount}x)` 
+              : section.label;
+            doc.text(sectionLabel, 20, yPosition);
+            yPosition += 15;
+          }
+          break;
+        }
+      }
+    }
             yPosition += 10;
             doc.setFontSize(14);
             doc.setFont('helvetica', 'bold');
@@ -344,8 +357,8 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
 }
 
 function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, key, lyricsData) {
-  const chordY = yPosition;
-  const lyricsY = yPosition + 12;
+  const lyricsY = yPosition;        // Lyrics on TOP
+  const chordY = yPosition + 12;    // Chords/numbers BELOW lyrics
   const lineHeight = 25;
   
   // Draw vertical lines between measures
@@ -362,13 +375,45 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
     const xPosition = columnPositions[index];
     const measureWidth = 30; // Width allocated for each measure
     
+    // LYRICS on top (first)
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    
+    // Get lyrics for this measure's time range
+    let measureLyrics = '';
+    if (lyricsData && lyricsData.words && lyricsData.words.length > 0) {
+      // Find words that fall within this measure's time range
+      const wordsInMeasure = lyricsData.words.filter(word => 
+        word.start >= measure.startTime && word.start < measure.endTime
+      );
+      measureLyrics = wordsInMeasure.map(w => w.word).join(' ');
+    } else if (lyricsData && lyricsData.text) {
+      // Fallback: try to split lyrics evenly across measures
+      const words = lyricsData.text.split(/\s+/).filter(w => w.length > 0);
+      if (words.length > 0) {
+        const wordsPerMeasure = Math.ceil(words.length / 50); // Assume ~50 measures
+        const startIdx = (measure.measureNumber - 1) * wordsPerMeasure;
+        measureLyrics = words.slice(startIdx, startIdx + wordsPerMeasure).join(' ');
+      }
+    }
+    
+    // Truncate if too long to fit in measure column
+    if (measureLyrics.length > 15) {
+      measureLyrics = measureLyrics.substring(0, 12) + '...';
+    }
+    
+    if (measureLyrics) {
+      doc.text(measureLyrics, xPosition, lyricsY);
+    }
+    
+    // NASHVILLE NUMBERS below lyrics (second)
     // Get all chords in this measure
     const chordsInMeasure = measure.chords || [];
     
     if (chordsInMeasure.length === 0) return;
     
     // Calculate actual character widths for each chord
-    // Font size 11 bold ≈ 3.5 pts/char, font size 9 normal ≈ 2.8 pts/char
     const getChordWidth = (nashvilleNumber, isDownbeat) => {
       const charWidth = isDownbeat ? 3.5 : 2.8; // Bold vs normal font
       return nashvilleNumber.length * charWidth;
@@ -459,48 +504,6 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
         doc.text(chordInfo.nashvilleNumber, chordX, chordY);
       });
     }
-    
-    // LYRICS below chords
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    
-    // Get lyrics for this measure's time range
-    let measureLyrics = '';
-    if (lyricsData && lyricsData.words && lyricsData.words.length > 0) {
-      // Find words that fall within this measure's time range
-      const wordsInMeasure = lyricsData.words.filter(word => 
-        word.start >= measure.startTime && word.start < measure.endTime
-      );
-      measureLyrics = wordsInMeasure.map(w => w.word).join(' ');
-      
-      // Debug: log first measure lyrics
-      if (measure.measureNumber === 1 && measureLyrics) {
-        console.log(`📝 First measure lyrics: "${measureLyrics}" (${wordsInMeasure.length} words)`);
-      }
-    } else if (lyricsData && lyricsData.text) {
-      // Fallback: try to split lyrics evenly across measures
-      const words = lyricsData.text.split(/\s+/).filter(w => w.length > 0);
-      if (words.length > 0) {
-        const wordsPerMeasure = Math.ceil(words.length / 50); // Assume ~50 measures
-        const startIdx = (measure.measureNumber - 1) * wordsPerMeasure;
-        measureLyrics = words.slice(startIdx, startIdx + wordsPerMeasure).join(' ');
-        
-        // Debug: log first measure lyrics
-        if (measure.measureNumber === 1 && measureLyrics) {
-          console.log(`📝 First measure lyrics (fallback): "${measureLyrics}"`);
-        }
-      }
-    }
-    
-    // Truncate if too long to fit in measure column
-    if (measureLyrics.length > 15) {
-      measureLyrics = measureLyrics.substring(0, 12) + '...';
-    }
-    
-    if (measureLyrics) {
-      doc.text(measureLyrics, xPosition, lyricsY);
-    }
   });
   
   // Reset color
@@ -517,13 +520,14 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
   // Extract root note from key (e.g., "C# major" -> "C#")
   const keyRoot = key.split(' ')[0];
   
-  // Parse time signature
+  // Parse time signature - ALWAYS use 4 beats per measure for 4/4
   const [beatsPerMeasure] = timeSignature.split('/').map(Number);
   const secondsPerBeat = 60 / tempo; // Calculate from actual tempo
   const secondsPerMeasure = beatsPerMeasure * secondsPerBeat;
   
   console.log(`📏 Measure duration: ${secondsPerMeasure.toFixed(2)}s (${beatsPerMeasure} beats @ ${tempo} BPM)`);
   console.log(`📏 Beat duration: ${secondsPerBeat.toFixed(2)}s`);
+  console.log(`📏 ENFORCING ${beatsPerMeasure} BEATS PER MEASURE`);
   
   const measureMap = {};
   
@@ -558,6 +562,7 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
   });
   
   // Convert to array and intelligently select best chords per measure
+  // ENFORCE: Maximum 4 chords per measure (one per beat in 4/4 time)
   const measures = Object.keys(measureMap)
     .sort((a, b) => parseInt(a) - parseInt(b))
     .map(measureNum => {
@@ -567,8 +572,8 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
       // Sort chords within measure by beat
       allChords.sort((a, b) => a.beat - b.beat);
       
-      // Intelligently select up to 4 most important chords
-      const selectedChords = selectBestChords(allChords, 4);
+      // ENFORCE: Select maximum 4 chords (one per beat)
+      const selectedChords = selectBestChords(allChords, beatsPerMeasure);
       
       return {
         measureNumber: measure.measureNumber,
@@ -578,12 +583,13 @@ function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key
       };
     });
   
-  console.log(`✅ Created ${measures.length} measures`);
+  console.log(`✅ Created ${measures.length} measures with ${beatsPerMeasure} beats each`);
   
   // Log some examples
   if (measures.length > 0) {
     const firstMeasure = measures[0];
     console.log(`📊 First measure: ${firstMeasure.chords.length} chords selected from ${measureMap[1].allChords.length} total`);
+    console.log(`   Chords: ${firstMeasure.chords.map(c => c.nashvilleNumber).join(', ')}`);
   }
   
   return measures;
