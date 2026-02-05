@@ -1,5 +1,6 @@
-// Enhanced PDF Generator - Working Version with Measure-Based Layout
-// Uses enhanced chord and lyrics data to generate professional Nashville Number System PDFs
+// DIAGNOSTIC PDF Generator - Shows only patterns and progressions
+// This is a temporary version for debugging chord detection
+// Full version backed up as: index-full-version.js.backup
 
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
@@ -16,7 +17,7 @@ const PDF_BUCKET = process.env.S3_PDF_BUCKET || 'chordscout-pdfs-dev-46347093777
 exports.handler = async (event) => {
   const timestamp = new Date().toISOString();
   console.log('=' .repeat(80));
-  console.log(`[${timestamp}] 🎵 PDF GENERATOR STARTING`);
+  console.log(`[${timestamp}] 🎵 DIAGNOSTIC PDF GENERATOR STARTING`);
   console.log('=' .repeat(80));
   console.log('Event:', JSON.stringify(event, null, 2));
   
@@ -39,59 +40,14 @@ exports.handler = async (event) => {
     console.log('[STEP 2] Fetching job data from DynamoDB');
     const jobData = await getJobData(jobId);
     console.log('[STEP 2] ✓ Job data retrieved successfully');
-    console.log('📋 Job Data:', {
-      title: jobData.videoTitle || jobData.title,
-      status: jobData.status,
-      progress: jobData.progress,
-      hasChords: jobData.chords ? jobData.chords.length : 0,
-      hasChordsData: jobData.chordsData ? 'Present' : 'Missing',
-      hasLyrics: jobData.lyricsData ? 'Present' : 'Missing',
-      hasEnhancedLyrics: jobData.lyricsData?.syllableAlignedLyrics ? jobData.lyricsData.syllableAlignedLyrics.length : 0
-    });
 
-    // Extract enhanced data - now using chord changes instead of all detections
-    console.log('[STEP 3] Extracting chord and lyrics data');
-    const chordsData = jobData.chordsData || {};
-    const chords = chordsData.chords || jobData.chords || [];
-    const chordAnalysis = jobData.chordAnalysis || {};
-    const chordChanges = chordAnalysis.chordChanges || chords; // Use chord changes if available
-    const lyricsData = jobData.lyricsData || {};
-    const syllableAlignedLyrics = lyricsData.syllableAlignedLyrics || [];
-    const key = chordsData.key || jobData.key || 'C';
-    const tempo = chordsData.tempo || jobData.tempo || 120; // Read from chordsData first
-    const timeSignature = chordsData.timeSignature || jobData.timeSignature || '4/4';
-
-    console.log('[STEP 3] ✓ Data extracted successfully');
-    console.log('🎼 Processing Data:');
-    console.log(`  Chord Changes: ${chordChanges.length} detected`);
-    console.log(`  Syllable Lyrics: ${syllableAlignedLyrics.length} segments`);
-    console.log(`  Lyrics text: ${lyricsData.text ? lyricsData.text.substring(0, 100) + '...' : 'None'}`);
-    console.log(`  Key: ${key}`);
-    console.log(`  Tempo: ${tempo} BPM`);
-    console.log(`  Time Signature: ${timeSignature}`);
-    
-    if (chordAnalysis.summary) {
-      console.log(`  📉 Data reduction: ${chordAnalysis.summary.dataReduction}% (${chordAnalysis.summary.originalDetections} → ${chordAnalysis.summary.totalChanges} changes)`);
-    }
-
-    // Generate enhanced PDF
-    console.log('[STEP 4] Generating PDF document');
-    const pdfBuffer = await generateEnhancedPDF({
-      title: jobData.videoTitle || jobData.title || 'Untitled',
-      chords: chordChanges, // Use chord changes instead of all detections
-      syllableAlignedLyrics,
-      lyrics: lyricsData.text || '',
-      lyricsData: lyricsData, // Pass full lyrics data for word-level timing
-      key,
-      tempo,
-      timeSignature,
-      jobId,
-      chordAnalysis: chordAnalysis // Pass full analysis for metadata
-    });
-    console.log(`[STEP 4] ✓ PDF generated successfully (${pdfBuffer.length} bytes)`);
+    // Generate diagnostic PDF
+    console.log('[STEP 3] Generating diagnostic PDF');
+    const pdfBuffer = await generateDiagnosticPDF(jobData);
+    console.log(`[STEP 3] ✓ PDF generated successfully (${pdfBuffer.length} bytes)`);
 
     // Upload to S3
-    console.log('[STEP 5] Uploading PDF to S3');
+    console.log('[STEP 4] Uploading PDF to S3');
     const s3Key = `pdfs/${jobId}.pdf`;
     await s3Client.send(new PutObjectCommand({
       Bucket: PDF_BUCKET,
@@ -101,10 +57,10 @@ exports.handler = async (event) => {
     }));
 
     const pdfUrl = `https://${PDF_BUCKET}.s3.amazonaws.com/${s3Key}`;
-    console.log(`[STEP 5] ✓ PDF uploaded to S3: ${pdfUrl}`);
+    console.log(`[STEP 4] ✓ PDF uploaded to S3: ${pdfUrl}`);
 
     // Update job as complete
-    console.log('[STEP 6] Updating job status to COMPLETE (100%)');
+    console.log('[STEP 5] Updating job status to COMPLETE (100%)');
     await docClient.send(new UpdateCommand({
       TableName: JOBS_TABLE,
       Key: { jobId },
@@ -118,26 +74,18 @@ exports.handler = async (event) => {
         ':updated': new Date().toISOString()
       }
     }));
-    console.log('[STEP 6] ✓ Job marked as COMPLETE');
+    console.log('[STEP 5] ✓ Job marked as COMPLETE');
 
     console.log('=' .repeat(80));
-    console.log('✅ PDF GENERATION COMPLETED SUCCESSFULLY');
+    console.log('✅ DIAGNOSTIC PDF GENERATION COMPLETED SUCCESSFULLY');
     console.log('=' .repeat(80));
 
     return {
       statusCode: 200,
       body: {
-        message: 'Enhanced PDF generated successfully',
+        message: 'Diagnostic PDF generated successfully',
         pdfUrl,
-        enhancedFeatures: {
-          chordsDetected: chordChanges.length,
-          chordChangesUsed: true,
-          dataReduction: chordAnalysis.summary?.dataReduction || 0,
-          measureBasedLayout: syllableAlignedLyrics.length > 0,
-          syllableAlignment: syllableAlignedLyrics.length > 0,
-          colorCodedChords: true,
-          nashvilleNumberSystem: true
-        }
+        mode: 'diagnostic'
       }
     };
 
@@ -148,7 +96,6 @@ exports.handler = async (event) => {
     console.error('Error:', error);
     console.error('Stack:', error.stack);
     
-    // Update job status to failed
     if (event.jobId) {
       console.log(`[ERROR] Updating job ${event.jobId} to FAILED status`);
       await updateJobStatus(event.jobId, 'FAILED', 0, error.message);
@@ -158,577 +105,180 @@ exports.handler = async (event) => {
   }
 };
 
-async function generateEnhancedPDF(data) {
-  console.log('📄 Generating enhanced PDF with jsPDF...');
-  console.log('Data available:', {
-    chords: data.chords?.length || 0,
-    syllableAlignedLyrics: data.syllableAlignedLyrics?.length || 0,
-    hasLyrics: data.lyrics?.length || 0
-  });
+async function generateDiagnosticPDF(jobData) {
+  console.log('📄 Generating diagnostic PDF...');
   
   const doc = new jsPDF();
-  
-  // Header
-  doc.setFontSize(24);
+  const chordsData = jobData.chordsData || {};
+  let yPos = 20;
+
+  // Title
+  doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text(data.title, 105, 30, { align: 'center' });
-  
-  // Key and tempo info
+  doc.text('Pattern Diagnostic Report', 105, yPos, { align: 'center' });
+  yPos += 15;
+
+  // Song info
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Key: ${data.key} | Tempo: ${data.tempo} BPM | Meter: ${data.timeSignature}`, 105, 45, { align: 'center' });
+  doc.text(`Song: ${jobData.videoTitle || 'Unknown'}`, 20, yPos);
+  yPos += 7;
+  doc.text(`Key: ${chordsData.key || 'Unknown'} ${chordsData.mode || ''}`, 20, yPos);
+  yPos += 7;
+  doc.text(`Tempo: ${chordsData.tempo || 'Unknown'} BPM`, 20, yPos);
+  yPos += 7;
+  doc.text(`Total Chords: ${chordsData.totalChords || 0}`, 20, yPos);
+  yPos += 7;
+  doc.text(`Duration: ${chordsData.duration || 0}s`, 20, yPos);
+  yPos += 15;
+
+  // Separator
+  doc.setDrawColor(0, 0, 0);
+  doc.line(20, yPos, 190, yPos);
+  yPos += 10;
+
+  // Pattern Analysis
+  const patternAnalysis = chordsData.patternAnalysis || [];
   
-  let yPosition = 60;
-  
-  // Always use perfect 4-measure layout if we have chords
-  if (data.chords && data.chords.length > 0) {
-    console.log('🎵 Using perfect 4-measure layout');
-    yPosition = generatePerfect4MeasureLayout(doc, data, yPosition);
-  } else {
-    console.log('🎵 No chord data available');
-    doc.setFontSize(12);
-    doc.text('No chord data detected - this may be an instrumental track', 20, yPosition);
-    yPosition += 20;
-  }
-  
-  // Lyrics section (if not already included in measure-based layout)
-  if (!data.syllableAlignedLyrics || data.syllableAlignedLyrics.length === 0) {
-    yPosition += 20;
-    if (data.lyrics && data.lyrics.length > 0) {
-      doc.setFontSize(16);
+  if (patternAnalysis.length > 0) {
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('DETECTED REPEATING PATTERNS', 20, yPos);
+    yPos += 10;
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Found ${patternAnalysis.length} repeating patterns`, 20, yPos);
+    yPos += 15;
+
+    // Display each pattern
+    for (const pattern of patternAnalysis) {
+      // Check for page break
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Pattern header
+      doc.setFontSize(14);
       doc.setFont('helvetica', 'bold');
-      doc.text('Lyrics', 20, yPosition);
-      yPosition += 10;
-      doc.setFontSize(12);
+      doc.text(`Pattern ${pattern.patternNumber}`, 20, yPos);
+      yPos += 8;
+
+      // Progression (large and clear)
+      doc.setFontSize(16);
       doc.setFont('helvetica', 'normal');
+      const progression = pattern.progression.join('  →  ');
       
-      // Split lyrics into lines that fit on the page
-      const lines = doc.splitTextToSize(data.lyrics, 170);
+      // Wrap if too long
+      const lines = doc.splitTextToSize(progression, 170);
       lines.forEach(line => {
-        if (yPosition > 270) { // Start new page if needed
-          doc.addPage();
-          yPosition = 20;
-        }
-        doc.text(line, 20, yPosition);
-        yPosition += 8;
+        doc.text(line, 25, yPos);
+        yPos += 8;
       });
-    } else {
-      doc.setFontSize(12);
-      doc.text('No lyrics detected - this may be an instrumental track', 20, yPosition);
+      yPos += 2;
+
+      // Details
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Length: ${pattern.length} chords`, 25, yPos);
+      yPos += 6;
+      doc.text(`Occurrences: ${pattern.occurrences} times in the song`, 25, yPos);
+      yPos += 6;
+
+      // Show where it appears (with timestamps)
+      if (chordsData.chords && pattern.positions && pattern.positions.length > 0) {
+        const times = pattern.positions
+          .filter(pos => pos < chordsData.chords.length)
+          .map(pos => {
+            const chord = chordsData.chords[pos];
+            const time = chord.start || chord.time || 0;
+            return `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`;
+          })
+          .slice(0, 10);
+
+        doc.text(`Appears at: ${times.join(', ')}${pattern.positions.length > 10 ? '...' : ''}`, 25, yPos);
+        yPos += 6;
+      }
+
+      yPos += 10;
+    }
+  } else {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('NO REPEATING PATTERNS DETECTED', 20, yPos);
+    yPos += 10;
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.text('This could mean:', 20, yPos);
+    yPos += 7;
+    doc.text('• The song has no repeating chord progressions', 25, yPos);
+    yPos += 6;
+    doc.text('• The chord detection is too noisy', 25, yPos);
+    yPos += 6;
+    doc.text('• The song is through-composed (no verse/chorus structure)', 25, yPos);
+    yPos += 15;
+  }
+
+  // Add raw chord sequence
+  if (yPos > 200) {
+    doc.addPage();
+    yPos = 20;
+  }
+
+  doc.setDrawColor(0, 0, 0);
+  doc.line(20, yPos, 190, yPos);
+  yPos += 10;
+
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('RAW CHORD SEQUENCE', 20, yPos);
+  yPos += 10;
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text('First 50 chords detected:', 20, yPos);
+  yPos += 10;
+
+  if (chordsData.chords && chordsData.chords.length > 0) {
+    const chordsToShow = chordsData.chords.slice(0, 50);
+    
+    // Display in compact format: 10 chords per line
+    let chordLine = [];
+    for (let i = 0; i < chordsToShow.length; i++) {
+      const chord = chordsToShow[i];
+      const time = (chord.start || chord.time || 0).toFixed(1);
+      chordLine.push(`${chord.chord}(${time}s)`);
+
+      if (chordLine.length === 10 || i === chordsToShow.length - 1) {
+        if (yPos > 270) {
+          doc.addPage();
+          yPos = 20;
+        }
+        doc.text(chordLine.join('  '), 20, yPos);
+        yPos += 6;
+        chordLine = [];
+      }
+    }
+
+    if (chordsData.chords.length > 50) {
+      yPos += 5;
+      doc.text(`... and ${chordsData.chords.length - 50} more chords`, 20, yPos);
     }
   }
-  
+
   // Footer
-  yPosition += 30;
-  if (yPosition > 270) {
+  yPos += 15;
+  if (yPos > 270) {
     doc.addPage();
-    yPosition = 20;
+    yPos = 20;
   }
   doc.setFontSize(10);
   doc.setFont('helvetica', 'italic');
-  doc.text('Generated by ChordScout - Enhanced Nashville Number System', 105, yPosition, { align: 'center' });
+  doc.text('Generated by ChordScout - Diagnostic Mode', 105, yPos, { align: 'center' });
   
   return Buffer.from(doc.output('arraybuffer'));
-}
-
-function generatePerfect4MeasureLayout(doc, data, startY) {
-  console.log('🎼 Generating perfect 4-measure layout with measure dividers');
-  
-  let yPosition = startY;
-  
-  // Convert chords to measure format
-  const measures = convertChordsToMeasures(data.chords, data.timeSignature, data.tempo, data.key);
-  
-  console.log(`📊 Total measures: ${measures.length}`);
-  
-  // Get song sections - ONLY repeated sections (Verse, Chorus, Bridge)
-  const sections = data.chordsData?.songStructure || data.chordAnalysis?.sections || [];
-  const essentialSections = sections.filter(s => 
-    ['Verse', 'Chorus', 'Bridge'].includes(s.label)
-  );
-  
-  console.log(`📋 Essential sections: ${essentialSections.length > 0 ? essentialSections.map(s => `${s.label} (${s.patternCount}x)`).join(', ') : 'None detected'}`);
-  
-  // Define column positions for 4-measure layout
-  const columnPositions = [38, 73, 108, 143];
-  const measuresPerLine = 4;
-  
-  // If we have sections, only show measures from those sections
-  let measuresToShow = measures;
-  if (essentialSections.length > 0) {
-    measuresToShow = [];
-    for (const section of essentialSections) {
-      const sectionMeasures = measures.filter(m => 
-        m.measureNumber >= section.measureStart && m.measureNumber <= section.measureEnd
-      );
-      measuresToShow.push(...sectionMeasures);
-    }
-    console.log(`📊 Filtered to ${measuresToShow.length} measures (from ${measures.length} total)`);
-  }
-  
-  const totalLines = Math.ceil(measuresToShow.length / measuresPerLine);
-  
-  let currentSectionIndex = 0;
-  let currentSection = essentialSections[0] || null;
-  
-  for (let lineIndex = 0; lineIndex < totalLines; lineIndex++) {
-    // Check for page break
-    if (yPosition > 220) {
-      doc.addPage();
-      yPosition = 30;
-    }
-    
-    // Get measure numbers for this line
-    const firstMeasureNum = measuresToShow[lineIndex * measuresPerLine]?.measureNumber || 0;
-    const lastMeasureNum = measuresToShow[Math.min((lineIndex + 1) * measuresPerLine - 1, measuresToShow.length - 1)]?.measureNumber || 0;
-    
-    // Check if we've entered a new section
-    if (essentialSections.length > 0) {
-      for (let i = currentSectionIndex; i < essentialSections.length; i++) {
-        const section = essentialSections[i];
-        if (firstMeasureNum >= section.measureStart && firstMeasureNum <= section.measureEnd) {
-          if (!currentSection || currentSection.label !== section.label || currentSection.measureStart !== section.measureStart) {
-            currentSection = section;
-            currentSectionIndex = i;
-            
-            // Add section label with pattern count
-            yPosition += 10;
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            const sectionLabel = section.patternCount > 1 
-              ? `${section.label} (${section.patternCount}x)` 
-              : section.label;
-            doc.text(sectionLabel, 20, yPosition);
-            yPosition += 15;
-          }
-          break;
-        }
-      }
-    }
-    
-    // Get 4 measures for this line
-    const lineMeasures = [];
-    for (let i = 0; i < measuresPerLine; i++) {
-      const measureIndex = lineIndex * measuresPerLine + i;
-      if (measureIndex < measuresToShow.length) {
-        lineMeasures.push(measuresToShow[measureIndex]);
-      }
-    }
-    
-    // Generate the perfect measure line with dividers
-    generatePerfectMeasureLine(doc, lineMeasures, columnPositions, yPosition, data.key, data.lyricsData, essentialSections);
-    yPosition += 35; // Space between lines
-    
-    console.log(`✅ Line ${lineIndex + 1}: Measures ${firstMeasureNum}-${lastMeasureNum}`);
-  }
-  
-  // Add filtered lyrics section (only from repeated sections)
-  if (data.lyrics && data.lyrics.length > 0 && essentialSections.length > 0) {
-    yPosition += 20;
-    if (yPosition > 250) {
-      doc.addPage();
-      yPosition = 30;
-    }
-    
-    doc.setFontSize(14);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Lyrics (Repeated Sections Only)', 20, yPosition);
-    yPosition += 15;
-    
-    // Filter lyrics to only show words from essential sections
-    const filteredLyrics = filterLyricsToSections(data.lyricsData, essentialSections);
-    
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    const lines = doc.splitTextToSize(filteredLyrics, 170);
-    lines.forEach(line => {
-      if (yPosition > 270) {
-        doc.addPage();
-        yPosition = 20;
-      }
-      doc.text(line, 20, yPosition);
-      yPosition += 7;
-    });
-  }
-  
-  return yPosition;
-}
-
-function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, key, lyricsData, sections) {
-  const lyricsY = yPosition;        // Lyrics on TOP
-  const chordY = yPosition + 12;    // Chords/numbers BELOW lyrics
-  
-  // Calculate measure width from column spacing
-  const measureWidth = columnPositions.length > 1 ? columnPositions[1] - columnPositions[0] : 35;
-  
-  // DRAW MEASURE DIVIDER LINES
-  doc.setDrawColor(200, 200, 200); // Light gray
-  doc.setLineWidth(0.5);
-  
-  // Draw vertical lines between measures
-  for (let i = 0; i <= measures.length && i <= 4; i++) {
-    const xPos = i === 0 ? columnPositions[0] - 5 : columnPositions[i - 1] + measureWidth;
-    if (i < measures.length || i === 4) {
-      doc.line(xPos, yPosition - 5, xPos, yPosition + 15);
-    }
-  }
-  
-  measures.forEach((measure, index) => {
-    if (index >= 4) return; // Only 4 measures per line
-    
-    const xPosition = columnPositions[index];
-    
-    // LYRICS on top (first) - FILTERED to section time ranges
-    doc.setTextColor(0, 0, 0);
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    
-    // Get lyrics for this measure's time range - only if in a repeated section
-    let measureLyrics = '';
-    const isInRepeatedSection = sections && sections.some(s => 
-      measure.startTime >= s.startTime && measure.endTime <= s.endTime
-    );
-    
-    if (isInRepeatedSection && lyricsData && lyricsData.words && lyricsData.words.length > 0) {
-      // Find words that fall within this measure's time range
-      const wordsInMeasure = lyricsData.words.filter(word => 
-        word.start >= measure.startTime && word.start < measure.endTime
-      );
-      measureLyrics = wordsInMeasure.map(w => w.word).join(' ');
-    } else if (isInRepeatedSection && lyricsData && lyricsData.text) {
-      // Fallback: try to split lyrics evenly across measures
-      const words = lyricsData.text.split(/\s+/).filter(w => w.length > 0);
-      if (words.length > 0) {
-        const wordsPerMeasure = Math.ceil(words.length / 50); // Assume ~50 measures
-        const startIdx = (measure.measureNumber - 1) * wordsPerMeasure;
-        measureLyrics = words.slice(startIdx, startIdx + wordsPerMeasure).join(' ');
-      }
-    }
-    
-    // Truncate if too long to fit in measure column
-    if (measureLyrics.length > 15) {
-      measureLyrics = measureLyrics.substring(0, 12) + '...';
-    }
-    
-    if (measureLyrics) {
-      doc.text(measureLyrics, xPosition, lyricsY);
-    }
-    
-    // NASHVILLE NUMBERS below lyrics (second)
-    const chordsInMeasure = measure.chords || [];
-    
-    if (chordsInMeasure.length === 0) return;
-    
-    // Calculate actual character widths for each chord
-    const getChordWidth = (nashvilleNumber, isDownbeat) => {
-      const charWidth = isDownbeat ? 3.5 : 2.8; // Bold vs normal font
-      return nashvilleNumber.length * charWidth;
-    };
-    
-    // Calculate total width needed with actual chord widths
-    const chordWidths = chordsInMeasure.map((chord, idx) => 
-      getChordWidth(chord.nashvilleNumber, idx === 0 || chord.isDownbeat)
-    );
-    const totalChordWidth = chordWidths.reduce((sum, w) => sum + w, 0);
-    const minSpacing = 4; // Minimum spacing between chords
-    const totalMinSpacing = (chordsInMeasure.length - 1) * minSpacing;
-    const requiredWidth = totalChordWidth + totalMinSpacing;
-    
-    // Decide spacing strategy
-    const useEvenSpacing = requiredWidth > measureWidth * 0.9; // Use 90% of width as threshold
-    
-    if (useEvenSpacing) {
-      // Even spacing mode: distribute chords with dynamic spacing
-      const availableSpace = measureWidth - totalChordWidth;
-      const spacing = availableSpace / (chordsInMeasure.length + 1);
-      
-      let currentX = xPosition + spacing;
-      
-      chordsInMeasure.forEach((chordInfo, chordIndex) => {
-        // First chord (downbeat) in RED and bold
-        if (chordIndex === 0) {
-          doc.setTextColor(255, 0, 0); // RED
-          doc.setFontSize(11);
-          doc.setFont('helvetica', 'bold');
-        } else {
-          // Passing chords in BLACK and normal
-          doc.setTextColor(0, 0, 0); // BLACK
-          doc.setFontSize(9);
-          doc.setFont('helvetica', 'normal');
-        }
-        
-        doc.text(chordInfo.nashvilleNumber, currentX, chordY);
-        
-        // Move to next position: current chord width + spacing
-        currentX += chordWidths[chordIndex] + spacing;
-      });
-    } else {
-      // Beat-based positioning mode: position chords by their beat with collision detection
-      const positions = [];
-      
-      chordsInMeasure.forEach((chordInfo, chordIndex) => {
-        // Calculate ideal X position based on beat (0-4 for 4/4 time)
-        const beatOffset = (chordInfo.beat / 4) * measureWidth;
-        let chordX = xPosition + beatOffset;
-        
-        // Check for overlap with previous chords
-        for (let i = 0; i < positions.length; i++) {
-          const prevPos = positions[i];
-          const prevChordEnd = prevPos.x + prevPos.width;
-          const minDistance = minSpacing;
-          
-          // If overlapping, shift right
-          if (chordX < prevChordEnd + minDistance) {
-            chordX = prevChordEnd + minDistance;
-          }
-        }
-        
-        // Ensure we don't exceed measure boundary
-        const maxX = xPosition + measureWidth - chordWidths[chordIndex];
-        if (chordX > maxX) {
-          chordX = maxX;
-        }
-        
-        // Store position for collision detection
-        positions.push({
-          x: chordX,
-          width: chordWidths[chordIndex]
-        });
-        
-        // First chord (downbeat) in RED and bold
-        if (chordIndex === 0 || chordInfo.isDownbeat) {
-          doc.setTextColor(255, 0, 0); // RED
-          doc.setFontSize(11);
-          doc.setFont('helvetica', 'bold');
-        } else {
-          // Passing chords in BLACK and normal
-          doc.setTextColor(0, 0, 0); // BLACK
-          doc.setFontSize(9);
-          doc.setFont('helvetica', 'normal');
-        }
-        
-        doc.text(chordInfo.nashvilleNumber, chordX, chordY);
-      });
-    }
-  });
-  
-  // Reset color
-  doc.setTextColor(0, 0, 0);
-}
-
-function filterLyricsToSections(lyricsData, sections) {
-  /**
-   * Filter lyrics to only include words from repeated sections (Verse, Chorus, Bridge)
-   * This removes spoken words, intros, outros, and non-singing parts
-   */
-  if (!lyricsData || !sections || sections.length === 0) {
-    return '';
-  }
-  
-  // If we have word-level timing, filter by time ranges
-  if (lyricsData.words && lyricsData.words.length > 0) {
-    const filteredWords = [];
-    
-    for (const section of sections) {
-      const sectionWords = lyricsData.words.filter(word =>
-        word.start >= section.startTime && word.start <= section.endTime
-      );
-      
-      if (sectionWords.length > 0) {
-        // Add section label
-        filteredWords.push(`\n[${section.label}]`);
-        filteredWords.push(...sectionWords.map(w => w.word));
-      }
-    }
-    
-    return filteredWords.join(' ').replace(/\s+/g, ' ').trim();
-  }
-  
-  // Fallback: if no word-level timing, return full lyrics with section labels
-  if (lyricsData.text) {
-    let result = '';
-    for (const section of sections) {
-      result += `\n[${section.label}]\n`;
-      // This is a rough approximation - ideally we'd have better timing
-      result += lyricsData.text.substring(0, 200) + '...\n';
-    }
-    return result;
-  }
-  
-  return '';
-}
-
-function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key = 'C') {
-  if (!chords || chords.length === 0) {
-    return [];
-  }
-  
-  console.log(`🔄 Converting ${chords.length} chords to measures (tempo: ${tempo} BPM, key: ${key})`);
-  
-  // Extract root note from key (e.g., "C# major" -> "C#")
-  const keyRoot = key.split(' ')[0];
-  
-  // Parse time signature - ALWAYS use 4 beats per measure for 4/4
-  const [beatsPerMeasure] = timeSignature.split('/').map(Number);
-  const secondsPerBeat = 60 / tempo; // Calculate from actual tempo
-  const secondsPerMeasure = beatsPerMeasure * secondsPerBeat;
-  
-  console.log(`📏 Measure duration: ${secondsPerMeasure.toFixed(2)}s (${beatsPerMeasure} beats @ ${tempo} BPM)`);
-  console.log(`📏 Beat duration: ${secondsPerBeat.toFixed(2)}s`);
-  console.log(`📏 ENFORCING ${beatsPerMeasure} BEATS PER MEASURE`);
-  
-  const measureMap = {};
-  
-  // Group chords by measure and beat position
-  chords.forEach((chord, index) => {
-    const chordTime = chord.time || chord.timestamp || chord.start || chord.startTime || 0;
-    const measureNum = Math.floor(chordTime / secondsPerMeasure) + 1;
-    const timeInMeasure = chordTime % secondsPerMeasure;
-    const beatInMeasure = timeInMeasure / secondsPerBeat; // 0-4 for 4/4 time
-    
-    if (!measureMap[measureNum]) {
-      measureMap[measureNum] = {
-        measureNumber: measureNum,
-        allChords: [], // All chords before filtering
-        startTime: (measureNum - 1) * secondsPerMeasure,
-        endTime: measureNum * secondsPerMeasure
-      };
-    }
-    
-    const chordName = chord.chord || chord.name;
-    const nashvilleNumber = chord.nashvilleNumber || convertChordToNashvilleNumber(chordName, keyRoot);
-    const confidence = chord.confidence || 0.5;
-    
-    measureMap[measureNum].allChords.push({
-      chord: chordName,
-      nashvilleNumber: nashvilleNumber,
-      beat: beatInMeasure,
-      time: chordTime,
-      confidence: confidence,
-      isDownbeat: beatInMeasure < 0.5 // First beat of measure
-    });
-  });
-  
-  // Convert to array and intelligently select best chords per measure
-  // ENFORCE: Maximum 4 chords per measure (one per beat in 4/4 time)
-  const measures = Object.keys(measureMap)
-    .sort((a, b) => parseInt(a) - parseInt(b))
-    .map(measureNum => {
-      const measure = measureMap[measureNum];
-      const allChords = measure.allChords;
-      
-      // Sort chords within measure by beat
-      allChords.sort((a, b) => a.beat - b.beat);
-      
-      // ENFORCE: Select maximum 4 chords (one per beat)
-      const selectedChords = selectBestChords(allChords, beatsPerMeasure);
-      
-      return {
-        measureNumber: measure.measureNumber,
-        chords: selectedChords,
-        startTime: measure.startTime,
-        endTime: measure.endTime
-      };
-    });
-  
-  console.log(`✅ Created ${measures.length} measures with ${beatsPerMeasure} beats each`);
-  
-  // Log some examples
-  if (measures.length > 0) {
-    const firstMeasure = measures[0];
-    console.log(`📊 First measure: ${firstMeasure.chords.length} chords selected from ${measureMap[1].allChords.length} total`);
-    console.log(`   Chords: ${firstMeasure.chords.map(c => c.nashvilleNumber).join(', ')}`);
-  }
-  
-  return measures;
-}
-
-function selectBestChords(allChords, maxChords = 4) {
-  /**
-   * Intelligently select the most important chords based on:
-   * 1. Confidence score (higher = better)
-   * 2. Beat alignment (on-beat chords are more important)
-   * 3. Chord changes (when chord actually changes)
-   * 4. Position (first chord always included)
-   * 
-   * For maxChords=4: downbeat + 3 best chords
-   */
-  
-  if (allChords.length <= maxChords) {
-    return allChords;
-  }
-  
-  // Always include first chord (downbeat)
-  const selected = [allChords[0]];
-  const remaining = allChords.slice(1);
-  
-  // Score each remaining chord
-  const scoredChords = remaining.map((chord, index) => {
-    let score = 0;
-    
-    // 1. Confidence score (0-1, weight: 30%)
-    score += chord.confidence * 0.3;
-    
-    // 2. Beat alignment (on-beat = higher score, weight: 40%)
-    const beatRounded = Math.round(chord.beat);
-    const beatDistance = Math.abs(chord.beat - beatRounded);
-    const beatScore = 1 - (beatDistance / 0.5); // 1.0 if exactly on beat, 0.0 if halfway between
-    score += beatScore * 0.4;
-    
-    // 3. Chord change (different from previous chord, weight: 30%)
-    const prevChord = index > 0 ? remaining[index - 1] : allChords[0];
-    if (chord.chord !== prevChord.chord) {
-      score += 0.3;
-    }
-    
-    return { ...chord, score };
-  });
-  
-  // Sort by score (descending) and take top (maxChords - 1)
-  scoredChords.sort((a, b) => b.score - a.score);
-  const topChords = scoredChords.slice(0, maxChords - 1);
-  
-  // Add to selected and re-sort by beat position
-  selected.push(...topChords);
-  selected.sort((a, b) => a.beat - b.beat);
-  
-  return selected;
-}
-
-function convertChordToNashvilleNumber(chordName, keyRoot = 'C') {
-  if (!chordName || chordName === 'N') return '1';
-  
-  const noteToSemitone = {
-    'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'F': 5,
-    'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11
-  };
-
-  // Extract root note from chord
-  let rootNote = chordName[0];
-  if (chordName.length > 1 && (chordName[1] === '#' || chordName[1] === 'b')) {
-    rootNote = chordName.substring(0, 2);
-  }
-
-  const keySemitone = noteToSemitone[keyRoot] || 0;
-  const chordSemitone = noteToSemitone[rootNote] || 0;
-
-  let interval = (chordSemitone - keySemitone + 12) % 12;
-  const majorNumbers = ['1', 'b2', '2', 'b3', '3', '4', 'b5', '5', 'b6', '6', 'b7', '7'];
-  
-  let number = majorNumbers[interval];
-  
-  // Add chord quality indicators
-  if (chordName.toLowerCase().includes('m') && !chordName.toLowerCase().includes('maj')) {
-    number += 'm';
-  }
-  
-  return number;
-}
-
-function formatTime(seconds) {
-  const mins = Math.floor(seconds / 60);
-  const secs = (seconds % 60).toFixed(1);
-  return `${mins}:${secs.padStart(4, '0')}`;
 }
 
 async function getJobData(jobId) {
