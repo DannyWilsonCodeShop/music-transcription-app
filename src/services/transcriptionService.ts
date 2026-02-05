@@ -108,6 +108,11 @@ export async function getJobStatus(jobId: string): Promise<TranscriptionJob | nu
     } as TranscriptionJob;
   } catch (error) {
     console.error('Error getting job status:', error);
+    // Return null on network errors to allow retry
+    if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      console.log('Network error, will retry...');
+      return null;
+    }
     return null;
   }
 }
@@ -156,6 +161,7 @@ function mapBackendStatus(backendStatus: string): TranscriptionJob['status'] {
     case 'TRANSCRIBED':
       return 'TRANSCRIBING';
     case 'DETECTING_CHORDS':
+    case 'CHORDS_DETECTED':
       return 'DETECTING_CHORDS';
     case 'GENERATING_PDF':
       return 'GENERATING_PDF';

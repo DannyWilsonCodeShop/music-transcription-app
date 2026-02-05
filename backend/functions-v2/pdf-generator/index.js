@@ -291,25 +291,6 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
         }
       }
     }
-            yPosition += 10;
-            doc.setFontSize(14);
-            doc.setFont('helvetica', 'bold');
-            doc.text(section.label, 20, yPosition);
-            yPosition += 15;
-          }
-          break;
-        }
-      }
-    } else {
-      // Fallback: Add verse label every 8 measures (2 lines)
-      if (lineIndex % 2 === 0) {
-        yPosition += 10;
-        doc.setFontSize(14);
-        doc.setFont('helvetica', 'bold');
-        doc.text(`Verse ${Math.floor(lineIndex / 2) + 1}`, 20, yPosition);
-        yPosition += 15;
-      }
-    }
     
     // Get 4 measures for this line
     const lineMeasures = [];
@@ -359,6 +340,9 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
 function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, key, lyricsData) {
   const lyricsY = yPosition;        // Lyrics on TOP
   const chordY = yPosition + 12;    // Chords/numbers BELOW lyrics
+  
+  // Calculate measure width from column spacing
+  const measureWidth = columnPositions.length > 1 ? columnPositions[1] - columnPositions[0] : 35;
   
   // NO TABLE LINES - Clean Nashville Number System format
   // Removed: doc.setDrawColor() and doc.line() calls for clean appearance
