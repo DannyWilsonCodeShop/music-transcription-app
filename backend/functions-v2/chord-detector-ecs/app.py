@@ -327,7 +327,12 @@ def detect_key_from_progression(chords):
     all_patterns = {}  # Store all patterns found for structure detection
     repeating_patterns_found = 0
     
-    for pattern_length in range(3, 9):  # Try patterns of 3-8 chords
+    # IMPROVED: Look for patterns of at least 2 measures
+    # In 4/4 time with half-beat analysis: 4 beats/measure * 2 positions/beat = 8 positions/measure
+    # So 2 measures = 16 chord positions minimum
+    # But after consolidation, we might have 4-8 unique chords per 2 measures
+    # Start at 6 chords (1.5 measures) to catch meaningful progressions
+    for pattern_length in range(6, 17):  # Try patterns of 6-16 chords (1.5 to 4 measures)
         patterns_found = {}
         pattern_positions = {}  # Track where each pattern occurs
         
@@ -798,14 +803,27 @@ def detect_chords_librosa(audio_path, job_id):
     start_time = time.time()
     chords = []
     
-    # Convert beats to frames
-    beat_frames = librosa.time_to_frames(
-        librosa.frames_to_time(beats, sr=sr),
+    # IMPROVED: Create half-beat analysis points for better temporal resolution
+    # This captures chord changes that happen between beats
+    beat_times = librosa.frames_to_time(beats, sr=sr)
+    
+    # Generate half-beat positions
+    half_beat_times = []
+    for i in range(len(beat_times) - 1):
+        half_beat_times.append(beat_times[i])
+        # Add midpoint between this beat and next
+        half_beat_times.append((beat_times[i] + beat_times[i + 1]) / 2)
+    half_beat_times.append(beat_times[-1])  # Add last beat
+    
+    # Convert to frames
+    analysis_frames = librosa.time_to_frames(
+        np.array(half_beat_times),
         sr=sr,
         hop_length=2048
     )
     
-    log(f"  Analyzing {len(beat_frames)} beats")
+    log(f"  Analyzing at {len(analysis_frames)} positions (half-beat resolution)")
+    log(f"  Original beats: {len(beats)}, Analysis points: {len(analysis_frames)}")
     
     # Chord templates for major and minor chords
     chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -815,15 +833,15 @@ def detect_chords_librosa(audio_path, job_id):
     # Minor chord template: root, minor third, perfect fifth (0, 3, 7 semitones)
     minor_template = np.array([1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0])
     
-    # Analyze chords at each beat
+    # Analyze chords at each half-beat position
     beat_chords = []
-    for i, beat_frame in enumerate(beat_frames):
-        if beat_frame >= chroma.shape[1]:
+    for i, analysis_frame in enumerate(analysis_frames):
+        if analysis_frame >= chroma.shape[1]:
             continue
         
-        # Get chroma vector at this beat (average nearby frames for stability)
-        start_frame = max(0, beat_frame - 2)
-        end_frame = min(chroma.shape[1], beat_frame + 3)
+        # Get chroma vector at this position (average nearby frames for stability)
+        start_frame = max(0, analysis_frame - 2)
+        end_frame = min(chroma.shape[1], analysis_frame + 3)
         chroma_beat = np.mean(chroma[:, start_frame:end_frame], axis=1)
         
         # Normalize
@@ -854,16 +872,16 @@ def detect_chords_librosa(audio_path, job_id):
                 best_chord = root + 'm'
                 best_quality = 'minor'
         
-        beat_time = librosa.frames_to_time(beat_frame, sr=sr, hop_length=2048)
+        analysis_time = half_beat_times[i] if i < len(half_beat_times) else duration
         
         beat_chords.append({
             'chord': best_chord,
-            'time': beat_time,
+            'time': analysis_time,
             'confidence': best_score,
-            'beat_index': i
+            'position_index': i
         })
     
-    log(f"  Detected {len(beat_chords)} beat-level chords")
+    log(f"  Detected {len(beat_chords)} chords at half-beat positions")
     
     # CONSOLIDATE: Merge consecutive identical chords
     log("  Consolidating consecutive identical chords...")
