@@ -232,29 +232,44 @@ async function generateEnhancedPDF(data) {
 }
 
 function generatePerfect4MeasureLayout(doc, data, startY) {
-  console.log('🎼 Generating perfect 4-measure layout (Amazing Grace style)');
+  console.log('🎼 Generating perfect 4-measure layout with measure dividers');
   
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Nashville Number System', 20, startY);
-  let yPosition = startY + 20;
+  let yPosition = startY;
   
   // Convert chords to measure format
   const measures = convertChordsToMeasures(data.chords, data.timeSignature, data.tempo, data.key);
   
   console.log(`📊 Total measures: ${measures.length}`);
   
-  // Get song sections if available
+  // Get song sections - ONLY repeated sections (Verse, Chorus, Bridge)
   const sections = data.chordsData?.songStructure || data.chordAnalysis?.sections || [];
-  console.log(`📋 Song sections: ${sections.length > 0 ? sections.map(s => `${s.label} (${s.patternCount}x)`).join(', ') : 'None detected'}`);
+  const essentialSections = sections.filter(s => 
+    ['Verse', 'Chorus', 'Bridge'].includes(s.label)
+  );
   
-  // Define column positions for 4-measure layout (matching Amazing Grace)
+  console.log(`📋 Essential sections: ${essentialSections.length > 0 ? essentialSections.map(s => `${s.label} (${s.patternCount}x)`).join(', ') : 'None detected'}`);
+  
+  // Define column positions for 4-measure layout
   const columnPositions = [38, 73, 108, 143];
   const measuresPerLine = 4;
-  const totalLines = Math.ceil(measures.length / measuresPerLine);
+  
+  // If we have sections, only show measures from those sections
+  let measuresToShow = measures;
+  if (essentialSections.length > 0) {
+    measuresToShow = [];
+    for (const section of essentialSections) {
+      const sectionMeasures = measures.filter(m => 
+        m.measureNumber >= section.measureStart && m.measureNumber <= section.measureEnd
+      );
+      measuresToShow.push(...sectionMeasures);
+    }
+    console.log(`📊 Filtered to ${measuresToShow.length} measures (from ${measures.length} total)`);
+  }
+  
+  const totalLines = Math.ceil(measuresToShow.length / measuresPerLine);
   
   let currentSectionIndex = 0;
-  let currentSection = sections[0] || null;
+  let currentSection = essentialSections[0] || null;
   
   for (let lineIndex = 0; lineIndex < totalLines; lineIndex++) {
     // Check for page break
@@ -264,14 +279,13 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
     }
     
     // Get measure numbers for this line
-    const firstMeasureNum = lineIndex * measuresPerLine + 1;
-    const lastMeasureNum = Math.min((lineIndex + 1) * measuresPerLine, measures.length);
+    const firstMeasureNum = measuresToShow[lineIndex * measuresPerLine]?.measureNumber || 0;
+    const lastMeasureNum = measuresToShow[Math.min((lineIndex + 1) * measuresPerLine - 1, measuresToShow.length - 1)]?.measureNumber || 0;
     
     // Check if we've entered a new section
-    if (sections.length > 0) {
-      // Find which section these measures belong to
-      for (let i = currentSectionIndex; i < sections.length; i++) {
-        const section = sections[i];
+    if (essentialSections.length > 0) {
+      for (let i = currentSectionIndex; i < essentialSections.length; i++) {
+        const section = essentialSections[i];
         if (firstMeasureNum >= section.measureStart && firstMeasureNum <= section.measureEnd) {
           if (!currentSection || currentSection.label !== section.label || currentSection.measureStart !== section.measureStart) {
             currentSection = section;
@@ -296,20 +310,20 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
     const lineMeasures = [];
     for (let i = 0; i < measuresPerLine; i++) {
       const measureIndex = lineIndex * measuresPerLine + i;
-      if (measureIndex < measures.length) {
-        lineMeasures.push(measures[measureIndex]);
+      if (measureIndex < measuresToShow.length) {
+        lineMeasures.push(measuresToShow[measureIndex]);
       }
     }
     
-    // Generate the perfect measure line
-    generatePerfectMeasureLine(doc, lineMeasures, columnPositions, yPosition, data.key, data.lyricsData);
+    // Generate the perfect measure line with dividers
+    generatePerfectMeasureLine(doc, lineMeasures, columnPositions, yPosition, data.key, data.lyricsData, essentialSections);
     yPosition += 35; // Space between lines
     
     console.log(`✅ Line ${lineIndex + 1}: Measures ${firstMeasureNum}-${lastMeasureNum}`);
   }
   
-  // Add lyrics section if available
-  if (data.lyrics && data.lyrics.length > 0) {
+  // Add filtered lyrics section (only from repeated sections)
+  if (data.lyrics && data.lyrics.length > 0 && essentialSections.length > 0) {
     yPosition += 20;
     if (yPosition > 250) {
       doc.addPage();
@@ -318,12 +332,15 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
     
     doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
-    doc.text('Lyrics', 20, yPosition);
+    doc.text('Lyrics (Repeated Sections Only)', 20, yPosition);
     yPosition += 15;
+    
+    // Filter lyrics to only show words from essential sections
+    const filteredLyrics = filterLyricsToSections(data.lyricsData, essentialSections);
     
     doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    const lines = doc.splitTextToSize(data.lyrics, 170);
+    const lines = doc.splitTextToSize(filteredLyrics, 170);
     lines.forEach(line => {
       if (yPosition > 270) {
         doc.addPage();
@@ -337,35 +354,48 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
   return yPosition;
 }
 
-function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, key, lyricsData) {
+function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, key, lyricsData, sections) {
   const lyricsY = yPosition;        // Lyrics on TOP
   const chordY = yPosition + 12;    // Chords/numbers BELOW lyrics
   
   // Calculate measure width from column spacing
   const measureWidth = columnPositions.length > 1 ? columnPositions[1] - columnPositions[0] : 35;
   
-  // NO TABLE LINES - Clean Nashville Number System format
-  // Removed: doc.setDrawColor() and doc.line() calls for clean appearance
+  // DRAW MEASURE DIVIDER LINES
+  doc.setDrawColor(200, 200, 200); // Light gray
+  doc.setLineWidth(0.5);
+  
+  // Draw vertical lines between measures
+  for (let i = 0; i <= measures.length && i <= 4; i++) {
+    const xPos = i === 0 ? columnPositions[0] - 5 : columnPositions[i - 1] + measureWidth;
+    if (i < measures.length || i === 4) {
+      doc.line(xPos, yPosition - 5, xPos, yPosition + 15);
+    }
+  }
   
   measures.forEach((measure, index) => {
     if (index >= 4) return; // Only 4 measures per line
     
     const xPosition = columnPositions[index];
     
-    // LYRICS on top (first)
+    // LYRICS on top (first) - FILTERED to section time ranges
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     
-    // Get lyrics for this measure's time range
+    // Get lyrics for this measure's time range - only if in a repeated section
     let measureLyrics = '';
-    if (lyricsData && lyricsData.words && lyricsData.words.length > 0) {
+    const isInRepeatedSection = sections && sections.some(s => 
+      measure.startTime >= s.startTime && measure.endTime <= s.endTime
+    );
+    
+    if (isInRepeatedSection && lyricsData && lyricsData.words && lyricsData.words.length > 0) {
       // Find words that fall within this measure's time range
       const wordsInMeasure = lyricsData.words.filter(word => 
         word.start >= measure.startTime && word.start < measure.endTime
       );
       measureLyrics = wordsInMeasure.map(w => w.word).join(' ');
-    } else if (lyricsData && lyricsData.text) {
+    } else if (isInRepeatedSection && lyricsData && lyricsData.text) {
       // Fallback: try to split lyrics evenly across measures
       const words = lyricsData.text.split(/\s+/).filter(w => w.length > 0);
       if (words.length > 0) {
@@ -385,7 +415,6 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
     }
     
     // NASHVILLE NUMBERS below lyrics (second)
-    // Get all chords in this measure
     const chordsInMeasure = measure.chords || [];
     
     if (chordsInMeasure.length === 0) return;
@@ -485,6 +514,48 @@ function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, k
   
   // Reset color
   doc.setTextColor(0, 0, 0);
+}
+
+function filterLyricsToSections(lyricsData, sections) {
+  /**
+   * Filter lyrics to only include words from repeated sections (Verse, Chorus, Bridge)
+   * This removes spoken words, intros, outros, and non-singing parts
+   */
+  if (!lyricsData || !sections || sections.length === 0) {
+    return '';
+  }
+  
+  // If we have word-level timing, filter by time ranges
+  if (lyricsData.words && lyricsData.words.length > 0) {
+    const filteredWords = [];
+    
+    for (const section of sections) {
+      const sectionWords = lyricsData.words.filter(word =>
+        word.start >= section.startTime && word.start <= section.endTime
+      );
+      
+      if (sectionWords.length > 0) {
+        // Add section label
+        filteredWords.push(`\n[${section.label}]`);
+        filteredWords.push(...sectionWords.map(w => w.word));
+      }
+    }
+    
+    return filteredWords.join(' ').replace(/\s+/g, ' ').trim();
+  }
+  
+  // Fallback: if no word-level timing, return full lyrics with section labels
+  if (lyricsData.text) {
+    let result = '';
+    for (const section of sections) {
+      result += `\n[${section.label}]\n`;
+      // This is a rough approximation - ideally we'd have better timing
+      result += lyricsData.text.substring(0, 200) + '...\n';
+    }
+    return result;
+  }
+  
+  return '';
 }
 
 function convertChordsToMeasures(chords, timeSignature = '4/4', tempo = 120, key = 'C') {
