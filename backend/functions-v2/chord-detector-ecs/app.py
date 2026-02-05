@@ -9,6 +9,7 @@ import boto3
 import librosa
 import numpy as np
 from scipy.signal import find_peaks
+from scipy.ndimage import median_filter
 from decimal import Decimal
 import time
 import sys
@@ -498,52 +499,152 @@ def detect_chords(audio_path, job_id):
     log(f"  Beats detected: {len(beats)}")
     log(f"  Detection time: {tempo_time:.2f}s")
     
-    # Compute chromagram
+    # Compute chromagram with better parameters for chord detection
     log("Computing chromagram...")
     start_time = time.time()
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=512)
+    
+    # Use CQT chromagram with higher resolution and smoothing
+    chroma = librosa.feature.chroma_cqt(
+        y=y, 
+        sr=sr, 
+        hop_length=2048,  # Larger hop = less temporal resolution but more stable
+        n_chroma=12,
+        bins_per_octave=36  # Higher resolution
+    )
+    
+    # Apply median filtering to smooth out noise
+    chroma = median_filter(chroma, size=(1, 5))  # Smooth along time axis
+    
     chroma_time = time.time() - start_time
     log(f"✓ Chromagram computed")
     log(f"  Shape: {chroma.shape}")
     log(f"  Compute time: {chroma_time:.2f}s")
     
-    # Detect chord changes
-    log("Detecting chord changes...")
+    # IMPROVED CHORD DETECTION
+    log("Detecting chord changes (beat-synchronized)...")
     start_time = time.time()
     chords = []
     
-    # Simple chord detection: find peaks in chroma energy
-    chroma_energy = np.sum(chroma, axis=0)
-    peaks, _ = find_peaks(chroma_energy, distance=sr//512, prominence=0.5)
-    log(f"  Found {len(peaks)} peaks in chroma energy")
+    # Convert beats to frames
+    beat_frames = librosa.time_to_frames(
+        librosa.frames_to_time(beats, sr=sr),
+        sr=sr,
+        hop_length=2048
+    )
     
-    # Map chroma to chord names
+    log(f"  Analyzing {len(beat_frames)} beats")
+    
+    # Chord templates for major and minor chords
     chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     
-    for i, peak in enumerate(peaks):
-        # Get dominant pitch class at this peak
-        chroma_frame = chroma[:, peak]
-        dominant_pitch = np.argmax(chroma_frame)
-        chord_name = chord_names[dominant_pitch]
+    # Major chord template: root, major third, perfect fifth (0, 4, 7 semitones)
+    major_template = np.array([1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0])
+    # Minor chord template: root, minor third, perfect fifth (0, 3, 7 semitones)
+    minor_template = np.array([1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0])
+    
+    # Analyze chords at each beat
+    beat_chords = []
+    for i, beat_frame in enumerate(beat_frames):
+        if beat_frame >= chroma.shape[1]:
+            continue
         
-        # Calculate timing
-        start_time_chord = librosa.frames_to_time(peak, sr=sr, hop_length=512)
+        # Get chroma vector at this beat (average nearby frames for stability)
+        start_frame = max(0, beat_frame - 2)
+        end_frame = min(chroma.shape[1], beat_frame + 3)
+        chroma_beat = np.mean(chroma[:, start_frame:end_frame], axis=1)
         
-        # Duration until next peak or end
-        if i < len(peaks) - 1:
-            next_peak = peaks[i + 1]
-            end_time = librosa.frames_to_time(next_peak, sr=sr, hop_length=512)
-        else:
-            end_time = duration
+        # Normalize
+        if np.sum(chroma_beat) > 0:
+            chroma_beat = chroma_beat / np.sum(chroma_beat)
         
-        chords.append({
-            'chord': chord_name,
-            'start': round(start_time_chord, 2),
-            'end': round(end_time, 2),
-            'duration': round(end_time - start_time_chord, 2)
+        # Find best matching chord (try all 12 roots × 2 qualities)
+        best_score = -1
+        best_chord = 'C'
+        best_quality = 'major'
+        
+        for root_idx, root in enumerate(chord_names):
+            # Try major
+            major_rotated = np.roll(major_template, root_idx)
+            major_score = np.dot(chroma_beat, major_rotated)
+            
+            if major_score > best_score:
+                best_score = major_score
+                best_chord = root
+                best_quality = 'major'
+            
+            # Try minor
+            minor_rotated = np.roll(minor_template, root_idx)
+            minor_score = np.dot(chroma_beat, minor_rotated)
+            
+            if minor_score > best_score:
+                best_score = minor_score
+                best_chord = root + 'm'
+                best_quality = 'minor'
+        
+        beat_time = librosa.frames_to_time(beat_frame, sr=sr, hop_length=2048)
+        
+        beat_chords.append({
+            'chord': best_chord,
+            'time': beat_time,
+            'confidence': best_score,
+            'beat_index': i
         })
     
+    log(f"  Detected {len(beat_chords)} beat-level chords")
+    
+    # CONSOLIDATE: Merge consecutive identical chords
+    log("  Consolidating consecutive identical chords...")
+    
+    if len(beat_chords) > 0:
+        current_chord = beat_chords[0]['chord']
+        current_start = beat_chords[0]['time']
+        current_confidence = [beat_chords[0]['confidence']]
+        
+        for i in range(1, len(beat_chords)):
+            if beat_chords[i]['chord'] == current_chord:
+                # Same chord, accumulate confidence
+                current_confidence.append(beat_chords[i]['confidence'])
+            else:
+                # Chord changed, save previous chord
+                avg_confidence = np.mean(current_confidence)
+                
+                # Only keep chords with reasonable confidence
+                if avg_confidence > 0.3:  # Threshold for confidence
+                    chords.append({
+                        'chord': current_chord,
+                        'start': round(current_start, 2),
+                        'end': round(beat_chords[i]['time'], 2),
+                        'duration': round(beat_chords[i]['time'] - current_start, 2),
+                        'confidence': round(avg_confidence, 2)
+                    })
+                
+                # Start new chord
+                current_chord = beat_chords[i]['chord']
+                current_start = beat_chords[i]['time']
+                current_confidence = [beat_chords[i]['confidence']]
+        
+        # Add last chord
+        if len(current_confidence) > 0:
+            avg_confidence = np.mean(current_confidence)
+            if avg_confidence > 0.3:
+                chords.append({
+                    'chord': current_chord,
+                    'start': round(current_start, 2),
+                    'end': round(duration, 2),
+                    'duration': round(duration - current_start, 2),
+                    'confidence': round(avg_confidence, 2)
+                })
+    
+    # FILTER: Remove very short chords (likely noise)
+    log("  Filtering out very short chords...")
+    min_duration = 1.0  # Minimum 1 second
+    chords = [c for c in chords if c['duration'] >= min_duration]
+    
     detection_time = time.time() - start_time
+    log(f"✓ Chord detection complete")
+    log(f"  Final chord count: {len(chords)} (after consolidation and filtering)")
+    log(f"  Average chord duration: {np.mean([c['duration'] for c in chords]):.2f}s")
+    log(f"  Detection time: {detection_time:.2f}s")
     
     # Estimate key using improved Krumhansl-Schmuckler algorithm
     log("Detecting key...")
