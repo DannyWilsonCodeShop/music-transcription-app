@@ -584,9 +584,50 @@ def detect_chords(audio_path, job_id):
         log(f"  {section['label']}: measures {section['measureStart']}-{section['measureEnd']} ({section['patternCount']} repetitions)")
     log(f"  Detection time: {structure_time:.2f}s")
     
+    # DETAILED PATTERN ANALYSIS FOR DEBUGGING
+    log("=" * 80)
+    log("📊 DETAILED PATTERN ANALYSIS")
+    log("=" * 80)
+    
+    if pattern_info:
+        # Sort patterns by count (most repeated first)
+        sorted_patterns = sorted(
+            pattern_info.items(),
+            key=lambda x: x[1]['count'],
+            reverse=True
+        )
+        
+        # Filter to only repeating patterns (2+ occurrences)
+        repeating_patterns = [(p, info) for p, info in sorted_patterns if info['count'] >= 2]
+        
+        log(f"Total patterns found: {len(pattern_info)}")
+        log(f"Repeating patterns (2+ occurrences): {len(repeating_patterns)}")
+        log("")
+        
+        for i, (pattern, info) in enumerate(repeating_patterns[:10], 1):  # Show top 10
+            log(f"Pattern {i}:")
+            log(f"  Progression: {' → '.join(list(pattern))}")
+            log(f"  Length: {info['length']} chords")
+            log(f"  Occurrences: {info['count']} times")
+            log(f"  Positions: {info['positions']}")
+            
+            # Show timing for each occurrence
+            for j, pos in enumerate(info['positions'][:5], 1):  # Show first 5 occurrences
+                if pos < len(chords):
+                    start_time = chords[pos].get('start', 0) or chords[pos].get('time', 0)
+                    log(f"    Occurrence {j}: starts at {start_time:.1f}s (chord index {pos})")
+            
+            if len(info['positions']) > 5:
+                log(f"    ... and {len(info['positions']) - 5} more occurrences")
+            log("")
+    else:
+        log("No patterns detected")
+    
+    log("=" * 80)
+    
     if len(chords) > 0:
-        log(f"  First chord: {chords[0]['chord']} at {chords[0]['start']}s")
-        log(f"  Last chord: {chords[-1]['chord']} at {chords[-1]['start']}s")
+        log(f"First chord: {chords[0]['chord']} at {chords[0]['start']}s")
+        log(f"Last chord: {chords[-1]['chord']} at {chords[-1]['start']}s")
     
     return {
         'chords': chords,
@@ -598,8 +639,39 @@ def detect_chords(audio_path, job_id):
         'duration': round(duration, 2),
         'totalChords': len(chords),
         'songStructure': song_structure,
+        'patternAnalysis': format_pattern_analysis(pattern_info),  # Add detailed analysis
         'model': 'librosa-chromagram-enhanced'
     }
+
+def format_pattern_analysis(pattern_info):
+    """
+    Format pattern analysis for storage in DynamoDB
+    Returns a list of pattern summaries
+    """
+    if not pattern_info:
+        return []
+    
+    # Sort patterns by count (most repeated first)
+    sorted_patterns = sorted(
+        pattern_info.items(),
+        key=lambda x: x[1]['count'],
+        reverse=True
+    )
+    
+    # Filter to only repeating patterns (2+ occurrences)
+    repeating_patterns = [(p, info) for p, info in sorted_patterns if info['count'] >= 2]
+    
+    result = []
+    for i, (pattern, info) in enumerate(repeating_patterns[:10], 1):  # Top 10 patterns
+        result.append({
+            'patternNumber': i,
+            'progression': list(pattern),
+            'length': info['length'],
+            'occurrences': info['count'],
+            'positions': info['positions'][:10]  # Limit to first 10 positions
+        })
+    
+    return result
 
 def detect_time_signature(y, sr, beats):
     """
