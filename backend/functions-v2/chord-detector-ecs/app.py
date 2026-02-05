@@ -544,7 +544,11 @@ def detect_chords_essentia(audio_path, job_id):
         log(f"  Computed {len(hpcps)} HPCP frames")
         
         # Detect key from HPCP
-        key, scale, strength = key_detector(np.mean(hpcps, axis=0))
+        # Key algorithm returns: key, scale, strength, first_to_second_relative_strength
+        key_result = key_detector(np.mean(hpcps, axis=0))
+        key = key_result[0]
+        scale = key_result[1]
+        strength = key_result[2]
         
         log(f"  Key detected: {key} {scale} (strength: {strength:.2f})")
         
