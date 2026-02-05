@@ -74,20 +74,17 @@ function App() {
             Cipher
           </h1>
           <h1 style={{
-            fontSize: '36px',
-            fontWeight: '900',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 25%, #f093fb 50%, #4facfe 75%, #00f2fe 100%)',
+            fontSize: '42px',
+            fontWeight: '700',
+            background: 'linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #6366f1 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            backgroundSize: '200% 200%',
-            animation: 'gradient 3s ease infinite',
             marginBottom: '12px',
-            textShadow: '0 4px 8px rgba(102, 126, 234, 0.4), 0 8px 16px rgba(118, 75, 162, 0.3)',
-            letterSpacing: '1px',
-            filter: 'drop-shadow(0 2px 4px rgba(102, 126, 234, 0.5)) drop-shadow(0 4px 8px rgba(118, 75, 162, 0.4))',
+            letterSpacing: '-0.5px',
+            fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
             position: 'relative' as const,
-            display: 'inline-block',
-            padding: '8px 0'
+            textShadow: '0 0 40px rgba(139, 92, 246, 0.3)',
+            filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.2))'
           }}>
             Music Transcription App
           </h1>

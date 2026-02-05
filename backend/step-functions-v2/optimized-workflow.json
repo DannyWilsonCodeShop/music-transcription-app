@@ -39,7 +39,7 @@
               "Parameters": {
                 "LaunchType": "FARGATE",
                 "Cluster": "arn:aws:ecs:us-east-1:090130568474:cluster/ChordScout-dev",
-                "TaskDefinition": "chordscout-chord-detector-dev",
+                "TaskDefinition": "chordscout-chord-detector-dev:9",
                 "NetworkConfiguration": {
                   "AwsvpcConfiguration": {
                     "Subnets": [
