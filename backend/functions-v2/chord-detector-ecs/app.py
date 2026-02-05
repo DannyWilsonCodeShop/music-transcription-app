@@ -15,6 +15,15 @@ import time
 import sys
 import traceback
 
+# Essentia for chord detection
+try:
+    import essentia
+    import essentia.standard as es
+    ESSENTIA_AVAILABLE = True
+except ImportError:
+    ESSENTIA_AVAILABLE = False
+    print("WARNING: essentia not available, using librosa only")
+
 # Optional: Demucs for source separation
 try:
     import torch
@@ -462,7 +471,267 @@ def detect_key_from_progression(chords):
     
     return best_key, mode, confidence, all_patterns
 
+def detect_chords_essentia(audio_path, job_id):
+    """
+    Detect chords using Essentia's HPCP-based chord detection
+    Essentia is simpler than madmom and easier to install
+    """
+    log("🎸 Using Essentia chord detection")
+    log("Loading audio file...")
+    start_time = time.time()
+    
+    # Load audio with essentia
+    loader = es.MonoLoader(filename=audio_path, sampleRate=44100)
+    audio = loader()
+    duration = len(audio) / 44100.0
+    load_time = time.time() - start_time
+    
+    log(f"✓ Audio loaded successfully")
+    log(f"  Duration: {duration:.2f}s")
+    log(f"  Sample rate: 44100Hz")
+    log(f"  Samples: {len(audio)}")
+    log(f"  Load time: {load_time:.2f}s")
+    
+    # Detect tempo
+    log("Detecting tempo...")
+    tempo_start = time.time()
+    rhythm_extractor = es.RhythmExtractor2013(method="multifeature")
+    bpm, beats, beats_confidence, _, beats_intervals = rhythm_extractor(audio)
+    tempo_value = float(bpm)
+    time_signature = "4/4"  # Essentia doesn't detect time signature directly
+    tempo_time = time.time() - tempo_start
+    
+    log(f"✓ Tempo detected: {tempo_value:.1f} BPM")
+    log(f"✓ Time signature: {time_signature} (default)")
+    log(f"  Beats detected: {len(beats)}")
+    log(f"  Detection time: {tempo_time:.2f}s")
+    
+    # Detect chords using HPCP (Harmonic Pitch Class Profile)
+    log("Detecting chords with Essentia HPCP...")
+    start_time = time.time()
+    
+    try:
+        # Frame-based analysis
+        frame_size = 4096
+        hop_size = 2048
+        
+        # Windowing
+        windowing = es.Windowing(type='blackmanharris62')
+        # Spectrum
+        spectrum = es.Spectrum()
+        # Spectral peaks
+        spectral_peaks = es.SpectralPeaks(orderBy='magnitude',
+                                          magnitudeThreshold=0.00001,
+                                          minFrequency=40,
+                                          maxFrequency=5000,
+                                          maxPeaks=60)
+        # HPCP
+        hpcp = es.HPCP()
+        # Key detection
+        key_detector = es.Key(profileType='temperley')
+        
+        # Process audio in frames
+        hpcps = []
+        for frame in es.FrameGenerator(audio, frameSize=frame_size, hopSize=hop_size):
+            frame_windowed = windowing(frame)
+            frame_spectrum = spectrum(frame_windowed)
+            frequencies, magnitudes = spectral_peaks(frame_spectrum)
+            frame_hpcp = hpcp(frequencies, magnitudes)
+            hpcps.append(frame_hpcp)
+        
+        hpcps = np.array(hpcps)
+        
+        log(f"  Computed {len(hpcps)} HPCP frames")
+        
+        # Detect key from HPCP
+        key, scale, strength = key_detector(np.mean(hpcps, axis=0))
+        
+        log(f"  Key detected: {key} {scale} (strength: {strength:.2f})")
+        
+        # Simple chord detection: analyze HPCP at beat positions
+        beat_chords = []
+        frames_per_second = 44100 / hop_size
+        
+        for i, beat_time in enumerate(beats):
+            frame_idx = int(beat_time * frames_per_second)
+            if frame_idx >= len(hpcps):
+                continue
+            
+            # Average HPCP around this beat
+            start_frame = max(0, frame_idx - 2)
+            end_frame = min(len(hpcps), frame_idx + 3)
+            beat_hpcp = np.mean(hpcps[start_frame:end_frame], axis=0)
+            
+            # Find dominant pitch class
+            dominant_pc = np.argmax(beat_hpcp)
+            
+            # Map to chord name (simplified - just root note for now)
+            chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+            chord_root = chord_names[dominant_pc]
+            
+            # Determine major/minor by checking third
+            minor_third_idx = (dominant_pc + 3) % 12
+            major_third_idx = (dominant_pc + 4) % 12
+            
+            if beat_hpcp[minor_third_idx] > beat_hpcp[major_third_idx] * 1.2:
+                chord_name = chord_root + 'm'
+            else:
+                chord_name = chord_root
+            
+            beat_chords.append({
+                'chord': chord_name,
+                'time': float(beat_time),
+                'confidence': float(beat_hpcp[dominant_pc])
+            })
+        
+        log(f"  Detected {len(beat_chords)} beat-level chords")
+        
+        # Consolidate consecutive identical chords
+        log("  Consolidating consecutive identical chords...")
+        chords = []
+        if len(beat_chords) > 0:
+            current = beat_chords[0].copy()
+            current['start'] = current['time']
+            
+            for i in range(1, len(beat_chords)):
+                if beat_chords[i]['chord'] == current['chord']:
+                    # Extend current chord
+                    pass
+                else:
+                    # Save current and start new
+                    current['end'] = beat_chords[i]['time']
+                    current['duration'] = current['end'] - current['start']
+                    if current['duration'] >= 0.5:  # Min 0.5s
+                        chords.append(current)
+                    current = beat_chords[i].copy()
+                    current['start'] = current['time']
+            
+            # Add last chord
+            current['end'] = duration
+            current['duration'] = duration - current['start']
+            if current['duration'] >= 0.5:
+                chords.append(current)
+        
+        # Clean up chord data
+        for chord in chords:
+            chord['start'] = round(chord['start'], 2)
+            chord['end'] = round(chord['end'], 2)
+            chord['duration'] = round(chord['duration'], 2)
+            chord['confidence'] = round(chord['confidence'], 2)
+            del chord['time']
+        
+        detection_time = time.time() - start_time
+        log(f"✓ Chord detection complete")
+        log(f"  Final chord count: {len(chords)}")
+        if len(chords) > 0:
+            log(f"  Average chord duration: {np.mean([c['duration'] for c in chords]):.2f}s")
+            major_count = sum(1 for c in chords if 'm' not in c['chord'])
+            minor_count = sum(1 for c in chords if 'm' in c['chord'])
+            log(f"  Chord quality: {major_count} major, {minor_count} minor")
+            
+            log("  First 20 chords detected:")
+            for i, chord in enumerate(chords[:20]):
+                log(f"    {i+1}. {chord['chord']:6s} at {chord['start']:6.1f}s (duration: {chord['duration']:.1f}s)")
+        
+        log(f"  Detection time: {detection_time:.2f}s")
+        
+    except Exception as e:
+        log(f"ERROR in essentia chord detection: {str(e)}", "ERROR")
+        log(traceback.format_exc(), "ERROR")
+        log("Falling back to librosa chord detection", "WARNING")
+        return detect_chords_librosa(audio_path, job_id)
+    
+    # Detect key from progression
+    log("Detecting key from progression...")
+    key_start = time.time()
+    key_prog, mode_prog, confidence_prog, pattern_info = detect_key_from_progression(chords)
+    
+    # Use essentia key if progression confidence is low
+    if confidence_prog < 0.2:
+        # Convert essentia key format
+        key_final = key
+        mode_final = 'major' if scale == 'major' else 'minor'
+        confidence_final = strength
+        log(f"  Using Essentia key detection (low progression confidence)")
+    else:
+        key_final = key_prog
+        mode_final = mode_prog
+        confidence_final = confidence_prog
+        log(f"  Using progression-based key detection")
+    
+    key_time = time.time() - key_start
+    
+    log(f"✓ Key detection complete")
+    log(f"  Detected key: {key_final} {mode_final}")
+    log(f"  Confidence: {confidence_final:.2f}")
+    log(f"  Essentia: {key} {scale} ({strength:.2f})")
+    log(f"  Progression: {key_prog} {mode_prog} ({confidence_prog:.2f})")
+    log(f"  Detection time: {key_time:.2f}s")
+    
+    # Detect song structure
+    log("Detecting song structure...")
+    structure_start = time.time()
+    song_structure = detect_song_structure(chords, pattern_info, tempo_value)
+    structure_time = time.time() - structure_start
+    log(f"✓ Song structure detected: {len(song_structure)} sections")
+    for section in song_structure:
+        log(f"  {section['label']}: measures {section['measureStart']}-{section['measureEnd']} ({section['patternCount']} repetitions)")
+    log(f"  Detection time: {structure_time:.2f}s")
+    
+    # Pattern analysis logging
+    log("=" * 80)
+    log("📊 DETAILED PATTERN ANALYSIS")
+    log("=" * 80)
+    
+    if pattern_info:
+        sorted_patterns = sorted(
+            pattern_info.items(),
+            key=lambda x: x[1]['count'],
+            reverse=True
+        )
+        repeating_patterns = [(p, info) for p, info in sorted_patterns if info['count'] >= 2]
+        
+        log(f"Total patterns found: {len(pattern_info)}")
+        log(f"Repeating patterns (2+ occurrences): {len(repeating_patterns)}")
+        log("")
+        
+        for i, (pattern, info) in enumerate(repeating_patterns[:10], 1):
+            log(f"Pattern {i}:")
+            log(f"  Progression: {' → '.join(list(pattern))}")
+            log(f"  Length: {info['length']} chords")
+            log(f"  Occurrences: {info['count']} times")
+            log("")
+    else:
+        log("No patterns detected")
+    
+    log("=" * 80)
+    
+    return {
+        'chords': chords,
+        'key': key_final,
+        'mode': mode_final,
+        'keyConfidence': round(confidence_final, 2),
+        'tempo': round(tempo_value, 1),
+        'timeSignature': time_signature,
+        'duration': round(duration, 2),
+        'totalChords': len(chords),
+        'songStructure': song_structure,
+        'patternAnalysis': format_pattern_analysis(pattern_info, key_final),
+        'model': 'essentia-hpcp'
+    }
+
 def detect_chords(audio_path, job_id):
+    """
+    Main chord detection function - uses essentia if available, falls back to librosa
+    """
+    if ESSENTIA_AVAILABLE:
+        log("Using Essentia for chord detection")
+        return detect_chords_essentia(audio_path, job_id)
+    else:
+        log("Essentia not available, using librosa chord detection")
+        return detect_chords_librosa(audio_path, job_id)
+
+def detect_chords_librosa(audio_path, job_id):
     """Detect chords using librosa chromagram analysis with optional stem separation"""
     log("Loading audio file...")
     start_time = time.time()
