@@ -359,21 +359,14 @@ function generatePerfect4MeasureLayout(doc, data, startY) {
 function generatePerfectMeasureLine(doc, measures, columnPositions, yPosition, key, lyricsData) {
   const lyricsY = yPosition;        // Lyrics on TOP
   const chordY = yPosition + 12;    // Chords/numbers BELOW lyrics
-  const lineHeight = 25;
   
-  // Draw vertical lines between measures
-  doc.setDrawColor(200, 200, 200); // Light gray
-  doc.setLineWidth(0.5);
-  for (let i = 1; i < measures.length && i < 4; i++) {
-    const lineX = columnPositions[i] - 5;
-    doc.line(lineX, yPosition - 5, lineX, yPosition + lineHeight);
-  }
+  // NO TABLE LINES - Clean Nashville Number System format
+  // Removed: doc.setDrawColor() and doc.line() calls for clean appearance
   
   measures.forEach((measure, index) => {
     if (index >= 4) return; // Only 4 measures per line
     
     const xPosition = columnPositions[index];
-    const measureWidth = 30; // Width allocated for each measure
     
     // LYRICS on top (first)
     doc.setTextColor(0, 0, 0);
