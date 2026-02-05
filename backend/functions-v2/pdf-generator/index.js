@@ -168,13 +168,27 @@ async function generateDiagnosticPDF(jobData) {
       // Progression (large and clear)
       doc.setFontSize(16);
       doc.setFont('helvetica', 'normal');
-      const progression = pattern.progression.join('  →  ');
       
-      // Wrap if too long
-      const lines = doc.splitTextToSize(progression, 170);
-      lines.forEach(line => {
+      // Show both chord names and Roman numerals
+      const chordProgression = pattern.progression.join('  →  ');
+      const romanProgression = pattern.nashvilleProgression 
+        ? pattern.nashvilleProgression.join('  →  ')
+        : 'N/A';
+      
+      // Chord names
+      const chordLines = doc.splitTextToSize(chordProgression, 170);
+      chordLines.forEach(line => {
         doc.text(line, 25, yPos);
         yPos += 8;
+      });
+      
+      // Roman numerals (in parentheses)
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'italic');
+      const romanLines = doc.splitTextToSize(`(${romanProgression})`, 170);
+      romanLines.forEach(line => {
+        doc.text(line, 25, yPos);
+        yPos += 7;
       });
       yPos += 2;
 

@@ -740,13 +740,14 @@ def detect_chords(audio_path, job_id):
         'duration': round(duration, 2),
         'totalChords': len(chords),
         'songStructure': song_structure,
-        'patternAnalysis': format_pattern_analysis(pattern_info),  # Add detailed analysis
+        'patternAnalysis': format_pattern_analysis(pattern_info, key),  # Pass detected key
         'model': 'librosa-chromagram-enhanced'
     }
 
-def format_pattern_analysis(pattern_info):
+def format_pattern_analysis(pattern_info, key='C'):
     """
     Format pattern analysis for storage in DynamoDB
+    Converts chord names to Nashville numbers based on detected key
     Returns a list of pattern summaries
     """
     if not pattern_info:
@@ -764,15 +765,94 @@ def format_pattern_analysis(pattern_info):
     
     result = []
     for i, (pattern, info) in enumerate(repeating_patterns[:10], 1):  # Top 10 patterns
+        # Convert chord names to Nashville numbers
+        nashville_progression = []
+        for chord_name in pattern:
+            nashville = convert_chord_to_nashville(chord_name, key)
+            nashville_progression.append(nashville)
+        
         result.append({
             'patternNumber': i,
-            'progression': list(pattern),
+            'progression': list(pattern),  # Original chord names
+            'nashvilleProgression': nashville_progression,  # Nashville numbers
             'length': info['length'],
             'occurrences': info['count'],
             'positions': info['positions'][:10]  # Limit to first 10 positions
         })
     
     return result
+
+def convert_chord_to_nashville(chord_name, key='C'):
+    """Convert a chord name to Roman numeral notation based on key"""
+    if not chord_name or chord_name == 'N':
+        return 'I'
+    
+    chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    
+    # Extract root note
+    root = chord_name[0]
+    if len(chord_name) > 1 and chord_name[1] in ['#', 'b']:
+        root = chord_name[:2]
+        # Convert flats to sharps
+        if chord_name[1] == 'b':
+            flat_to_sharp = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'}
+            root = flat_to_sharp.get(root, root)
+    
+    # Extract key root
+    key_root = key.split(' ')[0] if ' ' in key else key
+    if len(key_root) > 1 and key_root[1] == 'b':
+        flat_to_sharp = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'}
+        key_root = flat_to_sharp.get(key_root, key_root)
+    
+    try:
+        key_idx = chord_names.index(key_root)
+        root_idx = chord_names.index(root)
+    except ValueError:
+        return 'I'
+    
+    # Calculate interval (scale degree)
+    interval = (root_idx - key_idx + 12) % 12
+    
+    # Determine if chord is minor
+    is_minor = 'm' in chord_name.lower() and 'maj' not in chord_name.lower()
+    
+    # Map to Roman numeral based on scale degree
+    # In major key: I, ii, iii, IV, V, vi, vii°
+    roman_numerals_major = {
+        0: 'I',      # Tonic (major)
+        1: 'bII',    # Flat 2 (major)
+        2: 'II',     # 2 (major)
+        3: 'bIII',   # Flat 3 (major)
+        4: 'III',    # 3 (major)
+        5: 'IV',     # 4 (major)
+        6: 'bV',     # Flat 5 (diminished)
+        7: 'V',      # 5 (major)
+        8: 'bVI',    # Flat 6 (major)
+        9: 'VI',     # 6 (major)
+        10: 'bVII',  # Flat 7 (major)
+        11: 'VII'    # 7 (major)
+    }
+    
+    roman_numerals_minor = {
+        0: 'i',      # Tonic (minor)
+        1: 'bii',    # Flat 2 (minor)
+        2: 'ii',     # 2 (minor)
+        3: 'biii',   # Flat 3 (minor)
+        4: 'iii',    # 3 (minor)
+        5: 'iv',     # 4 (minor)
+        6: 'bv',     # Flat 5 (diminished)
+        7: 'v',      # 5 (minor)
+        8: 'bvi',    # Flat 6 (minor)
+        9: 'vi',     # 6 (minor)
+        10: 'bvii',  # Flat 7 (minor)
+        11: 'vii'    # 7 (minor)
+    }
+    
+    # Select appropriate Roman numeral based on chord quality
+    if is_minor:
+        return roman_numerals_minor.get(interval, 'i')
+    else:
+        return roman_numerals_major.get(interval, 'I')
 
 def detect_time_signature(y, sr, beats):
     """
