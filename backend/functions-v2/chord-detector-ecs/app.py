@@ -863,8 +863,8 @@ def detect_chords_librosa(audio_path, job_id):
     log(f"  Shape: {chroma.shape}")
     log(f"  Compute time: {chroma_time:.2f}s")
     
-    # IMPROVED CHORD DETECTION
-    log("Detecting chord changes (beat-synchronized)...")
+    # IMPROVED CHORD DETECTION WITH ENHANCED TEMPLATES
+    log("Detecting chord changes (beat-synchronized with enhanced templates)...")
     start_time = time.time()
     chords = []
     
@@ -890,13 +890,55 @@ def detect_chords_librosa(audio_path, job_id):
     log(f"  Analyzing at {len(analysis_frames)} positions (half-beat resolution)")
     log(f"  Original beats: {len(beats)}, Analysis points: {len(analysis_frames)}")
     
-    # Chord templates for major and minor chords
+    # ENHANCED: Create comprehensive chord templates (84 total)
     chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     
-    # Major chord template: root, major third, perfect fifth (0, 4, 7 semitones)
-    major_template = np.array([1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0])
-    # Minor chord template: root, minor third, perfect fifth (0, 3, 7 semitones)
-    minor_template = np.array([1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0])
+    def create_enhanced_chord_templates():
+        """Create 84 chord templates covering major, minor, 7th, maj7, m7, sus4, dim"""
+        templates = {}
+        
+        for root_idx in range(12):
+            root = chord_names[root_idx]
+            
+            # Major (1, 3, 5)
+            major = np.zeros(12)
+            major[[0, 4, 7]] = [1.0, 0.8, 0.9]
+            templates[root] = np.roll(major, root_idx)
+            
+            # Minor (1, b3, 5)
+            minor = np.zeros(12)
+            minor[[0, 3, 7]] = [1.0, 0.8, 0.9]
+            templates[root + 'm'] = np.roll(minor, root_idx)
+            
+            # Dominant 7th (1, 3, 5, b7)
+            dom7 = np.zeros(12)
+            dom7[[0, 4, 7, 10]] = [1.0, 0.7, 0.8, 0.6]
+            templates[root + '7'] = np.roll(dom7, root_idx)
+            
+            # Major 7th (1, 3, 5, 7)
+            maj7 = np.zeros(12)
+            maj7[[0, 4, 7, 11]] = [1.0, 0.7, 0.8, 0.6]
+            templates[root + 'maj7'] = np.roll(maj7, root_idx)
+            
+            # Minor 7th (1, b3, 5, b7)
+            min7 = np.zeros(12)
+            min7[[0, 3, 7, 10]] = [1.0, 0.7, 0.8, 0.6]
+            templates[root + 'm7'] = np.roll(min7, root_idx)
+            
+            # Sus4 (1, 4, 5)
+            sus4 = np.zeros(12)
+            sus4[[0, 5, 7]] = [1.0, 0.7, 0.9]
+            templates[root + 'sus4'] = np.roll(sus4, root_idx)
+            
+            # Diminished (1, b3, b5)
+            dim = np.zeros(12)
+            dim[[0, 3, 6]] = [1.0, 0.8, 0.8]
+            templates[root + 'dim'] = np.roll(dim, root_idx)
+        
+        return templates
+    
+    templates = create_enhanced_chord_templates()
+    log(f"  Created {len(templates)} enhanced chord templates (major, minor, 7th, maj7, m7, sus4, dim)")
     
     # Analyze chords at each half-beat position
     beat_chords = []
@@ -913,29 +955,23 @@ def detect_chords_librosa(audio_path, job_id):
         if np.sum(chroma_beat) > 0:
             chroma_beat = chroma_beat / np.sum(chroma_beat)
         
-        # Find best matching chord (try all 12 roots × 2 qualities)
+        # Find best matching chord from all 84 templates
         best_score = -1
         best_chord = 'C'
-        best_quality = 'major'
         
-        for root_idx, root in enumerate(chord_names):
-            # Try major
-            major_rotated = np.roll(major_template, root_idx)
-            major_score = np.dot(chroma_beat, major_rotated)
+        for chord_name, template in templates.items():
+            # Normalize template
+            if np.sum(template) > 0:
+                template_norm = template / np.sum(template)
+            else:
+                continue
             
-            if major_score > best_score:
-                best_score = major_score
-                best_chord = root
-                best_quality = 'major'
+            # Calculate correlation
+            score = np.dot(chroma_beat, template_norm)
             
-            # Try minor
-            minor_rotated = np.roll(minor_template, root_idx)
-            minor_score = np.dot(chroma_beat, minor_rotated)
-            
-            if minor_score > best_score:
-                best_score = minor_score
-                best_chord = root + 'm'
-                best_quality = 'minor'
+            if score > best_score:
+                best_score = score
+                best_chord = chord_name
         
         analysis_time = half_beat_times[i] if i < len(half_beat_times) else duration
         
@@ -964,8 +1000,8 @@ def detect_chords_librosa(audio_path, job_id):
                 # Chord changed, save previous chord
                 avg_confidence = np.mean(current_confidence)
                 
-                # Only keep chords with reasonable confidence
-                if avg_confidence > 0.3:  # Threshold for confidence
+                # Only keep chords with reasonable confidence (lowered for enhanced templates)
+                if avg_confidence > 0.08:  # Lower threshold for 84-template system
                     chords.append({
                         'chord': current_chord,
                         'start': round(current_start, 2),
@@ -982,7 +1018,7 @@ def detect_chords_librosa(audio_path, job_id):
         # Add last chord
         if len(current_confidence) > 0:
             avg_confidence = np.mean(current_confidence)
-            if avg_confidence > 0.3:
+            if avg_confidence > 0.08:  # Lower threshold for 84-template system
                 chords.append({
                     'chord': current_chord,
                     'start': round(current_start, 2),
@@ -993,7 +1029,7 @@ def detect_chords_librosa(audio_path, job_id):
     
     # FILTER: Remove very short chords (likely noise)
     log("  Filtering out very short chords...")
-    min_duration = 1.0  # Minimum 1 second
+    min_duration = 0.5  # Minimum 0.5 seconds (lowered from 1.0 for better resolution)
     chords = [c for c in chords if c['duration'] >= min_duration]
     
     detection_time = time.time() - start_time
@@ -1118,7 +1154,7 @@ def detect_chords_librosa(audio_path, job_id):
         'totalChords': len(chords),
         'songStructure': song_structure,
         'patternAnalysis': format_pattern_analysis(pattern_info, key),  # Pass detected key
-        'model': 'librosa-chromagram-enhanced'
+        'model': 'librosa-enhanced-84-templates'  # 84 chord templates (major, minor, 7th, maj7, m7, sus4, dim)
     }
 
 def format_pattern_analysis(pattern_info, key='C'):
