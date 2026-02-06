@@ -299,12 +299,14 @@ def detect_key_improved(chroma):
 def detect_key_from_progression(chords):
     """
     ENHANCED: Detect key by analyzing ONLY repeating chord progression patterns
+    PLUS: Use most common chord as a strong hint
     
     Strategy:
-    1. Find patterns that repeat at least 2 times (ignore single occurrences)
-    2. Analyze only these repeating patterns against all possible keys
-    3. Score based on common progressions (I-vi-ii-V, I-IV-V, etc.)
-    4. Use the context of repeated progressions to determine key
+    1. Count chord frequency - most common chord is likely I or vi
+    2. Find patterns that repeat at least 2 times
+    3. Analyze repeating patterns against all possible keys
+    4. Score based on common progressions (I-vi-ii-V, I-IV-V, etc.)
+    5. Combine frequency analysis with progression analysis
     
     Returns: (key, mode, confidence, pattern_info)
     """
@@ -317,6 +319,8 @@ def detect_key_from_progression(chords):
     
     # Extract chord roots as a sequence
     chord_sequence = []
+    chord_frequency = {}  # Count how often each chord appears
+    
     for chord in chords:
         chord_name = chord['chord']
         root = chord_name[0]
@@ -326,20 +330,46 @@ def detect_key_from_progression(chords):
         # Determine if major or minor
         is_minor = 'm' in chord_name.lower() and 'maj' not in chord_name.lower()
         chord_sequence.append({'root': root, 'minor': is_minor})
+        
+        # Count frequency
+        chord_frequency[root] = chord_frequency.get(root, 0) + 1
     
     log(f"  Total chords in sequence: {len(chord_sequence)}")
     
-    # STEP 1: Find repeating patterns (3-8 chord sequences)
-    # Only patterns that repeat at least 2 times
+    # STEP 0: Analyze chord frequency (most common chord is likely tonic or relative)
+    sorted_chords = sorted(chord_frequency.items(), key=lambda x: x[1], reverse=True)
+    most_common_chord = sorted_chords[0][0] if sorted_chords else 'C'
+    most_common_count = sorted_chords[0][1] if sorted_chords else 0
+    
+    log(f"  Most common chord: {most_common_chord} ({most_common_count} times)")
+    log(f"  Top 5 chords: {sorted_chords[:5]}")
+    
+    # Give strong weight to most common chord being the tonic
+    frequency_scores = {}
+    for chord_root, count in chord_frequency.items():
+        try:
+            # This chord as potential tonic
+            frequency_scores[chord_root] = count * 10  # Strong weight
+            
+            # Also consider relative major/minor (3 semitones away)
+            chord_idx = chord_names.index(chord_root)
+            relative_idx = (chord_idx + 3) % 12  # Minor third up = relative major
+            relative_chord = chord_names[relative_idx]
+            if relative_chord not in frequency_scores:
+                frequency_scores[relative_chord] = 0
+            frequency_scores[relative_chord] += count * 5  # Medium weight
+        except ValueError:
+            continue
+    
+    log(f"  Frequency-based key candidates:")
+    for i, (key, score) in enumerate(sorted(frequency_scores.items(), key=lambda x: x[1], reverse=True)[:3], 1):
+        log(f"    {i}. {key}: {score:.1f} points (frequency)")
+    
+    # STEP 1: Find repeating patterns (6-16 chord sequences)
     pattern_scores = {}  # key -> score
     all_patterns = {}  # Store all patterns found for structure detection
     repeating_patterns_found = 0
     
-    # IMPROVED: Look for patterns of at least 2 measures
-    # In 4/4 time with half-beat analysis: 4 beats/measure * 2 positions/beat = 8 positions/measure
-    # So 2 measures = 16 chord positions minimum
-    # But after consolidation, we might have 4-8 unique chords per 2 measures
-    # Start at 6 chords (1.5 measures) to catch meaningful progressions
     for pattern_length in range(6, 17):  # Try patterns of 6-16 chords (1.5 to 4 measures)
         patterns_found = {}
         pattern_positions = {}  # Track where each pattern occurs
@@ -418,25 +448,31 @@ def detect_key_from_progression(chords):
                         if potential_key not in pattern_scores:
                             pattern_scores[potential_key] = 0
                         # Weight by: progression strength × repetition count × pattern length
-                        # Heavily weight repetition count (repeated patterns are most important)
                         pattern_scores[potential_key] += progression_score * (count ** 1.5) * pattern_length
     
     log(f"  Repeating patterns found: {repeating_patterns_found}")
     
-    if not pattern_scores:
-        log("  ⚠️ No repeating patterns found - falling back to C major")
-        return 'C', 'major', 0.0, {}
+    # STEP 5: Combine frequency scores with pattern scores
+    combined_scores = {}
+    for key in set(list(frequency_scores.keys()) + list(pattern_scores.keys())):
+        combined_scores[key] = frequency_scores.get(key, 0) + pattern_scores.get(key, 0)
     
-    # STEP 5: Find best key based on repeated pattern analysis
-    best_key = max(pattern_scores, key=pattern_scores.get)
-    total_score = sum(pattern_scores.values())
-    confidence = pattern_scores[best_key] / total_score if total_score > 0 else 0.0
+    if not combined_scores:
+        log("  ⚠️ No key candidates found - falling back to most common chord")
+        return most_common_chord, 'major', 0.0, {}
+    
+    # Find best key based on combined analysis
+    best_key = max(combined_scores, key=combined_scores.get)
+    total_score = sum(combined_scores.values())
+    confidence = combined_scores[best_key] / total_score if total_score > 0 else 0.0
     
     # Log top 3 key candidates
-    sorted_keys = sorted(pattern_scores.items(), key=lambda x: x[1], reverse=True)
-    log(f"  Top key candidates:")
+    sorted_keys = sorted(combined_scores.items(), key=lambda x: x[1], reverse=True)
+    log(f"  Top key candidates (combined):")
     for i, (key, score) in enumerate(sorted_keys[:3]):
-        log(f"    {i+1}. {key}: {score:.1f} points")
+        freq_score = frequency_scores.get(key, 0)
+        prog_score = pattern_scores.get(key, 0)
+        log(f"    {i+1}. {key}: {score:.1f} points (freq: {freq_score:.1f}, prog: {prog_score:.1f})")
     
     # STEP 6: Determine mode by analyzing chord qualities in the key
     major_indicators = 0
