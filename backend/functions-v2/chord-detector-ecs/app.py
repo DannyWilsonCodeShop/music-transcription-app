@@ -695,13 +695,17 @@ def detect_chords_essentia(audio_path, job_id):
     # Also get pattern-based structure for comparison/fallback
     pattern_structure = detect_song_structure(chords, pattern_info, tempo_value)
     
-    # Use MSAF if available, otherwise fall back to pattern-based
-    if msaf_segments:
+    # Use MSAF if available and reasonable, otherwise fall back to pattern-based
+    if msaf_segments and len(msaf_segments) >= 3 and len(msaf_segments) <= 20:
         song_structure = msaf_segments
         log(f"✓ Using MSAF audio-based segmentation: {len(song_structure)} segments")
+        log(f"  Algorithm: {song_structure[0].get('algorithm', 'unknown')}")
     else:
         song_structure = pattern_structure
-        log(f"✓ Using pattern-based structure detection: {len(song_structure)} sections")
+        if msaf_segments:
+            log(f"⚠️ MSAF returned {len(msaf_segments)} segments (outside 3-20 range), using pattern-based")
+        else:
+            log(f"✓ Using pattern-based structure detection: {len(song_structure)} sections")
     
     structure_time = time.time() - structure_start
     
@@ -1001,13 +1005,17 @@ def detect_chords_librosa(audio_path, job_id):
     # Also get pattern-based structure for comparison/fallback
     pattern_structure = detect_song_structure(chords, pattern_info, tempo_value)
     
-    # Use MSAF if available, otherwise fall back to pattern-based
-    if msaf_segments:
+    # Use MSAF if available and reasonable, otherwise fall back to pattern-based
+    if msaf_segments and len(msaf_segments) >= 3 and len(msaf_segments) <= 20:
         song_structure = msaf_segments
         log(f"✓ Using MSAF audio-based segmentation: {len(song_structure)} segments")
+        log(f"  Algorithm: {song_structure[0].get('algorithm', 'unknown')}")
     else:
         song_structure = pattern_structure
-        log(f"✓ Using pattern-based structure detection: {len(song_structure)} sections")
+        if msaf_segments:
+            log(f"⚠️ MSAF returned {len(msaf_segments)} segments (outside 3-20 range), using pattern-based")
+        else:
+            log(f"✓ Using pattern-based structure detection: {len(song_structure)} sections")
     
     structure_time = time.time() - structure_start
     
@@ -1203,8 +1211,13 @@ def detect_time_signature(y, sr, beats):
 
 def detect_structure_msaf(audio_path):
     """
-    Use MSAF for structural segmentation
+    Use MSAF for structural segmentation with multiple algorithm fallbacks
     Detects segment boundaries and identifies repeated sections
+    
+    Tries multiple algorithms in order of accuracy:
+    1. sf (Spectral Clustering) - Best for pop/rock
+    2. foote (Foote Novelty) - Fast and reliable
+    3. cnmf (CNN) - Deep learning based
     
     Returns: list of segments with boundaries and labels (A, B, A, C, etc.)
     """
@@ -1215,50 +1228,73 @@ def detect_structure_msaf(audio_path):
     log("🎵 Detecting structure with MSAF...")
     start_time = time.time()
     
-    try:
-        # Run MSAF analysis with CNN-based method (most accurate)
-        # boundaries_id options: 'cnmf' (CNN), 'foote', 'sf' (spectral), 'olda'
-        # labels_id options: 'cnmf' (CNN), 'fmc2d', 'scluster'
-        boundaries, labels = msaf.process(
-            audio_path,
-            boundaries_id='cnmf',  # CNN-based boundary detection
-            labels_id='cnmf',      # CNN-based labeling
-            feature='mfcc'         # Use MFCC features
-        )
-        
-        log(f"  MSAF detected {len(boundaries)-1} segments")
-        log(f"  Boundaries: {[round(b, 1) for b in boundaries[:10]]}{'...' if len(boundaries) > 10 else ''}")
-        log(f"  Labels: {labels[:10]}{'...' if len(labels) > 10 else ''}")
-        
-        # Convert to our format
-        segments = []
-        for i in range(len(boundaries) - 1):
-            segment = {
-                'start': float(boundaries[i]),
-                'end': float(boundaries[i + 1]),
-                'label': str(labels[i]),
-                'duration': float(boundaries[i + 1] - boundaries[i])
-            }
-            segments.append(segment)
-            log(f"  Segment {i+1}: {segment['label']} ({segment['start']:.1f}s - {segment['end']:.1f}s, {segment['duration']:.1f}s)")
-        
-        detection_time = time.time() - start_time
-        log(f"✓ MSAF segmentation complete ({detection_time:.2f}s)")
-        
-        # Count repetitions of each label
-        label_counts = {}
-        for seg in segments:
-            label_counts[seg['label']] = label_counts.get(seg['label'], 0) + 1
-        
-        log(f"  Label distribution: {label_counts}")
-        
-        return segments
-        
-    except Exception as e:
-        log(f"MSAF segmentation failed: {str(e)}", "ERROR")
-        log(traceback.format_exc(), "ERROR")
-        log("Falling back to pattern-based structure detection", "WARNING")
-        return []
+    # Try multiple algorithms in order of preference
+    algorithms = [
+        ('sf', 'scluster', 'mfcc'),      # Spectral clustering - best for pop/rock
+        ('foote', 'fmc2d', 'mfcc'),      # Foote novelty - fast and reliable
+        ('olda', 'scluster', 'cqt'),     # Online learning - good for varied music
+        ('cnmf', 'cnmf', 'mfcc'),        # CNN - deep learning (slowest)
+    ]
+    
+    for boundaries_id, labels_id, feature in algorithms:
+        try:
+            log(f"  Trying algorithm: {boundaries_id} with {feature} features...")
+            
+            boundaries, labels = msaf.process(
+                audio_path,
+                boundaries_id=boundaries_id,
+                labels_id=labels_id,
+                feature=feature
+            )
+            
+            # Check if we got reasonable results
+            num_segments = len(boundaries) - 1
+            
+            if num_segments < 2:
+                log(f"  ⚠️ Only {num_segments} segment(s) detected, trying next algorithm...", "WARNING")
+                continue
+            
+            if num_segments > 50:
+                log(f"  ⚠️ Too many segments ({num_segments}), trying next algorithm...", "WARNING")
+                continue
+            
+            # Success!
+            log(f"  ✓ {boundaries_id} detected {num_segments} segments")
+            log(f"  Boundaries: {[round(b, 1) for b in boundaries[:10]]}{'...' if len(boundaries) > 10 else ''}")
+            log(f"  Labels: {labels[:10]}{'...' if len(labels) > 10 else ''}")
+            
+            # Convert to our format
+            segments = []
+            for i in range(len(boundaries) - 1):
+                segment = {
+                    'start': float(boundaries[i]),
+                    'end': float(boundaries[i + 1]),
+                    'label': str(labels[i]),
+                    'duration': float(boundaries[i + 1] - boundaries[i]),
+                    'algorithm': boundaries_id  # Track which algorithm was used
+                }
+                segments.append(segment)
+                log(f"  Segment {i+1}: {segment['label']} ({segment['start']:.1f}s - {segment['end']:.1f}s, {segment['duration']:.1f}s)")
+            
+            detection_time = time.time() - start_time
+            log(f"✓ MSAF segmentation complete using {boundaries_id} ({detection_time:.2f}s)")
+            
+            # Count repetitions of each label
+            label_counts = {}
+            for seg in segments:
+                label_counts[seg['label']] = label_counts.get(seg['label'], 0) + 1
+            
+            log(f"  Label distribution: {label_counts}")
+            
+            return segments
+            
+        except Exception as e:
+            log(f"  Algorithm {boundaries_id} failed: {str(e)}", "WARNING")
+            continue
+    
+    # All algorithms failed
+    log("All MSAF algorithms failed, falling back to pattern-based structure detection", "WARNING")
+    return []
 
 def detect_song_structure(chords, pattern_info, tempo):
     """
