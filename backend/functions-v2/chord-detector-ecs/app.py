@@ -1074,9 +1074,19 @@ def format_pattern_analysis(pattern_info, key='C'):
     return result
 
 def convert_chord_to_nashville(chord_name, key='C'):
-    """Convert a chord name to Roman numeral notation based on key"""
+    """
+    Convert a chord name to Nashville Number System notation
+    Returns simple numbers (1-7) with modifiers for accidentals and quality
+    
+    Examples:
+    - C in key of C = "1"
+    - Dm in key of C = "2m"
+    - F in key of C = "4"
+    - G in key of C = "5"
+    - Am in key of C = "6m"
+    """
     if not chord_name or chord_name == 'N':
-        return 'I'
+        return '1'
     
     chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
     
@@ -1099,7 +1109,7 @@ def convert_chord_to_nashville(chord_name, key='C'):
         key_idx = chord_names.index(key_root)
         root_idx = chord_names.index(root)
     except ValueError:
-        return 'I'
+        return '1'
     
     # Calculate interval (scale degree)
     interval = (root_idx - key_idx + 12) % 12
@@ -1107,43 +1117,30 @@ def convert_chord_to_nashville(chord_name, key='C'):
     # Determine if chord is minor
     is_minor = 'm' in chord_name.lower() and 'maj' not in chord_name.lower()
     
-    # Map to Roman numeral based on scale degree
-    # In major key: I, ii, iii, IV, V, vi, vii°
-    roman_numerals_major = {
-        0: 'I',      # Tonic (major)
-        1: 'bII',    # Flat 2 (major)
-        2: 'II',     # 2 (major)
-        3: 'bIII',   # Flat 3 (major)
-        4: 'III',    # 3 (major)
-        5: 'IV',     # 4 (major)
-        6: 'bV',     # Flat 5 (diminished)
-        7: 'V',      # 5 (major)
-        8: 'bVI',    # Flat 6 (major)
-        9: 'VI',     # 6 (major)
-        10: 'bVII',  # Flat 7 (major)
-        11: 'VII'    # 7 (major)
+    # Map interval to scale degree (1-7)
+    # 0=1, 2=2, 4=3, 5=4, 7=5, 9=6, 11=7
+    interval_to_degree = {
+        0: '1',      # Tonic
+        1: 'b2',     # Flat 2
+        2: '2',      # 2
+        3: 'b3',     # Flat 3
+        4: '3',      # 3
+        5: '4',      # 4
+        6: 'b5',     # Flat 5 (diminished 5th)
+        7: '5',      # 5
+        8: 'b6',     # Flat 6
+        9: '6',      # 6
+        10: 'b7',    # Flat 7
+        11: '7'      # 7
     }
     
-    roman_numerals_minor = {
-        0: 'i',      # Tonic (minor)
-        1: 'bii',    # Flat 2 (minor)
-        2: 'ii',     # 2 (minor)
-        3: 'biii',   # Flat 3 (minor)
-        4: 'iii',    # 3 (minor)
-        5: 'iv',     # 4 (minor)
-        6: 'bv',     # Flat 5 (diminished)
-        7: 'v',      # 5 (minor)
-        8: 'bvi',    # Flat 6 (minor)
-        9: 'vi',     # 6 (minor)
-        10: 'bvii',  # Flat 7 (minor)
-        11: 'vii'    # 7 (minor)
-    }
+    degree = interval_to_degree.get(interval, '1')
     
-    # Select appropriate Roman numeral based on chord quality
+    # Add quality modifier
     if is_minor:
-        return roman_numerals_minor.get(interval, 'i')
+        return degree + 'm'
     else:
-        return roman_numerals_major.get(interval, 'I')
+        return degree
 
 def detect_time_signature(y, sr, beats):
     """

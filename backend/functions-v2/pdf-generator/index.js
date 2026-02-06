@@ -169,9 +169,9 @@ async function generateDiagnosticPDF(jobData) {
       doc.setFontSize(16);
       doc.setFont('helvetica', 'normal');
       
-      // Show both chord names and Roman numerals
+      // Show both chord names and Nashville numbers
       const chordProgression = pattern.progression.join('  →  ');
-      const romanProgression = pattern.nashvilleProgression 
+      const nashvilleProgression = pattern.nashvilleProgression 
         ? pattern.nashvilleProgression.join('  →  ')
         : 'N/A';
       
@@ -182,11 +182,11 @@ async function generateDiagnosticPDF(jobData) {
         yPos += 8;
       });
       
-      // Roman numerals (in parentheses)
+      // Nashville numbers (in parentheses)
       doc.setFontSize(12);
       doc.setFont('helvetica', 'italic');
-      const romanLines = doc.splitTextToSize(`(${romanProgression})`, 170);
-      romanLines.forEach(line => {
+      const nashvilleLines = doc.splitTextToSize(`(${nashvilleProgression})`, 170);
+      nashvilleLines.forEach(line => {
         doc.text(line, 25, yPos);
         yPos += 7;
       });
