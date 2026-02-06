@@ -1159,10 +1159,40 @@ def format_pattern_analysis(pattern_info, key='C'):
     
     return result
 
-def convert_chord_to_nashville(chord_name, key='C'):
+def detect_bass_notes_from_stem(audio_path, chords, demucs_model=None):
+    """
+    Detect bass notes from Demucs bass stem
+    
+    Strategy:
+    1. Use Demucs to separate bass stem
+    2. For each chord timing, analyze bass frequencies
+    3. Detect the fundamental frequency (lowest note)
+    4. Map to note name
+    5. Return bass note for each chord
+    
+    Args:
+        audio_path: Path to audio file
+        chords: List of detected chords with timing
+        demucs_model: Optional Demucs model for stem separation
+    
+    Returns:
+        List of bass notes corresponding to each chord
+        
+    Note: This is a placeholder for future enhancement.
+    Currently returns None for all chords (no bass detection).
+    When implemented, will use Demucs bass stem + pitch detection.
+    """
+    # TODO: Implement bass note detection
+    # For now, return None for all chords (use chord root as bass)
+    log("  Bass note detection not yet implemented, using chord roots")
+    return [None] * len(chords)
+
+def convert_chord_to_nashville(chord_name, key='C', bass_note=None):
     """
     Convert a chord name to Nashville Number System notation
     Returns simple numbers (1-7) with modifiers for accidentals and quality
+    
+    ENHANCED: Supports bass notes for slash chords
     
     Examples:
     - C in key of C = "1"
@@ -1170,11 +1200,24 @@ def convert_chord_to_nashville(chord_name, key='C'):
     - F in key of C = "4"
     - G in key of C = "5"
     - Am in key of C = "6m"
+    - C/G in key of C = "1/5" (C chord with G bass)
+    - F/C in key of C = "4/1" (F chord with C bass)
+    
+    Args:
+        chord_name: The chord symbol (e.g., "C", "Dm", "F")
+        key: The key of the song (e.g., "C", "F major")
+        bass_note: Optional bass note if different from chord root (e.g., "G" for C/G)
     """
     if not chord_name or chord_name == 'N':
         return '1'
     
     chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+    
+    # Check if chord already has slash notation (e.g., "C/G")
+    if '/' in chord_name:
+        parts = chord_name.split('/')
+        chord_name = parts[0]
+        bass_note = parts[1] if len(parts) > 1 else None
     
     # Extract root note
     root = chord_name[0]
@@ -1204,7 +1247,6 @@ def convert_chord_to_nashville(chord_name, key='C'):
     is_minor = 'm' in chord_name.lower() and 'maj' not in chord_name.lower()
     
     # Map interval to scale degree (1-7)
-    # 0=1, 2=2, 4=3, 5=4, 7=5, 9=6, 11=7
     interval_to_degree = {
         0: '1',      # Tonic
         1: 'b2',     # Flat 2
@@ -1224,9 +1266,29 @@ def convert_chord_to_nashville(chord_name, key='C'):
     
     # Add quality modifier
     if is_minor:
-        return degree + 'm'
-    else:
-        return degree
+        degree = degree + 'm'
+    
+    # Handle bass note (slash chord)
+    if bass_note and bass_note != root:
+        # Normalize bass note
+        bass_root = bass_note[0]
+        if len(bass_note) > 1 and bass_note[1] in ['#', 'b']:
+            bass_root = bass_note[:2]
+            if bass_note[1] == 'b':
+                flat_to_sharp = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'}
+                bass_root = flat_to_sharp.get(bass_root, bass_root)
+        
+        try:
+            bass_idx = chord_names.index(bass_root)
+            bass_interval = (bass_idx - key_idx + 12) % 12
+            bass_degree = interval_to_degree.get(bass_interval, '1')
+            
+            # Return slash notation: chord/bass
+            return f"{degree}/{bass_degree}"
+        except ValueError:
+            pass
+    
+    return degree
 
 def detect_time_signature(y, sr, beats):
     """
