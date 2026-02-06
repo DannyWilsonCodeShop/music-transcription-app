@@ -267,8 +267,219 @@ function App() {
               ✓ Transcription Complete!
             </h2>
             <p style={{ color: '#15803d', marginBottom: '16px' }}>{job.title}</p>
+            
+            {/* Chord Data Display */}
+            {job.chordsData && (
+              <div style={{ marginTop: '24px' }}>
+                {/* Key and Tempo */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                  gap: '16px',
+                  marginBottom: '24px'
+                }}>
+                  <div style={{
+                    padding: '16px',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid #d1fae5'
+                  }}>
+                    <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>Key</div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
+                      {job.chordsData.key} {job.chordsData.mode}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                      Confidence: {(job.chordsData.keyConfidence * 100).toFixed(0)}%
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    padding: '16px',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid #d1fae5'
+                  }}>
+                    <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>Tempo</div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
+                      {job.chordsData.tempo} BPM
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                      {job.chordsData.timeSignature}
+                    </div>
+                  </div>
+                  
+                  <div style={{
+                    padding: '16px',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid #d1fae5'
+                  }}>
+                    <div style={{ fontSize: '14px', color: '#6b7280', marginBottom: '4px' }}>Duration</div>
+                    <div style={{ fontSize: '24px', fontWeight: '700', color: '#166534' }}>
+                      {Math.floor(job.chordsData.duration / 60)}:{String(Math.floor(job.chordsData.duration % 60)).padStart(2, '0')}
+                    </div>
+                    <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                      {job.chordsData.totalChords} chords
+                    </div>
+                  </div>
+                </div>
+
+                {/* Song Structure (MSAF Results) */}
+                {job.chordsData.songStructure && job.chordsData.songStructure.length > 0 && (
+                  <div style={{
+                    marginBottom: '24px',
+                    padding: '20px',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid #d1fae5'
+                  }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                      🎵 Song Structure
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {job.chordsData.songStructure.map((section: any, idx: number) => (
+                        <div key={idx} style={{
+                          padding: '12px 16px',
+                          backgroundColor: '#f9fafb',
+                          borderRadius: '8px',
+                          border: '1px solid #e5e7eb',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center'
+                        }}>
+                          <div>
+                            <span style={{ 
+                              fontSize: '16px', 
+                              fontWeight: '600', 
+                              color: '#1f2937',
+                              marginRight: '12px'
+                            }}>
+                              {section.label}
+                            </span>
+                            <span style={{ fontSize: '14px', color: '#6b7280' }}>
+                              {section.start?.toFixed(1)}s - {section.end?.toFixed(1)}s
+                            </span>
+                          </div>
+                          <div style={{ fontSize: '14px', color: '#9ca3af' }}>
+                            {section.duration?.toFixed(1)}s
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Pattern Analysis (Nashville Numbers) */}
+                {job.chordsData.patternAnalysis && job.chordsData.patternAnalysis.length > 0 && (
+                  <div style={{
+                    marginBottom: '24px',
+                    padding: '20px',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid #d1fae5'
+                  }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                      📊 Repeating Patterns
+                    </h3>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      {job.chordsData.patternAnalysis.slice(0, 5).map((pattern: any, idx: number) => (
+                        <div key={idx} style={{
+                          padding: '16px',
+                          backgroundColor: '#f9fafb',
+                          borderRadius: '8px',
+                          border: '1px solid #e5e7eb'
+                        }}>
+                          <div style={{ 
+                            fontSize: '14px', 
+                            fontWeight: '600', 
+                            color: '#6b7280',
+                            marginBottom: '8px'
+                          }}>
+                            Pattern {pattern.patternNumber}
+                          </div>
+                          <div style={{ 
+                            fontSize: '18px', 
+                            fontWeight: '600', 
+                            color: '#1f2937',
+                            marginBottom: '4px',
+                            fontFamily: 'monospace'
+                          }}>
+                            {pattern.progression.join(' → ')}
+                          </div>
+                          <div style={{ 
+                            fontSize: '16px', 
+                            color: '#9333ea',
+                            marginBottom: '8px',
+                            fontFamily: 'monospace',
+                            fontStyle: 'italic'
+                          }}>
+                            ({pattern.nashvilleProgression?.join(' → ') || 'N/A'})
+                          </div>
+                          <div style={{ fontSize: '14px', color: '#6b7280' }}>
+                            {pattern.length} chords • Repeats {pattern.occurrences} times
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* First 20 Chords */}
+                {job.chordsData.chords && job.chordsData.chords.length > 0 && (
+                  <div style={{
+                    marginBottom: '24px',
+                    padding: '20px',
+                    backgroundColor: 'white',
+                    borderRadius: '12px',
+                    border: '1px solid #d1fae5'
+                  }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                      🎸 Chord Progression (First 20)
+                    </h3>
+                    <div style={{ 
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
+                      gap: '8px'
+                    }}>
+                      {job.chordsData.chords.slice(0, 20).map((chord: any, idx: number) => (
+                        <div key={idx} style={{
+                          padding: '12px',
+                          backgroundColor: '#f9fafb',
+                          borderRadius: '8px',
+                          border: '1px solid #e5e7eb',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ 
+                            fontSize: '18px', 
+                            fontWeight: '700', 
+                            color: '#1f2937',
+                            marginBottom: '4px'
+                          }}>
+                            {chord.chord}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#9ca3af' }}>
+                            {chord.start?.toFixed(1)}s
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {job.chordsData.chords.length > 20 && (
+                      <div style={{ 
+                        marginTop: '12px', 
+                        fontSize: '14px', 
+                        color: '#6b7280',
+                        textAlign: 'center'
+                      }}>
+                        ... and {job.chordsData.chords.length - 20} more chords
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            
             {pdfUrl && (
-              <div style={{ display: 'flex', gap: '12px' }}>
+              <div style={{ display: 'flex', gap: '12px', marginTop: '16px' }}>
                 <a 
                   href={pdfUrl}
                   download={`${job.title || 'transcription'}.pdf`}

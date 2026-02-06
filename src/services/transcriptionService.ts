@@ -18,6 +18,40 @@ export interface TranscriptionJob {
   completedAt?: string;
   lyrics?: string;
   chords?: any;
+  chordsData?: {
+    key: string;
+    mode: string;
+    keyConfidence: number;
+    tempo: number;
+    timeSignature: string;
+    duration: number;
+    totalChords: number;
+    chords: Array<{
+      chord: string;
+      start: number;
+      end: number;
+      duration: number;
+      confidence: number;
+    }>;
+    songStructure?: Array<{
+      label: string;
+      start: number;
+      end: number;
+      duration: number;
+      measureStart?: number;
+      measureEnd?: number;
+      patternCount?: number;
+    }>;
+    patternAnalysis?: Array<{
+      patternNumber: number;
+      progression: string[];
+      nashvilleProgression: string[];
+      length: number;
+      occurrences: number;
+      positions: number[];
+    }>;
+    model?: string;
+  };
   pdfUrl?: string;
   sheetMusicUrl?: string;
   error?: string;
@@ -102,6 +136,7 @@ export async function getJobStatus(jobId: string): Promise<TranscriptionJob | nu
       completedAt: data.completedAt,
       lyrics: data.lyricsData?.text,
       chords: data.chordsData,
+      chordsData: data.chordsData, // Add chordsData explicitly
       pdfUrl: data.pdfUrl,
       sheetMusicUrl: data.pdfUrl, // Use PDF URL as sheet music
       error: data.errorMessage,
