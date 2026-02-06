@@ -6,3 +6,5 @@ demucs
 torch
 torchaudio
 essentia
+msaf
+scikit-learn
