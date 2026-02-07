@@ -123,7 +123,7 @@ Resources:
         Variables:
           ECS_CLUSTER: !Ref ECSCluster
           ECS_TASK_DEFINITION: !Ref YouTubeDownloaderTask
-          ECS_SUBNETS: !Join [',', !Ref ECSSubnets]
+          ECS_SUBNETS: !GetAtt GetSubnets.Data
           AUDIO_BUCKET: !Ref AudioBucket
           JOBS_TABLE: !Ref JobsTable
       Code:
@@ -138,7 +138,8 @@ Resources:
           
           ECS_CLUSTER = os.environ['ECS_CLUSTER']
           ECS_TASK_DEFINITION = os.environ['ECS_TASK_DEFINITION']
-          ECS_SUBNETS = os.environ['ECS_SUBNETS'].split(',')
+          ECS_SUBNETS_STR = os.environ['ECS_SUBNETS']
+          ECS_SUBNETS = ECS_SUBNETS_STR.split(',') if isinstance(ECS_SUBNETS_STR, str) else ECS_SUBNETS_STR
           AUDIO_BUCKET = os.environ['AUDIO_BUCKET']
           JOBS_TABLE = os.environ['JOBS_TABLE']
           
@@ -266,12 +267,7 @@ Resources:
                   - dynamodb:UpdateItem
                 Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobsTable}'
 
-  # Get default VPC subnets
-  ECSSubnets:
-    Type: Custom::GetSubnets
-    Properties:
-      ServiceToken: !GetAtt GetSubnetsFunction.Arn
-
+  # Lambda to get default VPC subnets
   GetSubnetsFunction:
     Type: AWS::Lambda::Function
     Properties:
@@ -300,7 +296,8 @@ Resources:
                   subnets = ec2.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
                   subnet_ids = [s['SubnetId'] for s in subnets['Subnets']]
                   
-                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {}, ','.join(subnet_ids))
+                  response_data = {'Data': ','.join(subnet_ids)}
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
               except Exception as e:
                   print(f"Error: {str(e)}")
                   cfnresponse.send(event, context, cfnresponse.FAILED, {})
@@ -327,6 +324,12 @@ Resources:
                   - ec2:DescribeVpcs
                   - ec2:DescribeSubnets
                 Resource: '*'
+
+  # Custom resource to get subnets
+  GetSubnets:
+    Type: Custom::GetSubnets
+    Properties:
+      ServiceToken: !GetAtt GetSubnetsFunction.Arn
 
 Outputs:
   ECSCluster:

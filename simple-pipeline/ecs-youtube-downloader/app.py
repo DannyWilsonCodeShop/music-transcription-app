@@ -72,6 +72,8 @@ def download_audio():
             '--output', output_file,
             '--no-playlist',
             '--no-warnings',
+            '--no-check-certificates',  # Sometimes needed for m3u8
+            '--prefer-free-formats',
         ]
         
         # Add cookies if available
