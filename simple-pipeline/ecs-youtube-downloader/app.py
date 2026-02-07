@@ -18,6 +18,7 @@ JOB_ID = os.environ.get('JOB_ID')
 S3_BUCKET = os.environ.get('S3_BUCKET')
 DYNAMODB_TABLE = os.environ.get('DYNAMODB_TABLE')
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+COOKIES_S3_KEY = os.environ.get('COOKIES_S3_KEY', 'config/youtube-cookies.txt')
 
 # Initialize AWS clients
 s3 = boto3.client('s3', region_name=AWS_REGION)
@@ -40,9 +41,23 @@ def update_job(status, progress, extra_data=None):
     table.put_item(Item=item)
     print(f"✅ Updated job {JOB_ID}: {status} ({progress}%)")
 
+def download_cookies():
+    """Download YouTube cookies from S3 if available"""
+    try:
+        cookies_file = '/tmp/cookies.txt'
+        s3.download_file(S3_BUCKET, COOKIES_S3_KEY, cookies_file)
+        print(f"✅ Downloaded cookies from S3")
+        return cookies_file
+    except Exception as e:
+        print(f"⚠️  No cookies found in S3 (this is okay): {str(e)}")
+        return None
+
 def download_audio():
     """Download audio from YouTube using yt-dlp"""
     print(f"🎵 Downloading audio from: {YOUTUBE_URL}")
+    
+    # Download cookies if available
+    cookies_file = download_cookies()
     
     with tempfile.TemporaryDirectory() as tmpdir:
         output_file = os.path.join(tmpdir, f"{JOB_ID}.mp3")
@@ -58,10 +73,19 @@ def download_audio():
             '--no-playlist',
             '--no-warnings',
             '--quiet',
-            YOUTUBE_URL
         ]
         
-        print(f"🔧 Running: {' '.join(cmd)}")
+        # Add cookies if available
+        if cookies_file and os.path.exists(cookies_file):
+            cmd.extend(['--cookies', cookies_file])
+            print(f"🍪 Using cookies for authentication")
+        
+        # Add user agent to avoid bot detection
+        cmd.extend(['--user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'])
+        
+        cmd.append(YOUTUBE_URL)
+        
+        print(f"🔧 Running: {' '.join(cmd[:8])}...")  # Don't print full command (too long)
         
         try:
             result = subprocess.run(
