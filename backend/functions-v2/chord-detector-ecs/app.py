@@ -796,14 +796,13 @@ def detect_chords_essentia(audio_path, job_id):
 
 def detect_chords(audio_path, job_id):
     """
-    Main chord detection function - uses essentia if available, falls back to librosa
+    Main chord detection function - ALWAYS uses enhanced librosa with 84 templates
+    (Essentia detection disabled in favor of enhanced librosa system)
     """
-    if ESSENTIA_AVAILABLE:
-        log("Using Essentia for chord detection")
-        return detect_chords_essentia(audio_path, job_id)
-    else:
-        log("Essentia not available, using librosa chord detection")
-        return detect_chords_librosa(audio_path, job_id)
+    # FORCE enhanced librosa detection (84 templates)
+    # Even if essentia is available, we want to use the new enhanced system
+    log("Using ENHANCED librosa chord detection (84 templates)")
+    return detect_chords_librosa(audio_path, job_id)
 
 def detect_chords_librosa(audio_path, job_id):
     """Detect chords using librosa chromagram analysis with optional stem separation"""
