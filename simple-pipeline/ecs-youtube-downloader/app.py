@@ -68,11 +68,10 @@ def download_audio():
             '--extract-audio',
             '--audio-format', 'mp3',
             '--audio-quality', '0',  # Best quality
-            '--format', 'bestaudio',
+            '--format', 'bestaudio/best',  # More flexible format selection
             '--output', output_file,
             '--no-playlist',
             '--no-warnings',
-            '--quiet',
         ]
         
         # Add cookies if available
