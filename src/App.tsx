@@ -101,14 +101,13 @@ function App() {
       }, 100);
 
       try {
-        // Upload file to S3 using fetch API
-        // CRITICAL: Set Content-Type to empty string to prevent browser from adding it
+        // Convert File to Blob without type to prevent Content-Type header
+        const blob = file.slice(0, file.size, '');
+        
+        // Upload to S3 using fetch API with no Content-Type
         const response = await fetch(uploadUrl, {
           method: 'PUT',
-          headers: {
-            'Content-Type': ''  // Empty string prevents browser default
-          },
-          body: file
+          body: blob
         });
 
         clearInterval(progressInterval);
