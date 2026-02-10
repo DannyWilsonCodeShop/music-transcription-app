@@ -60,7 +60,6 @@ def main():
     log(f"  BUCKET: {bucket}")
     log(f"  KEY: {key}")
     log(f"  JOBS_TABLE: {JOBS_TABLE}")
-    log(f"  PDF_GENERATOR_FUNCTION: {PDF_GENERATOR_FUNCTION}")
     
     if not all([job_id, bucket, key]):
         log("ERROR: Missing required environment variables", "ERROR")
