@@ -162,13 +162,20 @@ function App() {
             onDrop={handleDrop}
             style={{
               padding: '32px',
-              backgroundColor: isDragging ? '#f3f4f6' : 'white',
-              borderRadius: '16px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-              border: isDragging ? '2px dashed #9333ea' : '2px dashed #e5e7eb',
+              background: isDragging 
+                ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)'
+                : 'rgba(255, 255, 255, 0.05)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '20px',
+              boxShadow: isDragging 
+                ? '0 8px 32px rgba(147, 51, 234, 0.3), inset 0 0 0 1px rgba(147, 51, 234, 0.3)'
+                : '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+              border: isDragging ? '2px dashed rgba(147, 51, 234, 0.5)' : '2px dashed rgba(255, 255, 255, 0.1)',
               textAlign: 'center',
               cursor: 'pointer',
-              transition: 'all 0.3s'
+              transition: 'all 0.3s ease',
+              position: 'relative' as const,
+              overflow: 'hidden'
             }}
             onClick={() => document.getElementById('fileInput')?.click()}
           >
@@ -182,24 +189,59 @@ function App() {
             
             {!file ? (
               <>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📁</div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '6px' }}>
+                <div style={{ 
+                  fontSize: '48px', 
+                  marginBottom: '12px',
+                  filter: 'drop-shadow(0 0 20px rgba(147, 51, 234, 0.3))'
+                }}>
+                  📁
+                </div>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  color: '#ffffff', 
+                  marginBottom: '6px',
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+                }}>
                   {isDragging ? 'Drop your file here' : 'Drag & drop your audio file'}
                 </h3>
-                <p style={{ color: '#6b7280', marginBottom: '12px', fontSize: '14px' }}>
+                <p style={{ 
+                  color: 'rgba(255, 255, 255, 0.7)', 
+                  marginBottom: '12px', 
+                  fontSize: '14px' 
+                }}>
                   or click to browse
                 </p>
-                <p style={{ color: '#9ca3af', fontSize: '13px' }}>
+                <p style={{ 
+                  color: 'rgba(255, 255, 255, 0.5)', 
+                  fontSize: '13px' 
+                }}>
                   Supported: MP3, WAV, M4A, FLAC, OGG (max 50MB)
                 </p>
               </>
             ) : (
               <>
-                <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎵</div>
-                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '6px' }}>
+                <div style={{ 
+                  fontSize: '48px', 
+                  marginBottom: '12px',
+                  filter: 'drop-shadow(0 0 20px rgba(99, 102, 241, 0.5))'
+                }}>
+                  🎵
+                </div>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  color: '#ffffff', 
+                  marginBottom: '6px',
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+                }}>
                   {file.name}
                 </h3>
-                <p style={{ color: '#6b7280', marginBottom: '12px', fontSize: '14px' }}>
+                <p style={{ 
+                  color: 'rgba(255, 255, 255, 0.7)', 
+                  marginBottom: '12px', 
+                  fontSize: '14px' 
+                }}>
                   {(file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
@@ -211,14 +253,29 @@ function App() {
                     disabled={isUploading}
                     style={{
                       padding: '12px 32px',
-                      background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                      background: 'linear-gradient(135deg, #9333ea 0%, #6366f1 100%)',
                       color: 'white',
                       fontWeight: '600',
                       borderRadius: '12px',
                       border: 'none',
                       cursor: isUploading ? 'not-allowed' : 'pointer',
                       opacity: isUploading ? 0.5 : 1,
-                      fontSize: '16px'
+                      fontSize: '16px',
+                      boxShadow: '0 4px 15px rgba(147, 51, 234, 0.4)',
+                      transition: 'all 0.3s ease',
+                      transform: isUploading ? 'scale(0.98)' : 'scale(1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(147, 51, 234, 0.6)';
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(147, 51, 234, 0.4)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }
                     }}
                   >
                     {isUploading ? 'Uploading...' : 'Upload & Process'}
@@ -231,13 +288,27 @@ function App() {
                     disabled={isUploading}
                     style={{
                       padding: '12px 24px',
-                      backgroundColor: '#e5e7eb',
-                      color: '#374151',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      backdropFilter: 'blur(10px)',
+                      color: 'rgba(255, 255, 255, 0.9)',
                       fontWeight: '500',
                       borderRadius: '12px',
-                      border: 'none',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
                       cursor: isUploading ? 'not-allowed' : 'pointer',
-                      opacity: isUploading ? 0.5 : 1
+                      opacity: isUploading ? 0.5 : 1,
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      }
                     }}
                   >
                     Cancel
@@ -253,28 +324,38 @@ function App() {
           <div style={{
             marginTop: '24px',
             padding: '24px',
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            border: '1px solid #e5e7eb'
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ color: '#374151', fontWeight: '500' }}>Uploading...</span>
-              <span style={{ color: '#9333ea', fontWeight: '600' }}>{uploadProgress}%</span>
+              <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>Uploading...</span>
+              <span style={{ 
+                color: '#a78bfa', 
+                fontWeight: '600',
+                textShadow: '0 0 10px rgba(167, 139, 250, 0.5)'
+              }}>
+                {uploadProgress}%
+              </span>
             </div>
             <div style={{
               width: '100%',
               height: '10px',
-              backgroundColor: '#e5e7eb',
+              background: 'rgba(255, 255, 255, 0.1)',
               borderRadius: '999px',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3)'
             }}>
               <div style={{
                 height: '100%',
-                background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                background: 'linear-gradient(90deg, #9333ea 0%, #6366f1 50%, #8b5cf6 100%)',
                 borderRadius: '999px',
                 width: `${uploadProgress}%`,
-                transition: 'width 0.3s'
+                transition: 'width 0.3s ease',
+                boxShadow: '0 0 10px rgba(147, 51, 234, 0.5)',
+                position: 'relative' as const
               }}/>
             </div>
           </div>
@@ -285,33 +366,47 @@ function App() {
           <div style={{
             marginTop: '24px',
             padding: '24px',
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            border: '1px solid #e5e7eb'
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ color: '#374151', fontWeight: '500' }}>
+              <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
                 {job.status === 'PROCESSING' ? 'Analyzing audio...' : 'Processing...'}
               </span>
-              <span style={{ color: '#9333ea', fontWeight: '600' }}>{job.progress || 0}%</span>
+              <span style={{ 
+                color: '#a78bfa', 
+                fontWeight: '600',
+                textShadow: '0 0 10px rgba(167, 139, 250, 0.5)'
+              }}>
+                {job.progress || 0}%
+              </span>
             </div>
             <div style={{
               width: '100%',
               height: '10px',
-              backgroundColor: '#e5e7eb',
+              background: 'rgba(255, 255, 255, 0.1)',
               borderRadius: '999px',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3)'
             }}>
               <div style={{
                 height: '100%',
-                background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                background: 'linear-gradient(90deg, #9333ea 0%, #6366f1 50%, #8b5cf6 100%)',
                 borderRadius: '999px',
                 width: `${job.progress || 0}%`,
-                transition: 'width 0.5s'
+                transition: 'width 0.5s ease',
+                boxShadow: '0 0 10px rgba(147, 51, 234, 0.5)'
               }}/>
             </div>
-            <p style={{ marginTop: '12px', fontSize: '14px', color: '#6b7280' }}>
+            <p style={{ 
+              marginTop: '12px', 
+              fontSize: '14px', 
+              color: 'rgba(255, 255, 255, 0.6)',
+              textAlign: 'center'
+            }}>
               Enhanced chord detection with 84 templates and bass-weighted key detection
             </p>
           </div>
