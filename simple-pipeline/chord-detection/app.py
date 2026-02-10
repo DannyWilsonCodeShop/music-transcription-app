@@ -899,31 +899,43 @@ def detect_chords_librosa(audio_path, job_id):
     log(f"  Compute time: {chroma_time:.2f}s")
     
     # IMPROVED CHORD DETECTION WITH ENHANCED TEMPLATES
-    log("Detecting chord changes (beat-synchronized with enhanced templates)...")
+    log("Detecting chord changes (downbeat-synchronized with enhanced templates)...")
     start_time = time.time()
     chords = []
     
-    # IMPROVED: Create half-beat analysis points for better temporal resolution
-    # This captures chord changes that happen between beats
+    # DOWNBEAT-ONLY ANALYSIS: Only analyze first beat of each measure
+    # This reduces noise from passing tones and non-chord tones
     beat_times = librosa.frames_to_time(beats, sr=sr)
     
-    # Generate half-beat positions
-    half_beat_times = []
-    for i in range(len(beat_times) - 1):
-        half_beat_times.append(beat_times[i])
-        # Add midpoint between this beat and next
-        half_beat_times.append((beat_times[i] + beat_times[i + 1]) / 2)
-    half_beat_times.append(beat_times[-1])  # Add last beat
+    # Detect time signature to determine beats per measure
+    # Most common: 4/4 (4 beats), 3/4 (3 beats), 6/8 (2 beats)
+    if time_signature == '4/4':
+        beats_per_measure = 4
+    elif time_signature == '3/4':
+        beats_per_measure = 3
+    elif time_signature == '6/8':
+        beats_per_measure = 2
+    else:
+        beats_per_measure = 4  # Default to 4/4
+    
+    # Extract only downbeats (first beat of each measure)
+    downbeat_times = []
+    for i in range(0, len(beat_times), beats_per_measure):
+        downbeat_times.append(beat_times[i])
+    
+    log(f"  Time signature: {time_signature} ({beats_per_measure} beats per measure)")
+    log(f"  Total beats: {len(beat_times)}")
+    log(f"  Downbeats (first beat of each measure): {len(downbeat_times)}")
+    log(f"  Sampling strategy: DOWNBEAT-ONLY (reduces noise from passing tones)")
     
     # Convert to frames
     analysis_frames = librosa.time_to_frames(
-        np.array(half_beat_times),
+        np.array(downbeat_times),
         sr=sr,
         hop_length=2048
     )
     
-    log(f"  Analyzing at {len(analysis_frames)} positions (half-beat resolution)")
-    log(f"  Original beats: {len(beats)}, Analysis points: {len(analysis_frames)}")
+    log(f"  Analyzing at {len(analysis_frames)} downbeat positions")
     
     # ENHANCED: Create comprehensive chord templates (84 total)
     chord_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
@@ -1015,7 +1027,7 @@ def detect_chords_librosa(audio_path, job_id):
                 best_score = score
                 best_chord = chord_name
         
-        analysis_time = half_beat_times[i] if i < len(half_beat_times) else duration
+        analysis_time = downbeat_times[i] if i < len(downbeat_times) else duration
         
         beat_chords.append({
             'chord': best_chord,
@@ -1024,7 +1036,7 @@ def detect_chords_librosa(audio_path, job_id):
             'position_index': i
         })
     
-    log(f"  Detected {len(beat_chords)} chords at half-beat positions")
+    log(f"  Detected {len(beat_chords)} chords at downbeat positions")
     
     # CONSOLIDATE: Merge consecutive identical chords
     log("  Consolidating consecutive identical chords...")
