@@ -845,13 +845,25 @@ def detect_chords_librosa(audio_path, job_id):
     
     # Compute chromagram with better parameters for chord detection
     log("Computing chromagram...")
+    log("=" * 60)
+    log("AUDIO ANALYSIS CONFIGURATION")
+    log("=" * 60)
+    log(f"  Stem separation: DISABLED (using full mix)")
+    log(f"  Drum removal: ENABLED (HPSS)")
+    log(f"  Bass weighting: ENABLED (C2-C4 range)")
+    log(f"  Analysis method: Chromagram + Pattern matching")
+    log("=" * 60)
     start_time = time.time()
     
     # HARMONIC/PERCUSSIVE SEPARATION: Remove drums before analysis
     log("Separating harmonic content from percussion...")
     y_harmonic, y_percussive = librosa.effects.hpss(y, margin=3.0)
-    log(f"  Harmonic energy: {np.sum(np.abs(y_harmonic)):.0f}")
-    log(f"  Percussive energy: {np.sum(np.abs(y_percussive)):.0f}")
+    harmonic_energy = np.sum(np.abs(y_harmonic))
+    percussive_energy = np.sum(np.abs(y_percussive))
+    total_energy = harmonic_energy + percussive_energy
+    log(f"  Harmonic energy: {harmonic_energy:.0f} ({harmonic_energy/total_energy*100:.1f}%)")
+    log(f"  Percussive energy: {percussive_energy:.0f} ({percussive_energy/total_energy*100:.1f}%)")
+    log(f"  Using harmonic component for chord/key detection")
     
     # Use CQT chromagram with higher resolution and smoothing (harmonic only)
     chroma = librosa.feature.chroma_cqt(
@@ -1070,32 +1082,62 @@ def detect_chords_librosa(audio_path, job_id):
     
     # Estimate key using improved Krumhansl-Schmuckler algorithm with bass weighting
     log("Detecting key...")
+    log("=" * 60)
+    log("KEY DETECTION DIAGNOSTICS")
+    log("=" * 60)
     key_start = time.time()
+    
+    # Log chromagram statistics
+    chroma_mean = np.mean(chroma, axis=1)
+    if bass_chroma is not None:
+        bass_mean = np.mean(bass_chroma, axis=1)
+        log("Chromagram Analysis:")
+        log(f"  Full spectrum chroma shape: {chroma.shape}")
+        log(f"  Bass chroma shape: {bass_chroma.shape}")
+        log(f"  Full spectrum mean: {chroma_mean}")
+        log(f"  Bass mean: {bass_mean}")
+        # Show which notes are strongest
+        note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        full_top_notes = sorted(zip(note_names, chroma_mean), key=lambda x: x[1], reverse=True)[:5]
+        bass_top_notes = sorted(zip(note_names, bass_mean), key=lambda x: x[1], reverse=True)[:5]
+        log(f"  Top 5 notes (full): {[f'{n}={v:.3f}' for n, v in full_top_notes]}")
+        log(f"  Top 5 notes (bass): {[f'{n}={v:.3f}' for n, v in bass_top_notes]}")
+    else:
+        log("Chromagram Analysis:")
+        log(f"  Full spectrum chroma shape: {chroma.shape}")
+        log(f"  Full spectrum mean: {chroma_mean}")
+        note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+        full_top_notes = sorted(zip(note_names, chroma_mean), key=lambda x: x[1], reverse=True)[:5]
+        log(f"  Top 5 notes: {[f'{n}={v:.3f}' for n, v in full_top_notes]}")
+    
     key_chromagram, mode_chromagram, confidence_chromagram = detect_key_improved(chroma, bass_chroma)
     
     # Also analyze chord progression for better key detection
     key_progression, mode_progression, confidence_progression, pattern_info = detect_key_from_progression(chords)
+    
+    log("")
+    log("Key Detection Results:")
+    log(f"  Chromagram method: {key_chromagram} {mode_chromagram} (confidence: {confidence_chromagram:.3f})")
+    log(f"  Progression method: {key_progression} {mode_progression} (confidence: {confidence_progression:.3f})")
     
     # Use progression-based detection if confidence is higher
     if confidence_progression > confidence_chromagram:
         key = key_progression
         mode = mode_progression
         confidence = confidence_progression
-        log(f"  Using progression-based key detection (higher confidence)")
+        log(f"  ✓ SELECTED: Progression-based (higher confidence)")
     else:
         key = key_chromagram
         mode = mode_chromagram
         confidence = confidence_chromagram
-        log(f"  Using chromagram-based key detection")
+        log(f"  ✓ SELECTED: Chromagram-based (higher confidence)")
+    
+    log(f"  FINAL KEY: {key} {mode} (confidence: {confidence:.3f})")
+    log("=" * 60)
     
     key_time = time.time() - key_start
     
-    log(f"✓ Key detection complete")
-    log(f"  Detected key: {key} {mode}")
-    log(f"  Confidence: {confidence:.2f}")
-    log(f"  Chromagram: {key_chromagram} {mode_chromagram} ({confidence_chromagram:.2f})")
-    log(f"  Progression: {key_progression} {mode_progression} ({confidence_progression:.2f})")
-    log(f"  Detection time: {key_time:.2f}s")
+    log(f"✓ Key detection complete in {key_time:.2f}s")
     
     # Detect song structure with MSAF (audio-based segmentation)
     log("Detecting song structure...")
