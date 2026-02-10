@@ -74,35 +74,40 @@ function App() {
     setUploadProgress(0);
     
     try {
+      console.log('Requesting upload URL for:', file.name, file.type);
+      
       // Request upload URL
       const response = await axios.post(`${API_ENDPOINT}/upload`, {
         filename: file.name,
-        contentType: file.type,
+        contentType: file.type || 'audio/mpeg',
         userId: 'guest'
       });
 
+      console.log('Upload URL response:', response.data);
       const { jobId: newJobId, uploadUrl } = response.data;
       setJobId(newJobId);
 
-      // Upload file to S3
+      console.log('Uploading file to S3...');
+      // Upload file to S3 (no Content-Type header - presigned URL handles it)
       await axios.put(uploadUrl, file, {
-        headers: {
-          'Content-Type': file.type
-        },
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(
             (progressEvent.loaded * 100) / (progressEvent.total || 1)
           );
+          console.log('Upload progress:', percentCompleted + '%');
           setUploadProgress(percentCompleted);
         }
       });
 
+      console.log('Upload complete!');
       setUploadProgress(100);
       
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error);
+      console.error('Error response:', error.response?.data);
       setIsUploading(false);
-      setError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
+      const errorMsg = error.response?.data?.error || error.message || 'Upload failed. Please try again.';
+      setError(errorMsg);
     }
   };
 
@@ -156,7 +161,7 @@ function App() {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             style={{
-              padding: '48px',
+              padding: '32px',
               backgroundColor: isDragging ? '#f3f4f6' : 'white',
               borderRadius: '16px',
               boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
@@ -177,24 +182,24 @@ function App() {
             
             {!file ? (
               <>
-                <div style={{ fontSize: '64px', marginBottom: '16px' }}>📁</div>
-                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>📁</div>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '6px' }}>
                   {isDragging ? 'Drop your file here' : 'Drag & drop your audio file'}
                 </h3>
-                <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+                <p style={{ color: '#6b7280', marginBottom: '12px', fontSize: '14px' }}>
                   or click to browse
                 </p>
-                <p style={{ color: '#9ca3af', fontSize: '14px' }}>
+                <p style={{ color: '#9ca3af', fontSize: '13px' }}>
                   Supported: MP3, WAV, M4A, FLAC, OGG (max 50MB)
                 </p>
               </>
             ) : (
               <>
-                <div style={{ fontSize: '64px', marginBottom: '16px' }}>🎵</div>
-                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+                <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎵</div>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#1f2937', marginBottom: '6px' }}>
                   {file.name}
                 </h3>
-                <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+                <p style={{ color: '#6b7280', marginBottom: '12px', fontSize: '14px' }}>
                   {(file.size / 1024 / 1024).toFixed(2)} MB
                 </p>
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
