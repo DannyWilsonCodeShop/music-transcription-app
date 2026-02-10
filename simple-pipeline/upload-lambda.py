@@ -30,13 +30,13 @@ def lambda_handler(event, context):
     s3_key = f"uploads/{job_id}/{filename}"
     
     # Generate presigned URL for upload
-    # DO NOT include ContentType in params - it causes signature mismatch
-    # The client can send any Content-Type header
+    # MUST include ContentType to match what browser sends
     presigned_url = s3.generate_presigned_url(
         'put_object',
         Params={
             'Bucket': AUDIO_BUCKET,
-            'Key': s3_key
+            'Key': s3_key,
+            'ContentType': content_type
         },
         ExpiresIn=3600
     )

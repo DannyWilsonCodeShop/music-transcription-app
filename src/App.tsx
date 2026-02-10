@@ -101,13 +101,15 @@ function App() {
       }, 100);
 
       try {
-        // Convert File to Blob without type to prevent Content-Type header
-        const blob = file.slice(0, file.size, '');
+        // Upload to S3 with explicit Content-Type header to match presigned URL
+        const contentType = file.type || 'audio/mpeg';
         
-        // Upload to S3 using fetch API with no Content-Type
         const response = await fetch(uploadUrl, {
           method: 'PUT',
-          body: blob
+          headers: {
+            'Content-Type': contentType
+          },
+          body: file
         });
 
         clearInterval(progressInterval);
