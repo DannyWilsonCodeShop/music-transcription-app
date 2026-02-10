@@ -88,12 +88,10 @@ function App() {
       setJobId(newJobId);
 
       console.log('Uploading file to S3...');
-      // Upload file to S3 - must send as binary with correct Content-Type
+      // Upload file to S3 - presigned URL has no Content-Type constraint
+      // So we must NOT send any Content-Type header
       await axios.put(uploadUrl, file, {
-        headers: {
-          'Content-Type': file.type || 'application/octet-stream'
-        },
-        transformRequest: [], // Don't let axios transform the data
+        transformRequest: [(data) => data], // Don't transform, send File as-is
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(
             (progressEvent.loaded * 100) / (progressEvent.total || 1)
