@@ -14,6 +14,7 @@ from decimal import Decimal
 import time
 import sys
 import traceback
+from urllib.parse import unquote_plus
 
 try:
     import essentia
@@ -55,9 +56,14 @@ def main():
     bucket = os.environ.get('AUDIO_BUCKET') or os.environ.get('BUCKET')
     key = os.environ.get('AUDIO_KEY') or os.environ.get('KEY')
     
+    # URL-decode the key (S3 events have URL-encoded keys)
+    if key:
+        key = unquote_plus(key)
+    
     log(f"Environment Variables:")
     log(f"  JOB_ID: {job_id}")
     log(f"  BUCKET: {bucket}")
+    log(f"  KEY: {key}")
     log(f"  KEY: {key}")
     log(f"  JOBS_TABLE: {JOBS_TABLE}")
     
