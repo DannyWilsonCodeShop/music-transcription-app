@@ -234,9 +234,15 @@ class ChordDetector:
 # Initialize detector globally
 detector = ChordDetector()
 
-def detect_key_improved(chroma):
+def detect_key_improved(chroma, bass_chroma=None):
     """
     Improved key detection using Krumhansl-Schmuckler algorithm
+    BASS-WEIGHTED: Emphasizes bass notes for more accurate key detection
+    
+    Args:
+        chroma: Full spectrum chromagram
+        bass_chroma: Bass-only chromagram (optional, for weighting)
+    
     Returns: (key, mode, confidence)
     """
     # Krumhansl-Schmuckler key profiles
@@ -245,6 +251,12 @@ def detect_key_improved(chroma):
     
     # Average chroma over time
     chroma_mean = np.mean(chroma, axis=1)
+    
+    # BASS-WEIGHTED: If bass chroma provided, weight it heavily
+    if bass_chroma is not None:
+        bass_mean = np.mean(bass_chroma, axis=1)
+        # Bass gets 3x weight for key detection (even more important than chord detection)
+        chroma_mean = (chroma_mean + 3.0 * bass_mean) / 4.0
     
     # Normalize
     if np.sum(chroma_mean) > 0:
@@ -830,9 +842,15 @@ def detect_chords_librosa(audio_path, job_id):
     log("Computing chromagram...")
     start_time = time.time()
     
-    # Use CQT chromagram with higher resolution and smoothing
+    # HARMONIC/PERCUSSIVE SEPARATION: Remove drums before analysis
+    log("Separating harmonic content from percussion...")
+    y_harmonic, y_percussive = librosa.effects.hpss(y, margin=3.0)
+    log(f"  Harmonic energy: {np.sum(np.abs(y_harmonic)):.0f}")
+    log(f"  Percussive energy: {np.sum(np.abs(y_percussive)):.0f}")
+    
+    # Use CQT chromagram with higher resolution and smoothing (harmonic only)
     chroma = librosa.feature.chroma_cqt(
-        y=y, 
+        y=y_harmonic,  # Use harmonic component only (no drums)
         sr=sr, 
         hop_length=2048,  # Larger hop = less temporal resolution but more stable
         n_chroma=12,
@@ -842,9 +860,25 @@ def detect_chords_librosa(audio_path, job_id):
     # Apply median filtering to smooth out noise
     chroma = median_filter(chroma, size=(1, 5))  # Smooth along time axis
     
+    # BASS-WEIGHTED: Compute bass chromagram (low frequencies only, harmonic only)
+    log("Computing bass chromagram for improved key/chord detection...")
+    bass_chroma = librosa.feature.chroma_cqt(
+        y=y_harmonic,  # Use harmonic component only (no kick drum)
+        sr=sr,
+        hop_length=2048,
+        n_chroma=12,
+        bins_per_octave=36,
+        fmin=librosa.note_to_hz('C2'),  # Start at C2 (65.4 Hz) - bass range
+        fmax=librosa.note_to_hz('C4')   # End at C4 (261.6 Hz) - top of bass range
+    )
+    
+    # Apply median filtering to bass chroma
+    bass_chroma = median_filter(bass_chroma, size=(1, 5))
+    
     chroma_time = time.time() - start_time
-    log(f"✓ Chromagram computed")
-    log(f"  Shape: {chroma.shape}")
+    log(f"✓ Chromagram computed (drums excluded)")
+    log(f"  Full spectrum shape: {chroma.shape}")
+    log(f"  Bass spectrum shape: {bass_chroma.shape}")
     log(f"  Compute time: {chroma_time:.2f}s")
     
     # IMPROVED CHORD DETECTION WITH ENHANCED TEMPLATES
@@ -935,9 +969,16 @@ def detect_chords_librosa(audio_path, job_id):
         end_frame = min(chroma.shape[1], analysis_frame + 3)
         chroma_beat = np.mean(chroma[:, start_frame:end_frame], axis=1)
         
+        # Get bass chroma at this position
+        bass_chroma_beat = np.mean(bass_chroma[:, start_frame:end_frame], axis=1)
+        
+        # BASS-WEIGHTED: Combine full spectrum with bass emphasis
+        # Bass gets 2x weight for more accurate root detection
+        weighted_chroma = (chroma_beat + 2.0 * bass_chroma_beat) / 3.0
+        
         # Normalize
-        if np.sum(chroma_beat) > 0:
-            chroma_beat = chroma_beat / np.sum(chroma_beat)
+        if np.sum(weighted_chroma) > 0:
+            weighted_chroma = weighted_chroma / np.sum(weighted_chroma)
         
         # Find best matching chord from all 84 templates
         best_score = -1
@@ -950,8 +991,8 @@ def detect_chords_librosa(audio_path, job_id):
             else:
                 continue
             
-            # Calculate correlation
-            score = np.dot(chroma_beat, template_norm)
+            # Calculate correlation using bass-weighted chroma
+            score = np.dot(weighted_chroma, template_norm)
             
             if score > best_score:
                 best_score = score
@@ -1022,10 +1063,10 @@ def detect_chords_librosa(audio_path, job_id):
     log(f"  Average chord duration: {np.mean([c['duration'] for c in chords]):.2f}s")
     log(f"  Detection time: {detection_time:.2f}s")
     
-    # Estimate key using improved Krumhansl-Schmuckler algorithm
+    # Estimate key using improved Krumhansl-Schmuckler algorithm with bass weighting
     log("Detecting key...")
     key_start = time.time()
-    key_chromagram, mode_chromagram, confidence_chromagram = detect_key_improved(chroma)
+    key_chromagram, mode_chromagram, confidence_chromagram = detect_key_improved(chroma, bass_chroma)
     
     # Also analyze chord progression for better key detection
     key_progression, mode_progression, confidence_progression, pattern_info = detect_key_from_progression(chords)
