@@ -1092,61 +1092,96 @@ def detect_chords_librosa(audio_path, job_id):
     log(f"  Average chord duration: {np.mean([c['duration'] for c in chords]):.2f}s")
     log(f"  Detection time: {detection_time:.2f}s")
     
-    # Estimate key using improved Krumhansl-Schmuckler algorithm with bass weighting
-    log("Detecting key...")
+    # FREQUENCY-BASED KEY DETECTION: Find most common chord
+    log("Detecting key from chord frequency...")
     log("=" * 60)
-    log("KEY DETECTION DIAGNOSTICS")
+    log("KEY DETECTION: FREQUENCY-BASED APPROACH")
     log("=" * 60)
     key_start = time.time()
     
-    # Log chromagram statistics
-    chroma_mean = np.mean(chroma, axis=1)
-    if bass_chroma is not None:
-        bass_mean = np.mean(bass_chroma, axis=1)
-        log("Chromagram Analysis:")
-        log(f"  Full spectrum chroma shape: {chroma.shape}")
-        log(f"  Bass chroma shape: {bass_chroma.shape}")
-        log(f"  Full spectrum mean: {chroma_mean}")
-        log(f"  Bass mean: {bass_mean}")
-        # Show which notes are strongest
-        note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        full_top_notes = sorted(zip(note_names, chroma_mean), key=lambda x: x[1], reverse=True)[:5]
-        bass_top_notes = sorted(zip(note_names, bass_mean), key=lambda x: x[1], reverse=True)[:5]
-        log(f"  Top 5 notes (full): {[f'{n}={v:.3f}' for n, v in full_top_notes]}")
-        log(f"  Top 5 notes (bass): {[f'{n}={v:.3f}' for n, v in bass_top_notes]}")
+    # Count chord occurrences (root notes only, ignore quality)
+    from collections import Counter
+    
+    # Extract root notes from chords
+    chord_roots = []
+    for chord in chords:
+        chord_name = chord['chord']
+        # Extract root (first 1-2 characters)
+        root = chord_name[0]
+        if len(chord_name) > 1 and chord_name[1] in ['#', 'b']:
+            root = chord_name[:2]
+        chord_roots.append(root)
+    
+    # Count frequency
+    root_counts = Counter(chord_roots)
+    
+    log("Chord Root Frequency:")
+    for root, count in root_counts.most_common(10):
+        percentage = (count / len(chord_roots)) * 100
+        log(f"  {root}: {count} times ({percentage:.1f}%)")
+    
+    # Most common chord is the key
+    if root_counts:
+        most_common_root = root_counts.most_common(1)[0][0]
+        most_common_count = root_counts.most_common(1)[0][1]
+        confidence = most_common_count / len(chord_roots)
+        
+        # Determine if minor or major by checking chord quality
+        # Count major vs minor versions of the most common chord
+        major_count = sum(1 for c in chords if c['chord'].startswith(most_common_root) and 'm' not in c['chord'].lower())
+        minor_count = sum(1 for c in chords if c['chord'].startswith(most_common_root) and 'm' in c['chord'].lower() and 'maj' not in c['chord'].lower())
+        
+        if minor_count > major_count:
+            mode = 'minor'
+            key = most_common_root
+            
+            # Calculate relative major
+            note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+            # Normalize to sharp
+            if 'b' in most_common_root:
+                flat_to_sharp = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'}
+                most_common_root = flat_to_sharp.get(most_common_root, most_common_root)
+            
+            try:
+                minor_idx = note_names.index(most_common_root)
+                # Relative major is 3 semitones up (minor 3rd)
+                relative_major_idx = (minor_idx + 3) % 12
+                relative_major = note_names[relative_major_idx]
+                
+                log("")
+                log(f"✓ KEY DETECTED: {key} {mode}")
+                log(f"  Relative Major: {relative_major}")
+                log(f"  Display Format: {key} Minor / {relative_major} Major")
+                log(f"  Nashville Numbers: Calculated from {relative_major} Major")
+                log(f"  Confidence: {confidence:.3f} ({most_common_count}/{len(chord_roots)} chords)")
+                log(f"  Chord quality: {major_count} major, {minor_count} minor")
+                
+                # Store both for Nashville number calculation
+                key_for_display = f"{key} Minor / {relative_major} Major"
+                key_for_nashville = relative_major  # Use relative major for NNS
+            except (ValueError, IndexError):
+                relative_major = most_common_root
+                key_for_display = f"{key} {mode}"
+                key_for_nashville = key
+        else:
+            mode = 'major'
+            key = most_common_root
+            key_for_display = f"{key} Major"
+            key_for_nashville = key
+            
+            log("")
+            log(f"✓ KEY DETECTED: {key} {mode}")
+            log(f"  Confidence: {confidence:.3f} ({most_common_count}/{len(chord_roots)} chords)")
+            log(f"  Chord quality: {major_count} major, {minor_count} minor")
     else:
-        log("Chromagram Analysis:")
-        log(f"  Full spectrum chroma shape: {chroma.shape}")
-        log(f"  Full spectrum mean: {chroma_mean}")
-        note_names = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
-        full_top_notes = sorted(zip(note_names, chroma_mean), key=lambda x: x[1], reverse=True)[:5]
-        log(f"  Top 5 notes: {[f'{n}={v:.3f}' for n, v in full_top_notes]}")
+        key = 'C'
+        mode = 'major'
+        confidence = 0.0
+        key_for_display = 'C Major'
+        key_for_nashville = 'C'
+        log("⚠️ No chords detected, defaulting to C Major")
     
-    key_chromagram, mode_chromagram, confidence_chromagram = detect_key_improved(chroma, bass_chroma)
-    
-    # Also analyze chord progression for better key detection
-    key_progression, mode_progression, confidence_progression, pattern_info = detect_key_from_progression(chords)
-    
-    log("")
-    log("Key Detection Results:")
-    log(f"  Chromagram method: {key_chromagram} {mode_chromagram} (confidence: {confidence_chromagram:.3f})")
-    log(f"  Progression method: {key_progression} {mode_progression} (confidence: {confidence_progression:.3f})")
-    
-    # Use progression-based detection if confidence is higher
-    if confidence_progression > confidence_chromagram:
-        key = key_progression
-        mode = mode_progression
-        confidence = confidence_progression
-        log(f"  ✓ SELECTED: Progression-based (higher confidence)")
-    else:
-        key = key_chromagram
-        mode = mode_chromagram
-        confidence = confidence_chromagram
-        log(f"  ✓ SELECTED: Chromagram-based (higher confidence)")
-    
-    log(f"  FINAL KEY: {key} {mode} (confidence: {confidence:.3f})")
     log("=" * 60)
-    
     key_time = time.time() - key_start
     
     log(f"✓ Key detection complete in {key_time:.2f}s")
@@ -1229,7 +1264,7 @@ def detect_chords_librosa(audio_path, job_id):
     
     return {
         'chords': chords,
-        'key': key,
+        'key': key_for_display,  # Display format (e.g., "A Minor / C Major")
         'mode': mode,
         'keyConfidence': round(confidence, 2),
         'tempo': round(tempo_value, 1),
@@ -1237,18 +1272,26 @@ def detect_chords_librosa(audio_path, job_id):
         'duration': round(duration, 2),
         'totalChords': len(chords),
         'songStructure': song_structure,
-        'patternAnalysis': format_pattern_analysis(pattern_info, key),  # Pass detected key
-        'model': 'librosa-enhanced-84-templates'  # 84 chord templates (major, minor, 7th, maj7, m7, sus4, dim)
+        'patternAnalysis': format_pattern_analysis(pattern_info, key_for_display, key_for_nashville),  # Use relative major for NNS
+        'model': 'librosa-enhanced-84-templates-downbeat-frequency-key'  # Updated model identifier
     }
 
-def format_pattern_analysis(pattern_info, key='C'):
+def format_pattern_analysis(pattern_info, key='C', key_for_nashville=None):
     """
     Format pattern analysis for storage in DynamoDB
     Converts chord names to Nashville numbers based on detected key
     Returns a list of pattern summaries
+    
+    Args:
+        pattern_info: Pattern information dictionary
+        key: Display key (e.g., "A Minor / C Major")
+        key_for_nashville: Key to use for Nashville calculation (e.g., "C" for relative major)
     """
     if not pattern_info:
         return []
+    
+    # Use key_for_nashville if provided, otherwise use key
+    nns_key = key_for_nashville if key_for_nashville else key
     
     # Sort patterns by count (most repeated first)
     sorted_patterns = sorted(
@@ -1265,7 +1308,7 @@ def format_pattern_analysis(pattern_info, key='C'):
         # Convert chord names to Nashville numbers
         nashville_progression = []
         for chord_name in pattern:
-            nashville = convert_chord_to_nashville(chord_name, key)
+            nashville = convert_chord_to_nashville(chord_name, nns_key)
             nashville_progression.append(nashville)
         
         result.append({
