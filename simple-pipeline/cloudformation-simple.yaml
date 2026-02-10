@@ -1,0 +1,306 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Simple YouTube to MP3 Pipeline - Account 8474'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+    Description: Environment name
+
+Resources:
+  # S3 Bucket for audio files
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'music-transcription-audio-${Environment}-${AWS::AccountId}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteAfter7Days
+            Status: Enabled
+            ExpirationInDays: 7
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+
+  # DynamoDB Table for job metadata
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'MusicTranscription-Jobs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MusicTranscription-Lambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${AudioBucket.Arn}/*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt JobsTable.Arn
+
+  # Lambda Function - YouTube Downloader
+  YouTubeDownloaderFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'music-transcription-youtube-downloader-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          AUDIO_BUCKET: !Ref AudioBucket
+          JOBS_TABLE: !Ref JobsTable
+          RAPIDAPI_KEY: ''  # Add your RapidAPI key here
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import urllib.request
+          import urllib.parse
+          from urllib.parse import urlparse, parse_qs
+          from datetime import datetime
+          
+          s3 = boto3.client('s3')
+          dynamodb = boto3.resource('dynamodb')
+          
+          AUDIO_BUCKET = os.environ['AUDIO_BUCKET']
+          JOBS_TABLE = os.environ['JOBS_TABLE']
+          RAPIDAPI_KEY = os.environ.get('RAPIDAPI_KEY', '')
+          
+          def lambda_handler(event, context):
+              print(f"Event: {json.dumps(event)}")
+              
+              # Extract parameters
+              youtube_url = event.get('youtubeUrl')
+              job_id = event.get('jobId')
+              
+              if not youtube_url or not job_id:
+                  return {
+                      'statusCode': 400,
+                      'body': json.dumps({'error': 'Missing youtubeUrl or jobId'})
+                  }
+              
+              try:
+                  # Update job status
+                  update_job(job_id, 'DOWNLOADING', 10)
+                  
+                  # Extract video ID
+                  video_id = extract_video_id(youtube_url)
+                  if not video_id:
+                      raise Exception('Invalid YouTube URL')
+                  
+                  print(f"Video ID: {video_id}")
+                  
+                  # Download audio using RapidAPI
+                  audio_url = download_with_rapidapi(video_id)
+                  
+                  if not audio_url:
+                      raise Exception('Failed to get audio URL from RapidAPI')
+                  
+                  print(f"Audio URL: {audio_url}")
+                  
+                  # Download and upload to S3
+                  s3_key = f"audio/{job_id}.mp3"
+                  file_size = download_and_upload(audio_url, s3_key)
+                  
+                  # Update job with success
+                  update_job(job_id, 'COMPLETE', 100, {
+                      's3Bucket': AUDIO_BUCKET,
+                      's3Key': s3_key,
+                      'audioUrl': audio_url,
+                      'fileSize': file_size,
+                      'videoId': video_id
+                  })
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({
+                          'jobId': job_id,
+                          'status': 'COMPLETE',
+                          's3Bucket': AUDIO_BUCKET,
+                          's3Key': s3_key,
+                          'fileSize': file_size
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  update_job(job_id, 'FAILED', 0, {'error': str(e)})
+                  return {
+                      'statusCode': 500,
+                      'body': json.dumps({'error': str(e)})
+                  }
+          
+          def extract_video_id(youtube_url):
+              parsed = urlparse(youtube_url)
+              if parsed.hostname in ['www.youtube.com', 'youtube.com']:
+                  if parsed.path == '/watch':
+                      return parse_qs(parsed.query).get('v', [None])[0]
+              elif parsed.hostname == 'youtu.be':
+                  return parsed.path[1:]
+              return None
+          
+          def download_with_rapidapi(video_id):
+              if not RAPIDAPI_KEY:
+                  raise Exception('RAPIDAPI_KEY not configured')
+              
+              url = f"https://youtube-mp3-audio-video-downloader.p.rapidapi.com/get_m4a_download_link/{video_id}"
+              
+              req = urllib.request.Request(url)
+              req.add_header("x-rapidapi-key", RAPIDAPI_KEY)
+              req.add_header("x-rapidapi-host", "youtube-mp3-audio-video-downloader.p.rapidapi.com")
+              
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  data = json.loads(response.read().decode())
+              
+              print(f"RapidAPI Response: {data}")
+              
+              download_url = data.get('file') or data.get('reserved_file')
+              if download_url:
+                  return download_url.replace('\\/', '/')
+              
+              return None
+          
+          def download_and_upload(audio_url, s3_key):
+              print(f"Downloading from: {audio_url}")
+              
+              with urllib.request.urlopen(audio_url, timeout=120) as response:
+                  audio_data = response.read()
+              
+              file_size = len(audio_data)
+              print(f"Downloaded {file_size} bytes")
+              
+              s3.put_object(
+                  Bucket=AUDIO_BUCKET,
+                  Key=s3_key,
+                  Body=audio_data,
+                  ContentType='audio/mpeg'
+              )
+              
+              print(f"Uploaded to s3://{AUDIO_BUCKET}/{s3_key}")
+              return file_size
+          
+          def update_job(job_id, status, progress, extra_data=None):
+              table = dynamodb.Table(JOBS_TABLE)
+              
+              item = {
+                  'jobId': job_id,
+                  'status': status,
+                  'progress': progress,
+                  'updatedAt': datetime.utcnow().isoformat()
+              }
+              
+              if extra_data:
+                  item.update(extra_data)
+              
+              table.put_item(Item=item)
+              print(f"Updated job {job_id}: {status} ({progress}%)")
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'music-transcription-api-${Environment}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins:
+          - '*'
+        AllowMethods:
+          - GET
+          - POST
+          - OPTIONS
+        AllowHeaders:
+          - '*'
+
+  # API Integration
+  ApiIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt YouTubeDownloaderFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  # API Route
+  ApiRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'POST /download'
+      Target: !Sub 'integrations/${ApiIntegration}'
+
+  # API Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGateway
+      StageName: '$default'
+      AutoDeploy: true
+
+  # Lambda Permission for API Gateway
+  ApiGatewayInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref YouTubeDownloaderFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint
+    Value: !GetAtt ApiGateway.ApiEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+  
+  AudioBucket:
+    Description: S3 bucket for audio files
+    Value: !Ref AudioBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AudioBucket'
+  
+  JobsTable:
+    Description: DynamoDB table for jobs
+    Value: !Ref JobsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-JobsTable'

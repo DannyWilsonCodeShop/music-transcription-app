@@ -44,12 +44,12 @@ try:
     with open(TEST_AUDIO, 'rb') as audio_file:
         # Request parameters
         params = {
-            'model': 'universal',  # General purpose model
+            'model': 'lead',  # Extract melody and chords
         }
         
-        # Request data
+        # Data parameters (for transcription job)
         data = {
-            'outputs': ['mxml', 'json']  # Get MusicXML and JSON
+            'outputs': ['mxml']  # MusicXML output
         }
         
         # Files
@@ -121,6 +121,8 @@ while attempt < max_attempts:
         elif status == 'FAILED':
             print(f"\n❌ Transcription failed")
             print(f"Error: {status_data.get('error', 'Unknown error')}")
+            print(f"\nFull status response:")
+            print(json.dumps(status_data, indent=2))
             sys.exit(1)
         
         # Wait before next check
@@ -142,74 +144,74 @@ print("3. Fetching results...")
 print("-" * 60)
 
 try:
-    # Get JSON result (chord data)
-    json_response = requests.get(
-        f"{API_BASE_URL}/job/{job_id}/json",
+    # Get MusicXML result
+    xml_response = requests.get(
+        f"{API_BASE_URL}/job/{job_id}/xml",
         headers=headers
     )
     
-    if json_response.status_code == 200:
-        result_data = json_response.json()
-        
-        print("✓ Results retrieved successfully")
+    if xml_response.status_code == 200:
+        # Save MusicXML
+        xml_file = f"klangio-result-{job_id}.xml"
+        with open(xml_file, 'wb') as f:
+            f.write(xml_response.content)
+        print(f"✓ MusicXML saved to: {xml_file}")
         print()
         
-        # Display results
+        # Parse MusicXML to extract chord data
         print("=" * 60)
         print("TRANSCRIPTION RESULTS")
         print("=" * 60)
         print()
         
-        # Key
-        if 'key' in result_data:
-            print(f"🎹 Key: {result_data['key']}")
-        
-        # Tempo
-        if 'tempo' in result_data or 'bpm' in result_data:
-            tempo = result_data.get('tempo') or result_data.get('bpm')
-            print(f"🥁 Tempo: {tempo} BPM")
-        
-        # Time signature
-        if 'time_signature' in result_data or 'meter' in result_data:
-            ts = result_data.get('time_signature') or result_data.get('meter')
-            print(f"⏱️  Time Signature: {ts}")
-        
-        print()
-        
-        # Chords
-        if 'chords' in result_data:
-            chords = result_data['chords']
-            print(f"🎸 Chords detected: {len(chords)}")
-            print()
-            print("First 20 chords:")
-            for i, chord in enumerate(chords[:20], 1):
-                time_str = f"{chord.get('time', 0):.2f}s" if 'time' in chord else "N/A"
-                chord_name = chord.get('chord') or chord.get('name') or 'Unknown'
-                print(f"  {i}. {chord_name:8s} at {time_str}")
+        # Try to parse MusicXML with music21 if available
+        try:
+            from music21 import converter
             
-            if len(chords) > 20:
-                print(f"  ... and {len(chords) - 20} more chords")
-        
-        print()
-        
-        # Save full result
-        output_file = f"klangio-result-{job_id}.json"
-        with open(output_file, 'w') as f:
-            json.dump(result_data, f, indent=2)
-        print(f"📄 Full result saved to: {output_file}")
-        print()
-        
-        # Try to get MusicXML
-        xml_response = requests.get(
-            f"{API_BASE_URL}/job/{job_id}/xml",
-            headers=headers
-        )
-        
-        if xml_response.status_code == 200:
-            xml_file = f"klangio-result-{job_id}.xml"
-            with open(xml_file, 'wb') as f:
-                f.write(xml_response.content)
-            print(f"📄 MusicXML saved to: {xml_file}")
+            score = converter.parse(xml_file)
+            
+            # Extract key
+            key = score.analyze('key')
+            print(f"🎹 Key: {key}")
+            
+            # Extract tempo
+            tempo_marks = score.flatten().getElementsByClass('MetronomeMark')
+            if tempo_marks:
+                tempo = tempo_marks[0].number
+                print(f"🥁 Tempo: {tempo} BPM")
+            
+            # Extract time signature
+            time_sigs = score.flatten().getElementsByClass('TimeSignature')
+            if time_sigs:
+                ts = time_sigs[0]
+                print(f"⏱️  Time Signature: {ts.ratioString}")
+            
+            print()
+            
+            # Extract chords
+            from music21 import harmony
+            chords = score.flatten().getElementsByClass(harmony.ChordSymbol)
+            
+            if chords:
+                print(f"🎸 Chords detected: {len(chords)}")
+                print()
+                print("First 20 chords:")
+                for i, chord in enumerate(list(chords)[:20], 1):
+                    offset = chord.offset
+                    chord_name = chord.figure
+                    print(f"  {i}. {chord_name:8s} at offset {offset:.2f}")
+                
+                if len(chords) > 20:
+                    print(f"  ... and {len(chords) - 20} more chords")
+            else:
+                print("⚠️  No chord symbols found in MusicXML")
+            
+        except ImportError:
+            print("⚠️  music21 not installed, showing raw MusicXML file only")
+            print(f"   Install with: pip install music21")
+        except Exception as e:
+            print(f"⚠️  Could not parse MusicXML: {e}")
+            print(f"   Raw file saved to: {xml_file}")
         
         print()
         print("=" * 60)
@@ -217,14 +219,14 @@ try:
         print("=" * 60)
         print()
         print("Next steps:")
-        print("1. Review the chord accuracy")
-        print("2. Check if key detection is correct")
+        print("1. Review the MusicXML file")
+        print("2. Check if chord detection is accurate")
         print("3. Compare with current system")
         print("4. If good, integrate into pipeline")
         
     else:
-        print(f"❌ Error fetching results: {json_response.status_code}")
-        print(f"Response: {json_response.text}")
+        print(f"❌ Error fetching results: {xml_response.status_code}")
+        print(f"Response: {xml_response.text}")
         sys.exit(1)
 
 except Exception as e:

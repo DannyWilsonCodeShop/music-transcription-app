@@ -1,9 +1,14 @@
-import { useState, useEffect } from 'react';
-import { startTranscription, getJobStatus, TranscriptionJob } from './services/transcriptionService';
+import { useState, useEffect, useCallback } from 'react';
+import { getJobStatus, TranscriptionJob } from './services/transcriptionService';
+import axios from 'axios';
+
+const API_ENDPOINT = 'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
 function App() {
-  const [url, setUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<TranscriptionJob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -15,38 +20,89 @@ function App() {
       const status = await getJobStatus(jobId);
       if (status) {
         setJob(status);
-        if (status.status === 'COMPLETE') {
+        if (status.status === 'COMPLETED') {
           clearInterval(pollInterval);
-          setIsLoading(false);
-          // Use backend-generated PDF URL
+          setIsUploading(false);
           if (status.pdfUrl) {
             setPdfUrl(status.pdfUrl);
           }
         } else if (status.status === 'FAILED') {
           clearInterval(pollInterval);
-          setIsLoading(false);
+          setIsUploading(false);
         }
       }
     }, 2000);
     return () => clearInterval(pollInterval);
   }, [jobId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
     
-    setIsLoading(true);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && droppedFile.type.startsWith('audio/')) {
+      setFile(droppedFile);
+    } else {
+      setError('Please drop an audio file (MP3, WAV, M4A, FLAC, OGG)');
+    }
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    
+    setIsUploading(true);
     setError(null);
     setJob(null);
     setPdfUrl(null);
+    setUploadProgress(0);
     
     try {
-      const newJobId = await startTranscription(url);
+      // Request upload URL
+      const response = await axios.post(`${API_ENDPOINT}/upload`, {
+        filename: file.name,
+        contentType: file.type,
+        userId: 'guest'
+      });
+
+      const { jobId: newJobId, uploadUrl } = response.data;
       setJobId(newJobId);
+
+      // Upload file to S3
+      await axios.put(uploadUrl, file, {
+        headers: {
+          'Content-Type': file.type
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round(
+            (progressEvent.loaded * 100) / (progressEvent.total || 1)
+          );
+          setUploadProgress(percentCompleted);
+        }
+      });
+
+      setUploadProgress(100);
+      
     } catch (error) {
-      console.error('Failed:', error);
-      setIsLoading(false);
-      setError(error instanceof Error ? error.message : 'Failed to start transcription. Please check if the backend is deployed.');
+      console.error('Upload failed:', error);
+      setIsUploading(false);
+      setError(error instanceof Error ? error.message : 'Upload failed. Please try again.');
     }
   };
 
@@ -89,80 +145,106 @@ function App() {
             Music Transcription App
           </h1>
           <p style={{ color: '#9ca3af', fontSize: '18px' }}>
-            Transform any YouTube video into chords and lyrics
+            Upload your audio file to extract chords and lyrics
           </p>
         </div>
 
-        {/* Search Bar */}
-        <form onSubmit={handleSubmit}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-            border: '1px solid #e5e7eb',
-            overflow: 'hidden',
-            transition: 'box-shadow 0.3s'
-          }}>
-            
-            {/* Sparkle Icon */}
-            <div style={{ paddingLeft: '20px', paddingRight: '12px' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#9333ea">
-                <path d="M12 2L9.19 8.63L2 9.24l5.46 4.73L5.82 21L12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2z"/>
-              </svg>
-            </div>
-
-            {/* Input */}
+        {/* File Upload Area */}
+        {!jobId && (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              padding: '48px',
+              backgroundColor: isDragging ? '#f3f4f6' : 'white',
+              borderRadius: '16px',
+              boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
+              border: isDragging ? '2px dashed #9333ea' : '2px dashed #e5e7eb',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.3s'
+            }}
+            onClick={() => document.getElementById('fileInput')?.click()}
+          >
             <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste YouTube URL here..."
-              disabled={isLoading}
-              style={{
-                flex: 1,
-                padding: '20px 0',
-                fontSize: '16px',
-                border: 'none',
-                outline: 'none',
-                color: '#1f2937',
-                backgroundColor: 'transparent'
-              }}
+              id="fileInput"
+              type="file"
+              accept="audio/*"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
             />
-
-            {/* Button */}
-            <button
-              type="submit"
-              disabled={!url.trim() || isLoading}
-              style={{
-                margin: '8px',
-                padding: '12px 24px',
-                background: 'linear-gradient(to right, #9333ea, #2563eb)',
-                color: 'white',
-                fontWeight: '500',
-                borderRadius: '12px',
-                border: 'none',
-                cursor: url.trim() && !isLoading ? 'pointer' : 'not-allowed',
-                opacity: !url.trim() || isLoading ? 0.5 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s'
-              }}
-            >
-              {isLoading ? 'Processing...' : 'Start'}
-              {!isLoading && (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                </svg>
-              )}
-            </button>
+            
+            {!file ? (
+              <>
+                <div style={{ fontSize: '64px', marginBottom: '16px' }}>📁</div>
+                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+                  {isDragging ? 'Drop your file here' : 'Drag & drop your audio file'}
+                </h3>
+                <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+                  or click to browse
+                </p>
+                <p style={{ color: '#9ca3af', fontSize: '14px' }}>
+                  Supported: MP3, WAV, M4A, FLAC, OGG (max 50MB)
+                </p>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: '64px', marginBottom: '16px' }}>🎵</div>
+                <h3 style={{ fontSize: '20px', fontWeight: '600', color: '#1f2937', marginBottom: '8px' }}>
+                  {file.name}
+                </h3>
+                <p style={{ color: '#6b7280', marginBottom: '16px' }}>
+                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUpload();
+                    }}
+                    disabled={isUploading}
+                    style={{
+                      padding: '12px 32px',
+                      background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                      color: 'white',
+                      fontWeight: '600',
+                      borderRadius: '12px',
+                      border: 'none',
+                      cursor: isUploading ? 'not-allowed' : 'pointer',
+                      opacity: isUploading ? 0.5 : 1,
+                      fontSize: '16px'
+                    }}
+                  >
+                    {isUploading ? 'Uploading...' : 'Upload & Process'}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                    }}
+                    disabled={isUploading}
+                    style={{
+                      padding: '12px 24px',
+                      backgroundColor: '#e5e7eb',
+                      color: '#374151',
+                      fontWeight: '500',
+                      borderRadius: '12px',
+                      border: 'none',
+                      cursor: isUploading ? 'not-allowed' : 'pointer',
+                      opacity: isUploading ? 0.5 : 1
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        </form>
+        )}
 
-        {/* Progress */}
-        {isLoading && job && (
+        {/* Upload Progress */}
+        {isUploading && uploadProgress < 100 && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
@@ -172,7 +254,41 @@ function App() {
             border: '1px solid #e5e7eb'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ color: '#374151', fontWeight: '500' }}>{job.currentStep || 'Processing...'}</span>
+              <span style={{ color: '#374151', fontWeight: '500' }}>Uploading...</span>
+              <span style={{ color: '#9333ea', fontWeight: '600' }}>{uploadProgress}%</span>
+            </div>
+            <div style={{
+              width: '100%',
+              height: '10px',
+              backgroundColor: '#e5e7eb',
+              borderRadius: '999px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                borderRadius: '999px',
+                width: `${uploadProgress}%`,
+                transition: 'width 0.3s'
+              }}/>
+            </div>
+          </div>
+        )}
+
+        {/* Processing Progress */}
+        {isUploading && job && uploadProgress === 100 && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            backgroundColor: 'white',
+            borderRadius: '16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
+            border: '1px solid #e5e7eb'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ color: '#374151', fontWeight: '500' }}>
+                {job.status === 'PROCESSING' ? 'Analyzing audio...' : 'Processing...'}
+              </span>
               <span style={{ color: '#9333ea', fontWeight: '600' }}>{job.progress || 0}%</span>
             </div>
             <div style={{
@@ -190,6 +306,9 @@ function App() {
                 transition: 'width 0.5s'
               }}/>
             </div>
+            <p style={{ marginTop: '12px', fontSize: '14px', color: '#6b7280' }}>
+              Enhanced chord detection with 84 templates and bass-weighted key detection
+            </p>
           </div>
         )}
 
@@ -206,16 +325,24 @@ function App() {
               ❌ Error
             </h2>
             <p style={{ color: '#dc2626', marginBottom: '16px' }}>{error}</p>
-            <details style={{ color: '#7f1d1d', fontSize: '14px' }}>
-              <summary style={{ cursor: 'pointer', fontWeight: '500' }}>Troubleshooting</summary>
-              <ul style={{ marginTop: '12px', paddingLeft: '20px' }}>
-                <li>Check if the backend infrastructure is deployed</li>
-                <li>Verify the API Gateway URL in transcriptionService.ts</li>
-                <li>Check AWS CloudWatch logs for errors</li>
-                <li>Ensure all Lambda functions are deployed</li>
-                <li>Run: <code style={{ backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>./deploy-backend.sh</code></li>
-              </ul>
-            </details>
+            <button
+              onClick={() => {
+                setError(null);
+                setFile(null);
+                setJobId(null);
+              }}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Try Again
+            </button>
           </div>
         )}
 
@@ -231,13 +358,14 @@ function App() {
             <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#991b1b', marginBottom: '8px' }}>
               ❌ Transcription Failed
             </h2>
-            <p style={{ color: '#dc2626', marginBottom: '8px' }}>{job.error || 'An unknown error occurred'}</p>
+            <p style={{ color: '#dc2626', marginBottom: '8px' }}>{job.errorMessage || 'An unknown error occurred'}</p>
             <button
               onClick={() => {
                 setJob(null);
                 setJobId(null);
                 setError(null);
-                setIsLoading(false);
+                setIsUploading(false);
+                setFile(null);
               }}
               style={{
                 padding: '10px 20px',
@@ -255,7 +383,7 @@ function App() {
         )}
 
         {/* Results */}
-        {job?.status === 'COMPLETE' && (
+        {job?.status === 'COMPLETED' && job.chordsData && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
