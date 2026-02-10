@@ -868,7 +868,7 @@ def detect_chords_librosa(audio_path, job_id):
         n_chroma=12,
         bins_per_octave=36,
         fmin=librosa.note_to_hz('C2'),  # Start at C2 (65.4 Hz) - bass range
-        fmax=librosa.note_to_hz('C4')   # End at C4 (261.6 Hz) - top of bass range
+        n_octaves=2  # Cover C2 to C4 (2 octaves)
     )
     
     # Apply median filtering to bass chroma
