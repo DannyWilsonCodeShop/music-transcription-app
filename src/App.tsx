@@ -102,8 +102,12 @@ function App() {
 
       try {
         // Upload file to S3 using fetch API
+        // CRITICAL: Set Content-Type to empty string to prevent browser from adding it
         const response = await fetch(uploadUrl, {
           method: 'PUT',
+          headers: {
+            'Content-Type': ''  // Empty string prevents browser default
+          },
           body: file
         });
 
