@@ -88,17 +88,29 @@ function App() {
       setJobId(newJobId);
 
       console.log('Uploading file to S3...');
-      // Upload file to S3 - presigned URL has no Content-Type constraint
-      // So we must NOT send any Content-Type header
-      await axios.put(uploadUrl, file, {
-        transformRequest: [(data) => data], // Don't transform, send File as-is
-        onUploadProgress: (progressEvent) => {
-          const percentCompleted = Math.round(
-            (progressEvent.loaded * 100) / (progressEvent.total || 1)
-          );
+      // Upload file to S3 using fetch (not axios) for full control
+      // Presigned URL has no Content-Type constraint, so we send none
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentCompleted = Math.round((e.loaded * 100) / e.total);
           console.log('Upload progress:', percentCompleted + '%');
           setUploadProgress(percentCompleted);
         }
+      });
+
+      await new Promise((resolve, reject) => {
+        xhr.addEventListener('load', () => {
+          if (xhr.status === 200) {
+            resolve(xhr.response);
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}`));
+          }
+        });
+        xhr.addEventListener('error', () => reject(new Error('Upload failed')));
+        xhr.open('PUT', uploadUrl);
+        xhr.send(file);
       });
 
       console.log('Upload complete!');
