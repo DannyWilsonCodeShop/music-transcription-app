@@ -88,7 +88,7 @@ function App() {
       setJobId(newJobId);
 
       console.log('Uploading file to S3...');
-      // Upload file to S3 (no Content-Type header - presigned URL handles it)
+      // Upload file to S3 - presigned URL no longer requires specific Content-Type
       await axios.put(uploadUrl, file, {
         onUploadProgress: (progressEvent) => {
           const percentCompleted = Math.round(
