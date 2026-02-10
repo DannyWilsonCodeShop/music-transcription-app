@@ -545,7 +545,7 @@ function App() {
                       {job.chordsData.key} {job.chordsData.mode}
                     </div>
                     <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                      Confidence: {(job.chordsData.keyConfidence * 100).toFixed(0)}%
+                      Confidence: {(parseFloat(job.chordsData.keyConfidence) * 100).toFixed(0)}%
                     </div>
                   </div>
                   
@@ -613,11 +613,11 @@ function App() {
                               {section.label}
                             </span>
                             <span style={{ fontSize: '14px', color: '#6b7280' }}>
-                              {section.start?.toFixed(1)}s - {section.end?.toFixed(1)}s
+                              {parseFloat(section.start || 0).toFixed(1)}s - {parseFloat(section.end || 0).toFixed(1)}s
                             </span>
                           </div>
                           <div style={{ fontSize: '14px', color: '#9ca3af' }}>
-                            {section.duration?.toFixed(1)}s
+                            {parseFloat(section.duration || 0).toFixed(1)}s
                           </div>
                         </div>
                       ))}
@@ -714,7 +714,7 @@ function App() {
                             {chord.chord}
                           </div>
                           <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                            {chord.start?.toFixed(1)}s
+                            {parseFloat(chord.start || 0).toFixed(1)}s
                           </div>
                         </div>
                       ))}
