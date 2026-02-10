@@ -88,30 +88,39 @@ function App() {
       setJobId(newJobId);
 
       console.log('Uploading file to S3...');
-      // Upload file to S3 using fetch (not axios) for full control
-      // Presigned URL has no Content-Type constraint, so we send none
-      const xhr = new XMLHttpRequest();
       
-      xhr.upload.addEventListener('progress', (e) => {
-        if (e.lengthComputable) {
-          const percentCompleted = Math.round((e.loaded * 100) / e.total);
-          console.log('Upload progress:', percentCompleted + '%');
-          setUploadProgress(percentCompleted);
-        }
-      });
-
-      await new Promise((resolve, reject) => {
-        xhr.addEventListener('load', () => {
-          if (xhr.status === 200) {
-            resolve(xhr.response);
-          } else {
-            reject(new Error(`Upload failed with status ${xhr.status}`));
+      // Simulate progress for UX (actual upload happens in background)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(progressInterval);
+            return 95;
           }
+          return prev + 5;
         });
-        xhr.addEventListener('error', () => reject(new Error('Upload failed')));
-        xhr.open('PUT', uploadUrl);
-        xhr.send(file);
-      });
+      }, 100);
+
+      try {
+        // Upload file to S3 using fetch API
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file
+        });
+
+        clearInterval(progressInterval);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('S3 upload failed:', response.status, errorText);
+          throw new Error(`Upload failed: ${errorText || response.statusText}`);
+        }
+
+        console.log('Upload complete!');
+        setUploadProgress(100);
+      } catch (error) {
+        clearInterval(progressInterval);
+        throw error;
+      }
 
       console.log('Upload complete!');
       setUploadProgress(100);
