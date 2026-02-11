@@ -1186,6 +1186,10 @@ def detect_chords_librosa(audio_path, job_id):
     
     log(f"✓ Key detection complete in {key_time:.2f}s")
     
+    # Get pattern info for structure detection (don't use key from this)
+    log("Analyzing chord patterns for structure detection...")
+    _, _, _, pattern_info = detect_key_from_progression(chords)
+    
     # Detect song structure with MSAF (audio-based segmentation)
     log("Detecting song structure...")
     structure_start = time.time()
