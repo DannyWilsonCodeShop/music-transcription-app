@@ -61,6 +61,14 @@ def log(message, level="INFO"):
 
 def main():
     """Main entry point for ECS task"""
+    
+    # Check if this is a downbeat detection task
+    task_type = os.environ.get('TASK_TYPE', 'CHORD_DETECTION')
+    
+    if task_type == 'DOWNBEAT_DETECTION':
+        return run_downbeat_detection()
+    
+    # Otherwise, run chord detection
     log("=" * 80)
     log("STARTING CHORD DETECTION ECS TASK")
     log("=" * 80)
@@ -1732,6 +1740,112 @@ def trigger_pdf_generation(job_id):
     except Exception as e:
         log(f"ERROR invoking PDF generation Lambda: {str(e)}", "ERROR")
         raise
+
+def run_downbeat_detection():
+    """Run downbeat detection task"""
+    log("=" * 80)
+    log("STARTING DOWNBEAT DETECTION ECS TASK")
+    log("=" * 80)
+    
+    # Get parameters from environment
+    job_id = os.environ.get('JOB_ID')
+    audio_bucket = os.environ.get('AUDIO_BUCKET')
+    audio_key = os.environ.get('AUDIO_KEY')
+    jobs_table_name = os.environ.get('JOBS_TABLE', JOBS_TABLE)
+    
+    log(f"Environment Variables:")
+    log(f"  JOB_ID: {job_id}")
+    log(f"  AUDIO_BUCKET: {audio_bucket}")
+    log(f"  AUDIO_KEY: {audio_key}")
+    log(f"  JOBS_TABLE: {jobs_table_name}")
+    
+    if not all([job_id, audio_bucket, audio_key]):
+        log("ERROR: Missing required environment variables", "ERROR")
+        sys.exit(1)
+    
+    jobs_table = dynamodb.Table(jobs_table_name)
+    
+    try:
+        # Download audio file
+        audio_path = f'/tmp/{job_id}-audio.m4a'
+        log(f"Downloading audio from s3://{audio_bucket}/{audio_key}...")
+        s3.download_file(audio_bucket, audio_key, audio_path)
+        log("✓ Audio downloaded successfully")
+        
+        # Import downbeat detection module
+        sys.path.insert(0, '/app/simple-pipeline/chord-detection')
+        from downbeat_detection import detect_downbeats_complete
+        
+        # Detect downbeat
+        log("Detecting downbeat...")
+        result = detect_downbeats_complete(audio_path)
+        
+        log(f"✓ Downbeat detection complete:")
+        log(f"  Tempo: {result['tempo']} BPM")
+        log(f"  Time Signature: {result['time_signature']}")
+        log(f"  Detected Downbeat: {result['first_downbeat']}s")
+        log(f"  Confidence: {result['confidence']:.2f}")
+        log(f"  Total Beats: {len(result['beat_times'])}")
+        log(f"  Total Measures: {len(result['downbeats'])}")
+        
+        # Update DynamoDB with results
+        log("Updating DynamoDB...")
+        jobs_table.update_item(
+            Key={'jobId': job_id},
+            UpdateExpression='''
+                SET downbeatData = :data,
+                    downbeatStatus = :status,
+                    updatedAt = :now
+            ''',
+            ExpressionAttributeValues={
+                ':data': {
+                    'tempo': Decimal(str(result['tempo'])),
+                    'timeSignature': result['time_signature'],
+                    'detectedDownbeat': Decimal(str(result['first_downbeat'])),
+                    'confidence': Decimal(str(result['confidence'])),
+                    'beatTimes': [Decimal(str(t)) for t in result['beat_times']],
+                    'downbeats': [Decimal(str(t)) for t in result['downbeats']],
+                    'totalBeats': len(result['beat_times']),
+                    'totalMeasures': len(result['downbeats']),
+                    'methodInfo': result.get('method_info', {}),
+                },
+                ':status': 'COMPLETED',
+                ':now': datetime.utcnow().isoformat(),
+            }
+        )
+        
+        log("✓ Downbeat detection completed successfully!")
+        
+        # Clean up
+        if os.path.exists(audio_path):
+            os.remove(audio_path)
+        
+        sys.exit(0)
+        
+    except Exception as e:
+        log(f"ERROR: Downbeat detection failed: {str(e)}", "ERROR")
+        import traceback
+        log(traceback.format_exc(), "ERROR")
+        
+        # Update DynamoDB with error
+        try:
+            jobs_table.update_item(
+                Key={'jobId': job_id},
+                UpdateExpression='''
+                    SET downbeatStatus = :status,
+                        errorMessage = :error,
+                        updatedAt = :now
+                ''',
+                ExpressionAttributeValues={
+                    ':status': 'FAILED',
+                    ':error': str(e),
+                    ':now': datetime.utcnow().isoformat(),
+                }
+            )
+        except Exception as update_error:
+            log(f"ERROR: Failed to update DynamoDB: {str(update_error)}", "ERROR")
+        
+        sys.exit(1)
 
 if __name__ == '__main__':
     main()

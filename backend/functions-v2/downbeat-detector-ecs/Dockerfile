@@ -16,11 +16,11 @@ COPY requirements.txt .
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy simple-pipeline directory first (for downbeat_detection module)
+COPY simple-pipeline/ /app/simple-pipeline/
+
 # Copy application code
 COPY app.py .
-
-# Copy simple-pipeline directory (for downbeat_detection module)
-COPY ../../simple-pipeline /app/simple-pipeline
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1

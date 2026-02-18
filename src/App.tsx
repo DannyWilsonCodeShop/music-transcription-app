@@ -93,6 +93,33 @@ function App() {
     console.log('User cancelled downbeat confirmation, using auto-detected value');
   };
 
+  const pollForDownbeatResults = async (jobId: string): Promise<any> => {
+    const maxAttempts = 60; // 60 seconds
+    const pollInterval = 1000; // 1 second
+    
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const status = await getJobStatus(jobId);
+        
+        if (status.downbeatData && status.downbeatStatus === 'COMPLETED') {
+          return status.downbeatData;
+        }
+        
+        if (status.downbeatStatus === 'FAILED') {
+          throw new Error('Downbeat detection failed');
+        }
+        
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      } catch (error) {
+        console.error('Error polling for downbeat:', error);
+        throw error;
+      }
+    }
+    
+    throw new Error('Downbeat detection timed out');
+  };
+
   const handleUpload = async () => {
     if (!file) return;
     
@@ -164,24 +191,32 @@ function App() {
       try {
         const downbeatResponse = await axios.post(`${API_ENDPOINT}/api/detect-downbeat`, {
           jobId: newJobId,
-          bucket: 'chordscout-audio-uploads-dev',
+          bucket: 'chordscout-audio-dev-090130568474',
           key: `uploads/${newJobId}/${file.name}`
         });
         
-        console.log('Downbeat detection response:', downbeatResponse.data);
+        console.log('Downbeat detection started (async):', downbeatResponse.data);
         
-        // Store audio URL for playback in confirmation modal
-        setAudioUrl(uploadUrl.split('?')[0]); // Remove query params to get clean URL
+        // Poll for downbeat results
+        console.log('Polling for downbeat results...');
+        const downbeatData = await pollForDownbeatResults(newJobId);
         
-        setDownbeatData({
-          downbeat: downbeatResponse.data.detectedDownbeat,
-          tempo: downbeatResponse.data.tempo,
-          timeSignature: downbeatResponse.data.timeSignature,
-          beatTimes: downbeatResponse.data.beatTimes,
-          confidence: downbeatResponse.data.confidence
-        });
-        
-        setShowDownbeatConfirmation(true);
+        if (downbeatData) {
+          console.log('Downbeat detection complete:', downbeatData);
+          
+          // Store audio URL for playback in confirmation modal
+          setAudioUrl(uploadUrl.split('?')[0]); // Remove query params to get clean URL
+          
+          setDownbeatData({
+            downbeat: downbeatData.detectedDownbeat,
+            tempo: downbeatData.tempo,
+            timeSignature: downbeatData.timeSignature,
+            beatTimes: downbeatData.beatTimes,
+            confidence: downbeatData.confidence
+          });
+          
+          setShowDownbeatConfirmation(true);
+        }
       } catch (downbeatError: any) {
         console.error('Downbeat detection failed:', downbeatError);
         // Continue without downbeat confirmation (fallback to auto-detection)

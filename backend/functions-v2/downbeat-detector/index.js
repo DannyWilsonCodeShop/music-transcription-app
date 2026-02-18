@@ -12,7 +12,7 @@ const ecs = new AWS.ECS();
 
 const JOBS_TABLE = process.env.JOBS_TABLE || 'ChordScout-Jobs-V2-dev';
 const ECS_CLUSTER = process.env.ECS_CLUSTER || 'ChordScout-dev';
-const ECS_TASK_DEFINITION = process.env.ECS_TASK_DEFINITION || 'chordscout-downbeat-detector-dev';
+const ECS_TASK_DEFINITION = process.env.ECS_TASK_DEFINITION || 'chordscout-chord-detector-dev';
 const ECS_SUBNETS = process.env.ECS_SUBNETS ? process.env.ECS_SUBNETS.split(',') : [];
 const ECS_SECURITY_GROUPS = process.env.ECS_SECURITY_GROUPS ? process.env.ECS_SECURITY_GROUPS.split(',') : [];
 
@@ -75,7 +75,7 @@ exports.handler = async (event) => {
       overrides: {
         containerOverrides: [
           {
-            name: 'downbeat-detector',
+            name: 'chord-detector',
             environment: [
               { name: 'JOB_ID', value: jobId },
               { name: 'AUDIO_BUCKET', value: bucket },

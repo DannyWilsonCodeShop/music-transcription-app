@@ -2,6 +2,7 @@
 """
 ECS Task: Downbeat Detector
 Detects tempo, beats, and downbeat from audio file
+Uses the same Docker image as chord-detector but with different entry point
 """
 
 import os
@@ -10,10 +11,18 @@ import json
 import boto3
 from datetime import datetime
 
-# Add simple-pipeline to path
+# Add paths for modules
+sys.path.insert(0, '/app')
 sys.path.insert(0, '/app/simple-pipeline/chord-detection')
 
-from downbeat_detection import detect_downbeats_complete
+try:
+    from downbeat_detection import detect_downbeats_complete
+except ImportError:
+    print("ERROR: Could not import downbeat_detection module")
+    print("Python path:", sys.path)
+    print("Current directory:", os.getcwd())
+    print("Directory contents:", os.listdir('/app') if os.path.exists('/app') else "N/A")
+    sys.exit(1)
 
 # AWS clients
 s3 = boto3.client('s3')
