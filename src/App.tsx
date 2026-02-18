@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getJobStatus, TranscriptionJob } from './services/transcriptionService';
+import { DownbeatConfirmation } from './components/DownbeatConfirmation';
 import axios from 'axios';
 
-const API_ENDPOINT = 'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
+const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com';
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -13,6 +14,9 @@ function App() {
   const [job, setJob] = useState<TranscriptionJob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showDownbeatConfirmation, setShowDownbeatConfirmation] = useState(false);
+  const [downbeatData, setDownbeatData] = useState<any>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -62,6 +66,31 @@ function App() {
     if (selectedFile) {
       setFile(selectedFile);
     }
+  };
+
+  const handleDownbeatConfirm = async (downbeat: number, timeSignature: string) => {
+    if (!jobId) return;
+    
+    try {
+      console.log('Confirming downbeat:', downbeat, timeSignature);
+      await axios.post(`${API_ENDPOINT}/api/confirm-downbeat`, {
+        jobId,
+        downbeat,
+        timeSignature
+      });
+      
+      setShowDownbeatConfirmation(false);
+      console.log('Downbeat confirmed, chord detection will start automatically');
+    } catch (error: any) {
+      console.error('Failed to confirm downbeat:', error);
+      setError('Failed to confirm downbeat. Please try again.');
+    }
+  };
+
+  const handleDownbeatCancel = () => {
+    setShowDownbeatConfirmation(false);
+    // Continue with auto-detected downbeat
+    console.log('User cancelled downbeat confirmation, using auto-detected value');
   };
 
   const handleUpload = async () => {
@@ -129,6 +158,35 @@ function App() {
 
       console.log('Upload complete!');
       setUploadProgress(100);
+      
+      // Detect downbeat after upload
+      console.log('Detecting downbeat...');
+      try {
+        const downbeatResponse = await axios.post(`${API_ENDPOINT}/api/detect-downbeat`, {
+          jobId: newJobId,
+          bucket: 'chordscout-audio-uploads-dev',
+          key: `uploads/${newJobId}/${file.name}`
+        });
+        
+        console.log('Downbeat detection response:', downbeatResponse.data);
+        
+        // Store audio URL for playback in confirmation modal
+        setAudioUrl(uploadUrl.split('?')[0]); // Remove query params to get clean URL
+        
+        setDownbeatData({
+          downbeat: downbeatResponse.data.detectedDownbeat,
+          tempo: downbeatResponse.data.tempo,
+          timeSignature: downbeatResponse.data.timeSignature,
+          beatTimes: downbeatResponse.data.beatTimes,
+          confidence: downbeatResponse.data.confidence
+        });
+        
+        setShowDownbeatConfirmation(true);
+      } catch (downbeatError: any) {
+        console.error('Downbeat detection failed:', downbeatError);
+        // Continue without downbeat confirmation (fallback to auto-detection)
+        console.log('Continuing without downbeat confirmation');
+      }
       
     } catch (error: any) {
       console.error('Upload failed:', error);
@@ -772,6 +830,19 @@ function App() {
           </div>
         )}
       </div>
+      
+      {/* Downbeat Confirmation Modal */}
+      {showDownbeatConfirmation && downbeatData && audioUrl && (
+        <DownbeatConfirmation
+          audioUrl={audioUrl}
+          detectedDownbeat={downbeatData.downbeat}
+          detectedTempo={downbeatData.tempo}
+          detectedTimeSignature={downbeatData.timeSignature}
+          beatTimes={downbeatData.beatTimes}
+          onConfirm={handleDownbeatConfirm}
+          onCancel={handleDownbeatCancel}
+        />
+      )}
     </div>
   );
 }
