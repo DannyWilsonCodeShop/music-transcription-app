@@ -4,6 +4,7 @@ import { DownbeatConfirmation } from './components/DownbeatConfirmation';
 import axios from 'axios';
 
 const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com';
+const UPLOAD_API_ENDPOINT = 'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -133,7 +134,7 @@ function App() {
       console.log('Requesting upload URL for:', file.name, file.type);
       
       // Request upload URL
-      const response = await axios.post(`${API_ENDPOINT}/upload`, {
+      const response = await axios.post(`${UPLOAD_API_ENDPOINT}/upload`, {
         filename: file.name,
         contentType: file.type || 'audio/mpeg',
         userId: 'guest'
