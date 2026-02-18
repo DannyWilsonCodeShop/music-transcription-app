@@ -26,5 +26,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 COPY test_chord_detection.py .
 
+# Copy simple-pipeline directory for downbeat detection and chord detection modules
+COPY simple-pipeline ./simple-pipeline
+
 # Run the application
 CMD ["python", "app.py"]
