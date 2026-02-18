@@ -70,12 +70,24 @@ def main():
     bucket = os.environ.get('AUDIO_BUCKET') or os.environ.get('BUCKET')
     key = os.environ.get('AUDIO_KEY') or os.environ.get('KEY')
     
+    # Get confirmed downbeat values (if provided by user)
+    confirmed_downbeat = os.environ.get('CONFIRMED_DOWNBEAT')
+    confirmed_time_signature = os.environ.get('CONFIRMED_TIME_SIGNATURE')
+    
+    if confirmed_downbeat:
+        confirmed_downbeat = float(confirmed_downbeat)
+        log(f"✓ Using CONFIRMED downbeat: {confirmed_downbeat}s")
+    if confirmed_time_signature:
+        log(f"✓ Using CONFIRMED time signature: {confirmed_time_signature}")
+    
     log(f"Environment Variables:")
     log(f"  JOB_ID: {job_id}")
     log(f"  BUCKET: {bucket}")
     log(f"  KEY: {key}")
     log(f"  JOBS_TABLE: {JOBS_TABLE}")
     log(f"  PDF_GENERATOR_FUNCTION: {PDF_GENERATOR_FUNCTION}")
+    log(f"  CONFIRMED_DOWNBEAT: {confirmed_downbeat}")
+    log(f"  CONFIRMED_TIME_SIGNATURE: {confirmed_time_signature}")
     
     if not all([job_id, bucket, key]):
         log("ERROR: Missing required environment variables", "ERROR")
@@ -104,7 +116,7 @@ def main():
         # Detect chords
         log("Step 3: Starting chord detection...")
         start_time = time.time()
-        chords_data = detect_chords(audio_path, job_id)
+        chords_data = detect_chords(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
         detection_time = time.time() - start_time
         
         log(f"✓ Chord detection complete")
@@ -794,7 +806,7 @@ def detect_chords_essentia(audio_path, job_id):
         'model': 'essentia-hpcp'
     }
 
-def detect_chords(audio_path, job_id):
+def detect_chords(audio_path, job_id, confirmed_downbeat=None, confirmed_time_signature=None):
     """
     Main chord detection function - ALWAYS uses enhanced librosa with 84 templates
     (Essentia detection disabled in favor of enhanced librosa system)
@@ -802,9 +814,9 @@ def detect_chords(audio_path, job_id):
     # FORCE enhanced librosa detection (84 templates)
     # Even if essentia is available, we want to use the new enhanced system
     log("Using ENHANCED librosa chord detection (84 templates)")
-    return detect_chords_librosa(audio_path, job_id)
+    return detect_chords_librosa(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
 
-def detect_chords_librosa(audio_path, job_id):
+def detect_chords_librosa(audio_path, job_id, confirmed_downbeat=None, confirmed_time_signature=None):
     """Detect chords using librosa chromagram analysis with optional stem separation"""
     log("Loading audio file...")
     start_time = time.time()
@@ -833,13 +845,43 @@ def detect_chords_librosa(audio_path, job_id):
     # Extract tempo value (librosa returns array, take first element)
     tempo_value = float(tempo) if isinstance(tempo, (int, float)) else float(tempo[0]) if hasattr(tempo, '__len__') else float(tempo)
     
-    # Detect time signature by analyzing beat patterns
-    time_signature = detect_time_signature(y, sr, beats)
+    # Use confirmed time signature if provided, otherwise detect
+    if confirmed_time_signature:
+        time_signature = confirmed_time_signature
+        log(f"✓ Using CONFIRMED time signature: {time_signature}")
+    else:
+        time_signature = detect_time_signature(y, sr, beats)
+        log(f"✓ Time signature detected: {time_signature}")
     
     log(f"✓ Tempo detected: {tempo_value:.1f} BPM")
-    log(f"✓ Time signature detected: {time_signature}")
     log(f"  Beats detected: {len(beats)}")
     log(f"  Detection time: {tempo_time:.2f}s")
+    
+    # Use confirmed downbeat if provided
+    if confirmed_downbeat is not None:
+        log(f"✓ Using CONFIRMED downbeat: {confirmed_downbeat}s")
+        # Adjust beat times to align with confirmed downbeat
+        beat_times = librosa.frames_to_time(beats, sr=sr)
+        
+        # Find the beat closest to the confirmed downbeat
+        closest_beat_idx = np.argmin(np.abs(beat_times - confirmed_downbeat))
+        
+        # Calculate beats per measure from time signature
+        beats_per_measure = int(time_signature.split('/')[0])
+        
+        # Determine which beat in the measure the closest beat represents
+        # and adjust to make confirmed_downbeat the first beat of a measure
+        beat_offset = closest_beat_idx % beats_per_measure
+        
+        # Shift all beat indices so confirmed downbeat aligns with measure start
+        if beat_offset != 0:
+            # We need to shift beats so the confirmed downbeat is at position 0 in measure
+            beats = beats[beat_offset:]
+            log(f"  Adjusted beat alignment: removed {beat_offset} beats to align with downbeat")
+        
+        log(f"  Beats after alignment: {len(beats)}")
+    else:
+        log("  Using auto-detected downbeat (first beat)")
     
     # Compute chromagram with better parameters for chord detection
     log("Computing chromagram...")

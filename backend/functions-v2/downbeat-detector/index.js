@@ -1,19 +1,20 @@
 /**
- * Lambda Function: Downbeat Detector
+ * Lambda Function: Downbeat Detector (ECS Trigger)
  * 
- * Detects tempo, beats, and downbeat from audio file
- * Returns data needed for user confirmation UI
+ * Triggers ECS task to detect tempo, beats, and downbeat from audio file
+ * ECS task has all Python libraries (librosa, numpy, etc.) already installed
  */
 
 const AWS = require('aws-sdk');
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
 
-const s3 = new AWS.S3();
 const dynamodb = new AWS.DynamoDB.DocumentClient();
+const ecs = new AWS.ECS();
 
 const JOBS_TABLE = process.env.JOBS_TABLE || 'ChordScout-Jobs-V2-dev';
+const ECS_CLUSTER = process.env.ECS_CLUSTER || 'ChordScout-dev';
+const ECS_TASK_DEFINITION = process.env.ECS_TASK_DEFINITION || 'chordscout-downbeat-detector-dev';
+const ECS_SUBNETS = process.env.ECS_SUBNETS ? process.env.ECS_SUBNETS.split(',') : [];
+const ECS_SECURITY_GROUPS = process.env.ECS_SECURITY_GROUPS ? process.env.ECS_SECURITY_GROUPS.split(',') : [];
 
 /**
  * Main Lambda handler
@@ -25,9 +26,9 @@ exports.handler = async (event) => {
   try {
     // Parse request body
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
-    const { jobId, audioUrl, bucket, key } = body;
+    const { jobId, bucket, key } = body;
 
-    if (!jobId || (!audioUrl && (!bucket || !key))) {
+    if (!jobId || (!bucket || !key)) {
       return {
         statusCode: 400,
         headers: {
@@ -35,52 +36,69 @@ exports.handler = async (event) => {
           'Access-Control-Allow-Origin': '*',
         },
         body: JSON.stringify({
-          error: 'Missing required parameters: jobId and (audioUrl or bucket/key)',
+          error: 'Missing required parameters: jobId and bucket/key',
         }),
       };
     }
 
-    console.log(`Processing downbeat detection for job: ${jobId}`);
+    console.log(`Triggering downbeat detection for job: ${jobId}`);
 
-    // Download audio from S3
-    const audioBucket = bucket || audioUrl.split('/')[2].split('.')[0];
-    const audioKey = key || audioUrl.split('/').slice(3).join('/');
-    
-    const audioPath = `/tmp/${jobId}-audio.m4a`;
-    console.log(`Downloading audio from s3://${audioBucket}/${audioKey}`);
-    
-    const audioFile = await s3.getObject({
-      Bucket: audioBucket,
-      Key: audioKey,
-    }).promise();
-    
-    fs.writeFileSync(audioPath, audioFile.Body);
-    console.log(`Audio downloaded to ${audioPath}`);
-
-    // Run Python downbeat detection script
-    const pythonScript = path.join(__dirname, 'detect_downbeat.py');
-    const result = await runPythonScript(pythonScript, audioPath);
-
-    console.log('Downbeat detection complete:', result);
-
-    // Update job with downbeat data
+    // Update job status
     await dynamodb.update({
       TableName: JOBS_TABLE,
       Key: { jobId },
-      UpdateExpression: 'SET downbeatData = :data, updatedAt = :now',
+      UpdateExpression: 'SET #status = :status, downbeatStatus = :dbStatus, updatedAt = :now',
+      ExpressionAttributeNames: {
+        '#status': 'status',
+      },
       ExpressionAttributeValues: {
-        ':data': result,
+        ':status': 'DETECTING_DOWNBEAT',
+        ':dbStatus': 'PROCESSING',
         ':now': new Date().toISOString(),
       },
     }).promise();
 
-    // Clean up
-    if (fs.existsSync(audioPath)) {
-      fs.unlinkSync(audioPath);
+    // Trigger ECS task for downbeat detection
+    console.log('Starting ECS task for downbeat detection...');
+    
+    const ecsParams = {
+      cluster: ECS_CLUSTER,
+      taskDefinition: ECS_TASK_DEFINITION,
+      launchType: 'FARGATE',
+      networkConfiguration: {
+        awsvpcConfiguration: {
+          subnets: ECS_SUBNETS,
+          securityGroups: ECS_SECURITY_GROUPS,
+          assignPublicIp: 'ENABLED',
+        },
+      },
+      overrides: {
+        containerOverrides: [
+          {
+            name: 'downbeat-detector',
+            environment: [
+              { name: 'JOB_ID', value: jobId },
+              { name: 'AUDIO_BUCKET', value: bucket },
+              { name: 'AUDIO_KEY', value: key },
+              { name: 'JOBS_TABLE', value: JOBS_TABLE },
+              { name: 'TASK_TYPE', value: 'DOWNBEAT_DETECTION' },
+            ],
+          },
+        ],
+      },
+    };
+
+    const ecsResult = await ecs.runTask(ecsParams).promise();
+    
+    if (!ecsResult.tasks || ecsResult.tasks.length === 0) {
+      throw new Error('Failed to start ECS task');
     }
 
+    const taskArn = ecsResult.tasks[0].taskArn;
+    console.log('ECS task started:', taskArn);
+
     return {
-      statusCode: 200,
+      statusCode: 202,
       headers: {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -88,7 +106,8 @@ exports.handler = async (event) => {
       body: JSON.stringify({
         success: true,
         jobId,
-        ...result,
+        message: 'Downbeat detection started',
+        taskArn,
       }),
     };
 
@@ -108,43 +127,3 @@ exports.handler = async (event) => {
     };
   }
 };
-
-/**
- * Run Python script and return parsed JSON result
- */
-function runPythonScript(scriptPath, audioPath) {
-  return new Promise((resolve, reject) => {
-    const python = spawn('python3', [scriptPath, audioPath]);
-    
-    let stdout = '';
-    let stderr = '';
-
-    python.stdout.on('data', (data) => {
-      stdout += data.toString();
-    });
-
-    python.stderr.on('data', (data) => {
-      stderr += data.toString();
-      console.error('Python stderr:', data.toString());
-    });
-
-    python.on('close', (code) => {
-      if (code !== 0) {
-        reject(new Error(`Python script exited with code ${code}: ${stderr}`));
-        return;
-      }
-
-      try {
-        // Parse JSON output from Python script
-        const result = JSON.parse(stdout);
-        resolve(result);
-      } catch (error) {
-        reject(new Error(`Failed to parse Python output: ${error.message}\nOutput: ${stdout}`));
-      }
-    });
-
-    python.on('error', (error) => {
-      reject(new Error(`Failed to start Python process: ${error.message}`));
-    });
-  });
-}
