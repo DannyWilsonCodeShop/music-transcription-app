@@ -618,6 +618,46 @@ function App() {
             </h2>
             <p style={{ color: '#15803d', marginBottom: '16px' }}>{job.title}</p>
             
+            {/* Process Another File Button - Top */}
+            <button
+              onClick={() => {
+                setFile(null);
+                setJobId(null);
+                setJob(null);
+                setError(null);
+                setIsUploading(false);
+                setPdfUrl(null);
+                setUploadProgress(0);
+                setShowDownbeatConfirmation(false);
+                setDownbeatData(null);
+                setAudioUrl(null);
+              }}
+              style={{
+                marginBottom: '24px',
+                padding: '12px 24px',
+                background: 'linear-gradient(135deg, #9333ea 0%, #6366f1 100%)',
+                color: 'white',
+                fontWeight: '600',
+                borderRadius: '12px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '16px',
+                boxShadow: '0 4px 15px rgba(147, 51, 234, 0.4)',
+                transition: 'all 0.3s ease',
+                width: '100%'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(147, 51, 234, 0.6)';
+                e.currentTarget.style.transform = 'scale(1.02)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(147, 51, 234, 0.4)';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              ← Process Another File
+            </button>
+            
             {/* Chord Data Display */}
             {job.chordsData && (
               <div style={{ marginTop: '24px' }}>
@@ -945,46 +985,6 @@ function App() {
                 </a>
               </div>
             )}
-            
-            {/* Process Another File Button */}
-            <button
-              onClick={() => {
-                setFile(null);
-                setJobId(null);
-                setJob(null);
-                setError(null);
-                setIsUploading(false);
-                setPdfUrl(null);
-                setUploadProgress(0);
-                setShowDownbeatConfirmation(false);
-                setDownbeatData(null);
-                setAudioUrl(null);
-              }}
-              style={{
-                marginTop: '16px',
-                padding: '12px 24px',
-                background: 'linear-gradient(135deg, #9333ea 0%, #6366f1 100%)',
-                color: 'white',
-                fontWeight: '600',
-                borderRadius: '12px',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '16px',
-                boxShadow: '0 4px 15px rgba(147, 51, 234, 0.4)',
-                transition: 'all 0.3s ease',
-                width: '100%'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.boxShadow = '0 6px 20px rgba(147, 51, 234, 0.6)';
-                e.currentTarget.style.transform = 'scale(1.02)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.boxShadow = '0 4px 15px rgba(147, 51, 234, 0.4)';
-                e.currentTarget.style.transform = 'scale(1)';
-              }}
-            >
-              ← Process Another File
-            </button>
           </div>
         )}
       </div>
