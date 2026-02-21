@@ -704,7 +704,7 @@ function App() {
             </div>
 
             {/* Section-Based Chord Sheet */}
-            {job.chordsData.chords && job.chordsData.chords.length > 0 && (
+            {job.chordsData.chords && job.chordsData.chords.length > 0 ? (
               <div style={{
                 marginBottom: '24px',
                 padding: '20px',
@@ -716,6 +716,14 @@ function App() {
                   🎸 Chord Sheet
                 </h3>
                 {(() => {
+                  // Debug logging
+                  console.log('Rendering chord sheet with data:', {
+                    chordsCount: job.chordsData.chords.length,
+                    sectionsCount: job.chordsData.songStructure?.length || 0,
+                    firstChord: job.chordsData.chords[0],
+                    sections: job.chordsData.songStructure
+                  });
+                  
                   // Group chords by song sections
                   const sections = job.chordsData.songStructure || [];
                   const chords = job.chordsData.chords;
@@ -834,6 +842,25 @@ function App() {
                     );
                   });
                 })()}
+              </div>
+            ) : (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                  🎸 Chord Sheet
+                </h3>
+                <p style={{ color: '#6b7280' }}>
+                  No chords detected. Debug: {JSON.stringify({
+                    hasChordsData: !!job.chordsData,
+                    hasChords: !!job.chordsData?.chords,
+                    chordsLength: job.chordsData?.chords?.length || 0
+                  })}
+                </p>
               </div>
             )}
             
