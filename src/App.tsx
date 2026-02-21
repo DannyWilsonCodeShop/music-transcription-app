@@ -774,7 +774,7 @@ function App() {
                   </div>
                 )}
 
-                {/* First 20 Chords */}
+                {/* Section-Based Chord Sheet */}
                 {job.chordsData.chords && job.chordsData.chords.length > 0 && (
                   <div style={{
                     marginBottom: '24px',
@@ -784,45 +784,127 @@ function App() {
                     border: '1px solid #d1fae5'
                   }}>
                     <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
-                      🎸 Chord Progression (First 20)
+                      🎸 Chord Sheet
                     </h3>
-                    <div style={{ 
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-                      gap: '8px'
-                    }}>
-                      {job.chordsData.chords.slice(0, 20).map((chord: any, idx: number) => (
-                        <div key={idx} style={{
-                          padding: '12px',
-                          backgroundColor: '#f9fafb',
-                          borderRadius: '8px',
-                          border: '1px solid #e5e7eb',
-                          textAlign: 'center'
-                        }}>
-                          <div style={{ 
-                            fontSize: '18px', 
-                            fontWeight: '700', 
-                            color: '#1f2937',
-                            marginBottom: '4px'
-                          }}>
-                            {chord.chord}
+                    {(() => {
+                      // Group chords by song sections
+                      const sections = job.chordsData.songStructure || [];
+                      const chords = job.chordsData.chords;
+                      
+                      if (sections.length === 0) {
+                        // No sections detected, display all chords in one section
+                        const chordLines = [];
+                        for (let i = 0; i < chords.length; i += 16) {
+                          chordLines.push(chords.slice(i, i + 16));
+                        }
+                        
+                        return (
+                          <div style={{ marginBottom: '20px' }}>
+                            <div style={{
+                              fontSize: '16px',
+                              fontWeight: '600',
+                              color: '#166534',
+                              marginBottom: '12px',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                            }}>
+                              Full Song
+                            </div>
+                            {chordLines.map((line, lineIdx) => (
+                              <div key={lineIdx} style={{
+                                display: 'flex',
+                                gap: '4px',
+                                marginBottom: '8px',
+                                fontFamily: 'monospace',
+                                fontSize: '16px',
+                                flexWrap: 'wrap'
+                              }}>
+                                {line.map((chord: any, chordIdx: number) => (
+                                  <span key={chordIdx}>
+                                    <span style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: '#f9fafb',
+                                      borderRadius: '4px',
+                                      border: '1px solid #e5e7eb',
+                                      fontWeight: '600',
+                                      color: '#1f2937'
+                                    }}>
+                                      {chord.chord}
+                                    </span>
+                                    {chordIdx < line.length - 1 && chordIdx % 4 === 3 && (
+                                      <span style={{ margin: '0 8px', color: '#9ca3af' }}>|</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            ))}
                           </div>
-                          <div style={{ fontSize: '12px', color: '#9ca3af' }}>
-                            {parseFloat(chord.start || 0).toFixed(1)}s
+                        );
+                      }
+                      
+                      // Group chords by sections
+                      return sections.map((section: any, sectionIdx: number) => {
+                        const sectionStart = parseFloat(section.start || 0);
+                        const sectionEnd = parseFloat(section.end || 0);
+                        
+                        // Find chords within this section's time range
+                        const sectionChords = chords.filter((chord: any) => {
+                          const chordTime = parseFloat(chord.start || 0);
+                          return chordTime >= sectionStart && chordTime < sectionEnd;
+                        });
+                        
+                        if (sectionChords.length === 0) return null;
+                        
+                        // Split into lines of up to 16 chords
+                        const chordLines = [];
+                        for (let i = 0; i < sectionChords.length; i += 16) {
+                          chordLines.push(sectionChords.slice(i, i + 16));
+                        }
+                        
+                        return (
+                          <div key={sectionIdx} style={{ marginBottom: '20px' }}>
+                            <div style={{
+                              fontSize: '16px',
+                              fontWeight: '600',
+                              color: '#166534',
+                              marginBottom: '8px',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.5px'
+                            }}>
+                              {section.label} ({parseFloat(section.start || 0).toFixed(1)}s - {parseFloat(section.end || 0).toFixed(1)}s)
+                            </div>
+                            {chordLines.map((line, lineIdx) => (
+                              <div key={lineIdx} style={{
+                                display: 'flex',
+                                gap: '4px',
+                                marginBottom: '8px',
+                                fontFamily: 'monospace',
+                                fontSize: '16px',
+                                flexWrap: 'wrap'
+                              }}>
+                                {line.map((chord: any, chordIdx: number) => (
+                                  <span key={chordIdx}>
+                                    <span style={{
+                                      padding: '4px 8px',
+                                      backgroundColor: '#f9fafb',
+                                      borderRadius: '4px',
+                                      border: '1px solid #e5e7eb',
+                                      fontWeight: '600',
+                                      color: '#1f2937'
+                                    }}>
+                                      {chord.chord}
+                                    </span>
+                                    {chordIdx < line.length - 1 && chordIdx % 4 === 3 && (
+                                      <span style={{ margin: '0 8px', color: '#9ca3af' }}>|</span>
+                                    )}
+                                  </span>
+                                ))}
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                    {job.chordsData.chords.length > 20 && (
-                      <div style={{ 
-                        marginTop: '12px', 
-                        fontSize: '14px', 
-                        color: '#6b7280',
-                        textAlign: 'center'
-                      }}>
-                        ... and {job.chordsData.chords.length - 20} more chords
-                      </div>
-                    )}
+                        );
+                      });
+                    })()}
                   </div>
                 )}
               </div>
