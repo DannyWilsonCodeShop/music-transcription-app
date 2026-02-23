@@ -1128,8 +1128,23 @@ def detect_chords_librosa(audio_path, job_id):
         
         # Determine if minor or major by checking chord quality
         # Count major vs minor versions of the most common chord
-        major_count = sum(1 for c in chords if c['chord'].startswith(most_common_root) and 'm' not in c['chord'].lower())
-        minor_count = sum(1 for c in chords if c['chord'].startswith(most_common_root) and 'm' in c['chord'].lower() and 'maj' not in c['chord'].lower())
+        major_count = 0
+        minor_count = 0
+        
+        for c in chords:
+            chord_name = c['chord']
+            if not chord_name.startswith(most_common_root):
+                continue
+            
+            # Get the part after the root
+            suffix = chord_name[len(most_common_root):]
+            
+            # Check if it's explicitly minor (has 'm' but not 'maj')
+            if 'm' in suffix.lower() and 'maj' not in suffix.lower():
+                minor_count += 1
+            else:
+                # Everything else is major (including maj7, 7, sus, etc.)
+                major_count += 1
         
         if minor_count > major_count:
             mode = 'minor'
