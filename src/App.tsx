@@ -748,14 +748,19 @@ function App() {
                   
                   // Group chords by sections
                   return sections.map((section: any, sectionIdx: number) => {
-                    const sectionStart = parseFloat(section.start || 0);
-                    const sectionEnd = parseFloat(section.end || 0);
+                    // Handle both property names: start/end or startTime/endTime
+                    const sectionStart = parseFloat(section.start || section.startTime || 0);
+                    const sectionEnd = parseFloat(section.end || section.endTime || (sectionIdx < sections.length - 1 ? sections[sectionIdx + 1].startTime : 999999));
+                    
+                    console.log(`Section ${sectionIdx} (${section.label}): ${sectionStart}s - ${sectionEnd}s`);
                     
                     // Find chords within this section's time range
                     const sectionChords = chords.filter((chord: any) => {
                       const chordTime = parseFloat(chord.start || 0);
                       return chordTime >= sectionStart && chordTime < sectionEnd;
                     });
+                    
+                    console.log(`  Found ${sectionChords.length} chords in this section`);
                     
                     if (sectionChords.length === 0) return null;
                     
