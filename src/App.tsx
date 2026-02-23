@@ -687,7 +687,8 @@ function App() {
                     chordsCount: job.chordsData.chords.length,
                     sectionsCount: job.chordsData.songStructure?.length || 0,
                     firstChord: job.chordsData.chords[0],
-                    sections: job.chordsData.songStructure
+                    sections: job.chordsData.songStructure,
+                    allKeys: Object.keys(job.chordsData)
                   });
                   
                   // Group chords by song sections
