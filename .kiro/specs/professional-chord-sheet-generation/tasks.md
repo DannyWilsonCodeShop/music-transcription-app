@@ -64,248 +64,308 @@ The implementation is organized into discrete phases: audio analysis infrastruct
   - Verify 95%+ accuracy target is achievable
   - Ensure all tests pass, ask the user if questions arise
 
-- [ ] 5. Implement metadata extraction service
-  - [ ] 5.1 Create YouTube API integration
+- [ ] 5. Implement lyrics extraction system
+  - [ ] 5.1 Add Whisper to Docker container
+    - Update Dockerfile to install openai-whisper package
+    - Add required dependencies (ffmpeg, torch)
+    - Test Whisper installation in container
+    - _Requirements: 6.1_
+  
+  - [ ] 5.2 Implement vocal separation
+    - Enable Demucs vocal stem separation (already in pipeline)
+    - Extract vocal-only audio track
+    - Save vocal stem for Whisper processing
+    - _Requirements: 6.1_
+  
+  - [ ] 5.3 Create LyricsExtractionService class
+    - Load Whisper model (base or small for speed)
+    - Implement extract_lyrics method with word-level timestamps
+    - Handle instrumental sections (no vocals detected)
+    - Return LyricsData with timestamped words/phrases
+    - _Requirements: 6.1, 6.2, 6.7_
+  
+  - [ ] 5.4 Write property test for lyrics timestamp validity
+    - **Property: Lyrics timestamps within audio duration**
+    - Verify all word timestamps are between 0 and audio duration
+    - **Validates: Requirements 6.2**
+  
+  - [ ] 5.5 Write property test for minimum lyrics accuracy
+    - **Property: Lyrics transcription accuracy >= 85%**
+    - Test with known lyrics samples
+    - **Validates: Requirements 6.8**
+  
+  - [ ] 5.6 Implement lyrics-chord alignment engine
+    - Match lyrics timestamps with chord timestamps
+    - Group lyrics into lines based on natural phrasing
+    - Position chords above corresponding lyrics
+    - Handle mid-word chord changes
+    - _Requirements: 6.3, 6.5_
+  
+  - [ ] 5.7 Write property test for lyrics-chord alignment
+    - **Property: Chords aligned with lyrics timing**
+    - Verify chord timestamps match lyrics line timestamps
+    - **Validates: Requirements 6.3, 6.5**
+  
+  - [ ] 5.8 Implement verse/chorus structure detection
+    - Analyze lyrics for repeated sections
+    - Label sections as Verse, Chorus, Bridge
+    - Use pattern matching on lyrics text
+    - _Requirements: 6.4_
+  
+  - [ ] 5.9 Store lyrics data in DynamoDB
+    - Add lyricsData field to schema
+    - Store timestamped words/phrases
+    - Store alignment with chords
+    - _Requirements: 6.1, 6.2, 6.3_
+
+- [ ] 6. Checkpoint - Verify lyrics extraction pipeline
+  - Test lyrics extraction on sample songs with clear vocals
+  - Verify 85%+ transcription accuracy
+  - Test alignment with chords
+  - Ensure all tests pass, ask the user if questions arise
+
+- [ ] 7. Implement metadata extraction service
+  - [ ] 7.1 Create YouTube API integration
     - Set up YouTube Data API v3 client
     - Implement get_video_details method to fetch title, description, channel
     - Add error handling for quota limits and video not found
     - _Requirements: 1.1_
   
-  - [ ] 5.2 Write property test for YouTube API data retrieval
+  - [ ] 7.2 Write property test for YouTube API data retrieval
     - **Property 1: YouTube API data retrieval**
     - **Validates: Requirements 1.1**
   
-  - [ ] 5.3 Implement LLM-powered metadata parsing
+  - [ ] 7.3 Implement LLM-powered metadata parsing
     - Create parse_with_llm method using Claude/GPT-4 API
     - Design prompt to extract song name, artist, featured artists, composer, version
     - Parse JSON response into ParsedMetadata structure
     - Implement fallback rule-based parser for LLM failures
     - _Requirements: 1.2, 1.5, 1.6_
   
-  - [ ] 5.4 Write property test for LLM parsing clean output
+  - [ ] 7.4 Write property test for LLM parsing clean output
     - **Property 2: LLM parsing produces clean structured data**
     - **Validates: Requirements 1.2, 1.5, 1.6**
   
-  - [ ] 5.5 Implement artist vs uploader distinction logic
+  - [ ] 7.5 Implement artist vs uploader distinction logic
     - Compare channel name with artist extracted from title
     - Set is_official flag when channel matches artist
     - _Requirements: 1.3_
   
-  - [ ] 5.6 Write property test for artist distinction
+  - [ ] 7.6 Write property test for artist distinction
     - **Property 3: Artist vs uploader distinction**
     - **Validates: Requirements 1.3**
   
-  - [ ] 5.7 Implement composer extraction from description
+  - [ ] 7.7 Implement composer extraction from description
     - Parse description for keywords: "written by", "composed by", "songwriter"
     - Extract composer name when present
     - _Requirements: 1.4_
   
-  - [ ] 5.8 Write property test for composer extraction
+  - [ ] 7.8 Write property test for composer extraction
     - **Property 4: Composer extraction when available**
     - **Validates: Requirements 1.4**
 
-- [ ] 6. Implement musical analysis service
-  - [ ] 6.1 Create tempo and beat detection
+- [ ] 8. Implement musical analysis service
+  - [ ] 8.1 Create tempo and beat detection
     - Integrate Essentia RhythmExtractor2013 for BPM detection
     - Extract beat timestamps for alignment
     - _Requirements: 3.1_
   
-  - [ ] 6.2 Write property test for valid tempo range
+  - [ ] 8.2 Write property test for valid tempo range
     - **Property 10: Valid tempo range**
     - **Validates: Requirements 3.1**
   
-  - [ ] 6.3 Implement time signature detection
+  - [ ] 8.3 Implement time signature detection
     - Analyze beat interval patterns using autocorrelation
     - Detect common time signatures (4/4, 3/4, 6/8)
     - Default to 4/4 if detection uncertain
     - _Requirements: 3.2_
   
-  - [ ] 6.4 Write property test for valid time signature format
+  - [ ] 8.4 Write property test for valid time signature format
     - **Property 11: Valid time signature format**
     - **Validates: Requirements 3.2**
   
-  - [ ] 6.5 Implement song structure detection (optional)
+  - [ ] 8.5 Implement song structure detection (optional)
     - Use self-similarity matrix analysis to segment audio
     - Label segments as verse, chorus, bridge (best-effort)
     - Gracefully degrade if detection fails
     - _Requirements: 3.5_
   
-  - [ ] 6.6 Write property test for non-overlapping sections
+  - [ ] 8.6 Write property test for non-overlapping sections
     - **Property 12: Non-overlapping song sections**
     - **Validates: Requirements 3.5**
 
-- [ ] 7. Implement Nashville number system
-  - [ ] 7.1 Create NashvilleNumberService class
+- [ ] 9. Implement Nashville number system
+  - [ ] 9.1 Create NashvilleNumberService class
     - Build note-to-semitone mappings
     - Define major and minor scale degree arrays
     - _Requirements: 5.1_
   
-  - [ ] 7.2 Implement convert_chord method
+  - [ ] 9.2 Implement convert_chord method
     - Parse chord into root, quality, extensions, bass components
     - Calculate scale degree of root relative to key
     - Format number with quality indicators (uppercase/lowercase)
     - Handle slash chords with bass note scale degree
     - _Requirements: 5.1, 5.3, 5.4, 5.5_
   
-  - [ ] 7.3 Write property test for Nashville number correctness
+  - [ ] 9.3 Write property test for Nashville number correctness
     - **Property 13: Nashville number correctness**
     - **Validates: Requirements 5.1**
   
-  - [ ] 7.4 Write property test for Nashville case conventions
+  - [ ] 9.4 Write property test for Nashville case conventions
     - **Property 14: Nashville case conventions**
     - **Validates: Requirements 5.3**
   
-  - [ ] 7.5 Write property test for extension preservation
+  - [ ] 9.5 Write property test for extension preservation
     - **Property 15: Nashville extension preservation**
     - **Validates: Requirements 5.4**
   
-  - [ ] 7.6 Write property test for slash chord notation
+  - [ ] 9.6 Write property test for slash chord notation
     - **Property 16: Nashville slash chord notation**
     - **Validates: Requirements 5.5**
 
-- [ ] 8. Checkpoint - Verify data processing pipeline
+- [ ] 10. Checkpoint - Verify data processing pipeline
   - Test end-to-end data flow from audio to structured data
   - Verify all Nashville numbers calculate correctly
   - Ensure all tests pass, ask the user if questions arise
 
-- [ ] 9. Implement PDF layout engine
-  - [ ] 9.1 Create LayoutEngine class
+- [ ] 11. Implement PDF layout engine
+  - [ ] 11.1 Create LayoutEngine class
     - Implement calculate_layout method
     - Define measures_per_line configuration (4-8 measures)
     - Define staves_per_page configuration (5 staves)
     - _Requirements: 4.2, 6.3_
   
-  - [ ] 9.2 Implement measure grouping logic
+  - [ ] 11.2 Implement measure grouping logic
     - Calculate measure duration from time signature and tempo
     - Group chords into measures based on timing
     - Handle partial measures at song end
     - _Requirements: 4.2_
   
-  - [ ] 9.3 Write property test for measure calculation accuracy
+  - [ ] 11.3 Write property test for measure calculation accuracy
     - **Property 17: Measure calculation accuracy**
     - **Validates: Requirements 4.2**
   
-  - [ ] 9.4 Write property test for measures per line constraint
+  - [ ] 11.4 Write property test for measures per line constraint
     - **Property 21: Measures per line constraint**
     - **Validates: Requirements 6.3**
   
-  - [ ] 9.5 Implement pagination logic
+  - [ ] 11.5 Implement pagination logic
     - Organize measures into staff lines
     - Group staff lines into pages
     - Calculate page breaks
     - _Requirements: 4.8, 6.5_
   
-  - [ ] 9.6 Write property test for multi-page pagination
+  - [ ] 11.6 Write property test for multi-page pagination
     - **Property 20: Multi-page pagination**
     - **Validates: Requirements 4.8, 6.5**
 
-- [ ] 10. Implement PDF generation service
-  - [ ] 10.1 Set up PDF rendering infrastructure
+- [ ] 12. Implement PDF generation service
+  - [ ] 12.1 Set up PDF rendering infrastructure
     - Choose and integrate PDF library (ReportLab or similar)
     - Set up VexFlow for music notation (or alternative)
     - Create PDFDocument wrapper class
     - _Requirements: 4.1, 4.3, 4.4_
   
-  - [ ] 10.2 Implement header rendering
+  - [ ] 12.2 Implement header rendering
     - Add song metadata (title, artist, composer)
     - Add musical information (key, tempo, time signature)
     - Format header with proper typography
     - _Requirements: 6.2_
   
-  - [ ] 10.3 Write property test for required metadata in header
+  - [ ] 12.3 Write property test for required metadata in header
     - **Property 22: Required metadata in header**
     - **Validates: Requirements 6.2**
   
-  - [ ] 10.4 Implement staff rendering
+  - [ ] 12.4 Implement staff rendering
     - Draw 5-line musical staff
     - Add key signature at beginning
     - Add time signature at beginning
     - Draw measure bar lines
     - _Requirements: 4.1, 4.2, 4.3, 4.4_
   
-  - [ ] 10.5 Implement chord symbol rendering
+  - [ ] 12.5 Implement chord symbol rendering
     - Place chord symbols above staff at correct x-position
     - Calculate x-position based on chord timestamp
     - Use proper font and sizing
     - _Requirements: 4.5_
   
-  - [ ] 10.6 Write property test for chord positioning correspondence
+  - [ ] 12.6 Write property test for chord positioning correspondence
     - **Property 18: Chord positioning correspondence**
     - **Validates: Requirements 4.5**
   
-  - [ ] 10.7 Implement Nashville number rendering
+  - [ ] 12.7 Implement Nashville number rendering
     - Place Nashville numbers below staff
     - Align horizontally with corresponding chord symbols
     - Use distinct styling (lighter color, smaller font)
     - _Requirements: 4.6, 5.2_
   
-  - [ ] 10.8 Write property test for Nashville-chord alignment
+  - [ ] 12.8 Write property test for Nashville-chord alignment
     - **Property 19: Nashville-chord alignment**
     - **Validates: Requirements 4.6, 5.2**
   
-  - [ ] 10.9 Implement footer rendering
+  - [ ] 12.9 Implement footer rendering
     - Add copyright/attribution text
     - Add page numbers on multi-page documents
     - _Requirements: 6.6, 6.5_
 
-- [ ] 11. Implement orchestration service
-  - [ ] 11.1 Create main orchestration workflow
+- [ ] 13. Implement orchestration service
+  - [ ] 13.1 Create main orchestration workflow
     - Coordinate all services (audio, metadata, analysis, PDF)
     - Implement parallel processing where possible (metadata + audio download)
     - Add progress tracking and status updates
     - _Requirements: All_
   
-  - [ ] 11.2 Implement error handling and graceful degradation
+  - [ ] 13.2 Implement error handling and graceful degradation
     - Handle YouTube API errors with retry logic
     - Handle LLM failures with rule-based fallback
     - Handle optional feature failures (structure detection)
     - Implement ErrorResponse model
     - _Requirements: All_
   
-  - [ ] 11.3 Add DynamoDB integration
+  - [ ] 13.3 Add DynamoDB integration
     - Update schema to store enhanced metadata
     - Store detailed chord progression with timing
     - Store musical analysis results
     - Store quality metrics (confidence, processing time)
     - _Requirements: All_
   
-  - [ ] 11.4 Write integration test for end-to-end processing
+  - [ ] 13.4 Write integration test for end-to-end processing
     - Test complete pipeline from video ID to PDF
     - Verify all components execute successfully
     - Verify quality metrics meet requirements
 
-- [ ] 12. Implement caching and performance optimization
-  - [ ] 12.1 Add caching layer
+- [ ] 14. Implement caching and performance optimization
+  - [ ] 14.1 Add caching layer
     - Cache YouTube metadata (24 hours TTL)
     - Cache LLM parsing results (permanent)
     - Cache generated PDFs (permanent)
     - Use DynamoDB for cache storage
     - _Requirements: NFR-2, NFR-3_
   
-  - [ ] 12.2 Optimize audio processing
+  - [ ] 14.2 Optimize audio processing
     - Implement parallel processing for independent tasks
     - Use asyncio for I/O-bound operations
     - Optimize Essentia parameters for speed vs accuracy tradeoff
     - _Requirements: NFR-1_
   
-  - [ ] 12.3 Write performance test for processing time
+  - [ ] 14.3 Write performance test for processing time
     - Verify 5-minute song processes in under 3.5 minutes
     - Test with various song lengths
 
-- [ ] 13. Final checkpoint and integration testing
-  - [ ] 13.1 Run comprehensive test suite
+- [ ] 15. Final checkpoint and integration testing
+  - [ ] 15.1 Run comprehensive test suite
     - Execute all property-based tests (100+ iterations each)
     - Execute all unit tests
     - Execute integration tests
     - Verify 95%+ chord detection accuracy on test dataset
   
-  - [ ] 13.2 Test with diverse song samples
+  - [ ] 15.2 Test with diverse song samples
     - Test various genres (rock, jazz, classical, pop)
     - Test various keys and time signatures
     - Test edge cases (very short songs, unusual structures)
     - Verify PDF quality and readability
   
-  - [ ] 13.3 Verify all requirements met
+  - [ ] 15.3 Verify all requirements met
     - Review requirements document
     - Confirm all acceptance criteria satisfied
     - Document any known limitations
