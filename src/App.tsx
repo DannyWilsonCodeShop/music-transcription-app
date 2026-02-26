@@ -765,14 +765,28 @@ function App() {
                             {line.map((chord: any, chordIdx: number) => (
                               <span key={chordIdx}>
                                 <span style={{
+                                  display: 'inline-flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
                                   padding: '4px 8px',
                                   backgroundColor: '#f9fafb',
                                   borderRadius: '4px',
-                                  border: '1px solid #e5e7eb',
-                                  fontWeight: '600',
-                                  color: '#1f2937'
+                                  border: '1px solid #e5e7eb'
                                 }}>
-                                  {chord.chord}
+                                  <span style={{
+                                    fontWeight: '600',
+                                    color: '#1f2937'
+                                  }}>
+                                    {chord.chord}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '11px',
+                                    color: '#9333ea',
+                                    fontStyle: 'italic',
+                                    marginTop: '2px'
+                                  }}>
+                                    ({getNashvilleNumber(chord.chord, key)})
+                                  </span>
                                 </span>
                                 {chordIdx < line.length - 1 && chordIdx % 4 === 3 && (
                                   <span style={{ margin: '0 8px', color: '#9ca3af' }}>|</span>
@@ -833,14 +847,28 @@ function App() {
                             {line.map((chord: any, chordIdx: number) => (
                               <span key={chordIdx}>
                                 <span style={{
+                                  display: 'inline-flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
                                   padding: '4px 8px',
                                   backgroundColor: '#f9fafb',
                                   borderRadius: '4px',
-                                  border: '1px solid #e5e7eb',
-                                  fontWeight: '600',
-                                  color: '#1f2937'
+                                  border: '1px solid #e5e7eb'
                                 }}>
-                                  {chord.chord}
+                                  <span style={{
+                                    fontWeight: '600',
+                                    color: '#1f2937'
+                                  }}>
+                                    {chord.chord}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '11px',
+                                    color: '#9333ea',
+                                    fontStyle: 'italic',
+                                    marginTop: '2px'
+                                  }}>
+                                    ({getNashvilleNumber(chord.chord, key)})
+                                  </span>
                                 </span>
                                 {chordIdx < line.length - 1 && chordIdx % 4 === 3 && (
                                   <span style={{ margin: '0 8px', color: '#9ca3af' }}>|</span>
