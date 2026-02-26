@@ -208,6 +208,115 @@ def separate_vocal_stem(audio_path: str, output_path: str = None) -> str:
         log(traceback.format_exc(), "ERROR")
         return None
 
+class LyricsExtractionService:
+    """
+    Service for extracting lyrics from audio using Whisper
+    Provides word-level timestamps for alignment with chords
+    """
+    
+    def __init__(self, model_size='base'):
+        """
+        Initialize Whisper model
+        
+        Args:
+            model_size: Whisper model size ('tiny', 'base', 'small', 'medium', 'large')
+                       'base' is recommended for speed/accuracy balance
+        """
+        self.model = None
+        self.model_size = model_size
+        
+        if not WHISPER_AVAILABLE:
+            log("Whisper not available, lyrics extraction disabled", "WARNING")
+            return
+        
+        try:
+            log(f"Loading Whisper model ({model_size})...")
+            self.model = whisper.load_model(model_size)
+            log(f"✓ Whisper model loaded successfully")
+        except Exception as e:
+            log(f"Failed to load Whisper model: {e}", "ERROR")
+            self.model = None
+    
+    def extract_lyrics(self, audio_path: str) -> dict:
+        """
+        Extract lyrics with word-level timestamps from audio
+        
+        Args:
+            audio_path: Path to audio file (preferably vocal stem)
+        
+        Returns:
+            dict with:
+                - text: Full lyrics text
+                - words: List of {word, start, end} dicts with timestamps
+                - segments: List of phrase segments with timestamps
+                - language: Detected language
+                - duration: Audio duration in seconds
+        """
+        if not self.model:
+            log("Whisper model not available", "WARNING")
+            return {
+                'text': '',
+                'words': [],
+                'segments': [],
+                'language': 'unknown',
+                'duration': 0
+            }
+        
+        try:
+            log(f"🎤 Extracting lyrics from: {audio_path}")
+            
+            # Transcribe with word-level timestamps
+            result = self.model.transcribe(
+                audio_path,
+                word_timestamps=True,
+                verbose=False
+            )
+            
+            # Extract word-level data
+            words = []
+            for segment in result.get('segments', []):
+                for word_data in segment.get('words', []):
+                    words.append({
+                        'word': word_data['word'].strip(),
+                        'start': word_data['start'],
+                        'end': word_data['end']
+                    })
+            
+            # Get audio duration
+            audio_info = torchaudio.info(audio_path)
+            duration = audio_info.num_frames / audio_info.sample_rate
+            
+            lyrics_data = {
+                'text': result['text'].strip(),
+                'words': words,
+                'segments': result.get('segments', []),
+                'language': result.get('language', 'unknown'),
+                'duration': duration
+            }
+            
+            log(f"✓ Lyrics extracted successfully")
+            log(f"  Total words: {len(words)}")
+            log(f"  Language: {lyrics_data['language']}")
+            log(f"  Duration: {duration:.1f}s")
+            
+            # Check for instrumental sections (no vocals)
+            if len(words) == 0:
+                log("  ⚠️ No lyrics detected - may be instrumental", "WARNING")
+            
+            return lyrics_data
+            
+        except Exception as e:
+            log(f"Error extracting lyrics: {e}", "ERROR")
+            log(traceback.format_exc(), "ERROR")
+            return {
+                'text': '',
+                'words': [],
+                'segments': [],
+                'language': 'unknown',
+                'duration': 0,
+                'error': str(e)
+            }
+
 class ChordDetector:
     """Chord detector with optional stem separation"""
     
