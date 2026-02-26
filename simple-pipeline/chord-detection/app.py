@@ -199,21 +199,21 @@ def separate_vocal_stem(audio_path: str, output_path: str = None) -> str:
         log(f"  Model loaded: mdx_extra")
         log(f"  Model sample rate: {model.samplerate}Hz")
         
-        # Load audio
-        wav, sr = torchaudio.load(audio_path)
+        # Load audio using librosa (handles MP3/M4A better than torchaudio)
+        log(f"  Loading audio with librosa...")
+        audio_np, sr = librosa.load(audio_path, sr=model.samplerate, mono=False)
+        
+        # Convert to torch tensor
+        if audio_np.ndim == 1:
+            # Mono - convert to stereo
+            wav = torch.from_numpy(audio_np).unsqueeze(0).repeat(2, 1).float()
+        else:
+            # Already stereo or multi-channel
+            wav = torch.from_numpy(audio_np).float()
+            if wav.shape[0] == 1:
+                wav = wav.repeat(2, 1)
+        
         log(f"  Audio loaded: {wav.shape[1] / sr:.1f}s at {sr}Hz")
-        
-        # Demucs expects stereo
-        if wav.shape[0] == 1:
-            wav = wav.repeat(2, 1)
-            log("  Converted mono to stereo")
-        
-        # Resample if needed
-        if sr != model.samplerate:
-            resampler = torchaudio.transforms.Resample(sr, model.samplerate)
-            wav = resampler(wav)
-            sr = model.samplerate
-            log(f"  Resampled to {sr}Hz")
         
         # Apply source separation
         log("  Running Demucs separation (this may take 1-2 minutes)...")
