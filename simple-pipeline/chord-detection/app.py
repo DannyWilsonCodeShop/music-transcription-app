@@ -34,8 +34,16 @@ except ImportError:
     WHISPER_AVAILABLE = False
     print("WARNING: whisper not available, lyrics extraction disabled")
 
-# Demucs disabled for simple pipeline
-DEMUCS_AVAILABLE = False
+# Demucs for vocal separation
+try:
+    import torch
+    import torchaudio
+    from demucs import pretrained
+    from demucs.apply import apply_model
+    DEMUCS_AVAILABLE = True
+except ImportError:
+    DEMUCS_AVAILABLE = False
+    print("WARNING: demucs not available, vocal separation disabled")
 
 # MSAF disabled for simple pipeline  
 MSAF_AVAILABLE = False
@@ -137,6 +145,68 @@ def main():
         log(traceback.format_exc(), "ERROR")
         update_job_status(job_id, 'FAILED', 0, str(e))
         raise
+
+def separate_vocal_stem(audio_path: str, output_path: str = None) -> str:
+    """
+    Separate vocal stem from audio using Demucs
+    
+    Args:
+        audio_path: Path to input audio file
+        output_path: Path to save vocal stem (optional, defaults to /tmp/{job_id}-vocals.wav)
+    
+    Returns:
+        Path to saved vocal stem file
+    """
+    if not DEMUCS_AVAILABLE:
+        log("Demucs not available, cannot separate vocals", "WARNING")
+        return None
+    
+    try:
+        log("🎤 Separating vocal stem with Demucs...")
+        
+        # Load Demucs model (use mdx_extra for better quality)
+        model = pretrained.get_model('mdx_extra')
+        log(f"  Model loaded: mdx_extra")
+        log(f"  Model sample rate: {model.samplerate}Hz")
+        
+        # Load audio
+        wav, sr = torchaudio.load(audio_path)
+        log(f"  Audio loaded: {wav.shape[1] / sr:.1f}s at {sr}Hz")
+        
+        # Demucs expects stereo
+        if wav.shape[0] == 1:
+            wav = wav.repeat(2, 1)
+            log("  Converted mono to stereo")
+        
+        # Resample if needed
+        if sr != model.samplerate:
+            resampler = torchaudio.transforms.Resample(sr, model.samplerate)
+            wav = resampler(wav)
+            sr = model.samplerate
+            log(f"  Resampled to {sr}Hz")
+        
+        # Apply source separation
+        log("  Running Demucs separation (this may take 1-2 minutes)...")
+        with torch.no_grad():
+            sources = apply_model(model, wav[None], device='cpu')[0]
+        
+        # Demucs mdx_extra outputs: [drums, bass, other, vocals]
+        vocals = sources[3]  # Index 3 is vocals
+        log(f"  ✓ Vocal stem extracted: {vocals.shape}")
+        
+        # Save vocal stem
+        if output_path is None:
+            output_path = audio_path.replace('.mp3', '_vocals.wav').replace('.m4a', '_vocals.wav')
+        
+        torchaudio.save(output_path, vocals.cpu(), sr)
+        log(f"  ✓ Vocal stem saved to: {output_path}")
+        
+        return output_path
+        
+    except Exception as e:
+        log(f"Error separating vocal stem: {e}", "ERROR")
+        log(traceback.format_exc(), "ERROR")
+        return None
 
 class ChordDetector:
     """Chord detector with optional stem separation"""
