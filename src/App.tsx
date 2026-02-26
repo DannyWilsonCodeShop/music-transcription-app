@@ -645,7 +645,7 @@ function App() {
                 <div>
                   <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Key</div>
                   <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
-                    {job.chordsData.key} {job.chordsData.mode}
+                    {job.chordsData.key}
                   </div>
                 </div>
                 <div>
@@ -691,9 +691,48 @@ function App() {
                     allKeys: Object.keys(job.chordsData)
                   });
                   
+                  // Helper function to calculate Nashville Number
+                  const getNashvilleNumber = (chordName: string, key: string) => {
+                    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                    const flatToSharp: any = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'};
+                    
+                    // Extract root from chord
+                    let root = chordName[0];
+                    if (chordName.length > 1 && (chordName[1] === '#' || chordName[1] === 'b')) {
+                      root = chordName.substring(0, 2);
+                    }
+                    
+                    // Normalize to sharp
+                    if (root in flatToSharp) root = flatToSharp[root];
+                    
+                    // Extract key root (handle "E Minor / G Major" format)
+                    let keyRoot = key.split(' ')[0];
+                    if (keyRoot in flatToSharp) keyRoot = flatToSharp[keyRoot];
+                    
+                    try {
+                      const rootIdx = noteNames.indexOf(root);
+                      const keyIdx = noteNames.indexOf(keyRoot);
+                      if (rootIdx === -1 || keyIdx === -1) return '';
+                      
+                      const degree = ((rootIdx - keyIdx + 12) % 12) + 1;
+                      const degreeMap: any = {1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '1', 9: '2', 10: '3', 11: '4', 12: '5'};
+                      let nns = degreeMap[degree] || '';
+                      
+                      // Add quality suffix
+                      if (chordName.toLowerCase().includes('m') && !chordName.toLowerCase().includes('maj')) {
+                        nns += 'm';
+                      }
+                      
+                      return nns;
+                    } catch {
+                      return '';
+                    }
+                  };
+                  
                   // Group chords by song sections
                   const sections = job.chordsData.songStructure || [];
                   const chords = job.chordsData.chords;
+                  const key = job.chordsData.key;
                   
                   if (sections.length === 0) {
                     // No sections detected, display all chords in one section
