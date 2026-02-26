@@ -26,6 +26,14 @@ except ImportError:
     ESSENTIA_AVAILABLE = False
     print("WARNING: essentia not available, using librosa only")
 
+# Whisper for lyrics extraction
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    print("WARNING: whisper not available, lyrics extraction disabled")
+
 # Demucs disabled for simple pipeline
 DEMUCS_AVAILABLE = False
 
@@ -68,6 +76,11 @@ def main():
     log(f"  KEY: {key}")
     log(f"  KEY: {key}")
     log(f"  JOBS_TABLE: {JOBS_TABLE}")
+    
+    log(f"Library Availability:")
+    log(f"  Essentia: {ESSENTIA_AVAILABLE}")
+    log(f"  Whisper: {WHISPER_AVAILABLE}")
+    log(f"  Demucs: {DEMUCS_AVAILABLE}")
     
     if not all([job_id, bucket, key]):
         log("ERROR: Missing required environment variables", "ERROR")
