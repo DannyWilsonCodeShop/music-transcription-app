@@ -126,12 +126,13 @@ def main():
         log(f"  Audio duration: {chords_data.get('duration', 0):.2f}s")
         log(f"  Key detected: {chords_data.get('key', 'Unknown')}")
         
-        # Extract lyrics (Step 3.5)
-        log("Step 3.5: Extracting lyrics...")
-        update_job_status(job_id, 'PROCESSING', 60)
+        # Extract lyrics (Step 3.5) - TEMPORARILY DISABLED due to memory constraints
+        # TODO: Re-enable after deploying 8GB memory configuration
+        log("Step 3.5: Lyrics extraction temporarily disabled")
+        log("⚠️ Lyrics extraction requires 8GB memory (currently 4GB)", "WARNING")
         
         lyrics_data = None
-        if WHISPER_AVAILABLE and DEMUCS_AVAILABLE:
+        if False and WHISPER_AVAILABLE and DEMUCS_AVAILABLE:  # Disabled
             try:
                 # Separate vocal stem
                 vocal_path = separate_vocal_stem(audio_path)
