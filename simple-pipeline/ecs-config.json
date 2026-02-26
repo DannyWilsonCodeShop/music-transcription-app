@@ -1,0 +1,7 @@
+{
+  "ecsCluster": "music-transcription-test",
+  "ecsTaskDefinition": "music-transcription-chord-detection",
+  "ecsSubnets": "subnet-025cbdacce40039e8,subnet-054fa37e2ffc51588,subnet-08853162cbf93d2e3,subnet-0dd12804e1b0aa4f9,subnet-07c1c4ca4814c534e,subnet-0a9bfffb8608bd7c6",
+  "ecsSecurityGroups": "sg-0d36529326aacd89d",
+  "ecrImageUri": "090130568474.dkr.ecr.us-east-1.amazonaws.com/music-transcription-chord-detection:latest"
+}

@@ -1,0 +1,382 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Music Transcription App - File Upload Pipeline'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+    Description: Environment name
+
+Resources:
+  # S3 Bucket for audio uploads
+  AudioBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'music-transcription-uploads-${Environment}-${AWS::AccountId}'
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders: ['*']
+            AllowedMethods: [GET, PUT, POST, HEAD]
+            AllowedOrigins: ['*']
+            MaxAge: 3000
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldFiles
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # DynamoDB Table for jobs
+  JobsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'MusicTranscription-Jobs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: jobId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+      KeySchema:
+        - AttributeName: jobId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: UserIndex
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  # Lambda Execution Role
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MusicTranscription-Lambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${AudioBucket.Arn}/*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Query
+                Resource:
+                  - !GetAtt JobsTable.Arn
+                  - !Sub '${JobsTable.Arn}/index/*'
+
+  # Lambda: Create Upload URL
+  CreateUploadUrlFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'music-transcription-create-upload-url-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          AUDIO_BUCKET: !Ref AudioBucket
+          JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          import uuid
+          from datetime import datetime
+          
+          s3 = boto3.client('s3')
+          dynamodb = boto3.resource('dynamodb')
+          
+          AUDIO_BUCKET = os.environ['AUDIO_BUCKET']
+          JOBS_TABLE = os.environ['JOBS_TABLE']
+          
+          def lambda_handler(event, context):
+              print(f"Event: {json.dumps(event)}")
+              
+              # Parse body
+              if 'body' in event:
+                  body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
+              else:
+                  body = event
+              
+              filename = body.get('filename', 'audio.mp3')
+              content_type = body.get('contentType', 'audio/mpeg')
+              user_id = body.get('userId', 'anonymous')
+              
+              # Generate job ID
+              job_id = str(uuid.uuid4())
+              
+              # S3 key for upload
+              s3_key = f"uploads/{job_id}/{filename}"
+              
+              # Generate presigned URL for upload
+              presigned_url = s3.generate_presigned_url(
+                  'put_object',
+                  Params={
+                      'Bucket': AUDIO_BUCKET,
+                      'Key': s3_key,
+                      'ContentType': content_type
+                  },
+                  ExpiresIn=3600  # 1 hour
+              )
+              
+              # Create job in DynamoDB
+              table = dynamodb.Table(JOBS_TABLE)
+              table.put_item(Item={
+                  'jobId': job_id,
+                  'userId': user_id,
+                  'status': 'UPLOADING',
+                  'progress': 0,
+                  's3Key': s3_key,
+                  'filename': filename,
+                  'createdAt': datetime.utcnow().isoformat(),
+                  'updatedAt': datetime.utcnow().isoformat()
+              })
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {
+                      'Content-Type': 'application/json',
+                      'Access-Control-Allow-Origin': '*'
+                  },
+                  'body': json.dumps({
+                      'jobId': job_id,
+                      'uploadUrl': presigned_url,
+                      's3Key': s3_key
+                  })
+              }
+
+  # Lambda: Process Audio (triggered by S3)
+  ProcessAudioFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'music-transcription-process-audio-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          AUDIO_BUCKET: !Ref AudioBucket
+          JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          from urllib.parse import unquote_plus
+          
+          s3 = boto3.client('s3')
+          dynamodb = boto3.resource('dynamodb')
+          
+          AUDIO_BUCKET = os.environ['AUDIO_BUCKET']
+          JOBS_TABLE = os.environ['JOBS_TABLE']
+          
+          def lambda_handler(event, context):
+              print(f"Event: {json.dumps(event)}")
+              
+              # Get S3 object info
+              for record in event['Records']:
+                  bucket = record['s3']['bucket']['name']
+                  key = unquote_plus(record['s3']['object']['key'])
+                  size = record['s3']['object']['size']
+                  
+                  print(f"Processing: s3://{bucket}/{key} ({size} bytes)")
+                  
+                  # Extract job ID from key (uploads/{jobId}/filename)
+                  parts = key.split('/')
+                  if len(parts) >= 2:
+                      job_id = parts[1]
+                      
+                      # Update job status
+                      table = dynamodb.Table(JOBS_TABLE)
+                      table.update_item(
+                          Key={'jobId': job_id},
+                          UpdateExpression='SET #status = :status, progress = :progress, fileSize = :size, updatedAt = :updated',
+                          ExpressionAttributeNames={'#status': 'status'},
+                          ExpressionAttributeValues={
+                              ':status': 'UPLOADED',
+                              ':progress': 100,
+                              ':size': size,
+                              ':updated': datetime.utcnow().isoformat()
+                          }
+                      )
+                      
+                      print(f"Job {job_id} marked as UPLOADED")
+                      
+                      # TODO: Trigger chord detection / lyrics transcription
+                      # For now, just mark as complete
+              
+              return {'statusCode': 200}
+
+  # S3 Lambda Permission
+  S3InvokeLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref ProcessAudioFunction
+      Action: lambda:InvokeFunction
+      Principal: s3.amazonaws.com
+      SourceArn: !GetAtt AudioBucket.Arn
+
+  # Lambda: Get Job Status
+  GetJobStatusFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'music-transcription-get-job-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Timeout: 10
+      Environment:
+        Variables:
+          JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          
+          dynamodb = boto3.resource('dynamodb')
+          JOBS_TABLE = os.environ['JOBS_TABLE']
+          
+          def lambda_handler(event, context):
+              job_id = event.get('pathParameters', {}).get('jobId')
+              
+              if not job_id:
+                  return {
+                      'statusCode': 400,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'error': 'Missing jobId'})
+                  }
+              
+              table = dynamodb.Table(JOBS_TABLE)
+              response = table.get_item(Key={'jobId': job_id})
+              
+              if 'Item' not in response:
+                  return {
+                      'statusCode': 404,
+                      'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                      'body': json.dumps({'error': 'Job not found'})
+                  }
+              
+              return {
+                  'statusCode': 200,
+                  'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                  'body': json.dumps(response['Item'], default=str)
+              }
+
+  # API Gateway
+  ApiGateway:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: !Sub 'music-transcription-api-${Environment}'
+      ProtocolType: HTTP
+      CorsConfiguration:
+        AllowOrigins: ['*']
+        AllowMethods: [GET, POST, PUT, OPTIONS]
+        AllowHeaders: ['*']
+
+  # API Integration: Create Upload URL
+  CreateUploadUrlIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt CreateUploadUrlFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  CreateUploadUrlRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'POST /upload'
+      Target: !Sub 'integrations/${CreateUploadUrlIntegration}'
+
+  CreateUploadUrlPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CreateUploadUrlFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  # API Integration: Get Job Status
+  GetJobStatusIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref ApiGateway
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !GetAtt GetJobStatusFunction.Arn
+      PayloadFormatVersion: '2.0'
+
+  GetJobStatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref ApiGateway
+      RouteKey: 'GET /jobs/{jobId}'
+      Target: !Sub 'integrations/${GetJobStatusIntegration}'
+
+  GetJobStatusPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref GetJobStatusFunction
+      Action: lambda:InvokeFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 'arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGateway}/*'
+
+  # API Stage
+  ApiStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      ApiId: !Ref ApiGateway
+      StageName: '$default'
+      AutoDeploy: true
+
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint
+    Value: !GetAtt ApiGateway.ApiEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-ApiEndpoint'
+  
+  AudioBucket:
+    Description: S3 bucket for audio files
+    Value: !Ref AudioBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AudioBucket'
+  
+  JobsTable:
+    Description: DynamoDB table for jobs
+    Value: !Ref JobsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-JobsTable'

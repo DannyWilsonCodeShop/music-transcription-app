@@ -1,0 +1,6 @@
+{
+  "apiEndpoint": "https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com",
+  "audioBucket": "music-transcription-audio-test-090130568474",
+  "jobsTable": "MusicTranscription-Jobs-test",
+  "region": "us-east-1"
+}

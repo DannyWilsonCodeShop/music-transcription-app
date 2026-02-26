@@ -1,13 +1,23 @@
-import { useState, useEffect } from 'react';
-import { startTranscription, getJobStatus, TranscriptionJob } from './services/transcriptionService';
+import { useState, useEffect, useCallback } from 'react';
+import { getJobStatus, TranscriptionJob } from './services/transcriptionService';
+import { DownbeatConfirmation } from './components/DownbeatConfirmation';
+import axios from 'axios';
+
+const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com';
+const UPLOAD_API_ENDPOINT = 'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
 function App() {
-  const [url, setUrl] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [jobId, setJobId] = useState<string | null>(null);
   const [job, setJob] = useState<TranscriptionJob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showDownbeatConfirmation, setShowDownbeatConfirmation] = useState(false);
+  const [downbeatData, setDownbeatData] = useState<any>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
@@ -15,38 +25,177 @@ function App() {
       const status = await getJobStatus(jobId);
       if (status) {
         setJob(status);
-        if (status.status === 'COMPLETE') {
+        if (status.status === 'COMPLETED') {
           clearInterval(pollInterval);
-          setIsLoading(false);
-          // Use backend-generated PDF URL
+          setIsUploading(false);
           if (status.pdfUrl) {
             setPdfUrl(status.pdfUrl);
           }
         } else if (status.status === 'FAILED') {
           clearInterval(pollInterval);
-          setIsLoading(false);
+          setIsUploading(false);
         }
       }
     }, 2000);
     return () => clearInterval(pollInterval);
   }, [jobId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
-    if (!url.trim()) return;
+    setIsDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
     
-    setIsLoading(true);
+    const droppedFile = e.dataTransfer.files[0];
+    if (droppedFile && droppedFile.type.startsWith('audio/')) {
+      setFile(droppedFile);
+    } else {
+      setError('Please drop an audio file (MP3, WAV, M4A, FLAC, OGG)');
+    }
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+    }
+  };
+
+  const handleDownbeatConfirm = async (downbeat: number, timeSignature: string) => {
+    if (!jobId) return;
+    
+    try {
+      console.log('Confirming downbeat:', downbeat, timeSignature);
+      await axios.post(`${API_ENDPOINT}/api/confirm-downbeat`, {
+        jobId,
+        downbeat,
+        timeSignature
+      });
+      
+      setShowDownbeatConfirmation(false);
+      console.log('Downbeat confirmed, chord detection will start automatically');
+    } catch (error: any) {
+      console.error('Failed to confirm downbeat:', error);
+      setError('Failed to confirm downbeat. Please try again.');
+    }
+  };
+
+  const handleDownbeatCancel = () => {
+    setShowDownbeatConfirmation(false);
+    // Continue with auto-detected downbeat
+    console.log('User cancelled downbeat confirmation, using auto-detected value');
+  };
+
+  const pollForDownbeatResults = async (jobId: string): Promise<any> => {
+    const maxAttempts = 60; // 60 seconds
+    const pollInterval = 1000; // 1 second
+    
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const status = await getJobStatus(jobId);
+        
+        if (status.downbeatData && status.downbeatStatus === 'COMPLETED') {
+          return status.downbeatData;
+        }
+        
+        if (status.downbeatStatus === 'FAILED') {
+          throw new Error('Downbeat detection failed');
+        }
+        
+        // Wait before next poll
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      } catch (error) {
+        console.error('Error polling for downbeat:', error);
+        throw error;
+      }
+    }
+    
+    throw new Error('Downbeat detection timed out');
+  };
+
+  const handleUpload = async () => {
+    if (!file) return;
+    
+    setIsUploading(true);
     setError(null);
     setJob(null);
     setPdfUrl(null);
+    setUploadProgress(0);
     
     try {
-      const newJobId = await startTranscription(url);
+      console.log('Requesting upload URL for:', file.name, file.type);
+      
+      // Request upload URL
+      const response = await axios.post(`${UPLOAD_API_ENDPOINT}/upload`, {
+        filename: file.name,
+        contentType: file.type || 'audio/mpeg',
+        userId: 'guest'
+      });
+
+      console.log('Upload URL response:', response.data);
+      const { jobId: newJobId, uploadUrl } = response.data;
       setJobId(newJobId);
-    } catch (error) {
-      console.error('Failed:', error);
-      setIsLoading(false);
-      setError(error instanceof Error ? error.message : 'Failed to start transcription. Please check if the backend is deployed.');
+
+      console.log('Uploading file to S3...');
+      
+      // Simulate progress for UX (actual upload happens in background)
+      const progressInterval = setInterval(() => {
+        setUploadProgress(prev => {
+          if (prev >= 95) {
+            clearInterval(progressInterval);
+            return 95;
+          }
+          return prev + 5;
+        });
+      }, 100);
+
+      try {
+        // Upload to S3 with explicit Content-Type header to match presigned URL
+        const contentType = file.type || 'audio/mpeg';
+        
+        const response = await fetch(uploadUrl, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': contentType
+          },
+          body: file
+        });
+
+        clearInterval(progressInterval);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('S3 upload failed:', response.status, errorText);
+          throw new Error(`Upload failed: ${errorText || response.statusText}`);
+        }
+
+        console.log('Upload complete!');
+        setUploadProgress(100);
+      } catch (error) {
+        clearInterval(progressInterval);
+        throw error;
+      }
+
+      console.log('Upload complete!');
+      setUploadProgress(100);
+      
+      // Skip downbeat detection for now - using simple pipeline
+      console.log('Skipping downbeat detection, using simple pipeline');
+      
+    } catch (error: any) {
+      console.error('Upload failed:', error);
+      console.error('Error response:', error.response?.data);
+      setIsUploading(false);
+      const errorMsg = error.response?.data?.error || error.message || 'Upload failed. Please try again.';
+      setError(errorMsg);
     }
   };
 
@@ -74,117 +223,280 @@ function App() {
             Cipher
           </h1>
           <h1 style={{
-            fontSize: '48px',
-            fontWeight: 'bold',
-            background: 'linear-gradient(to right, #9333ea, #2563eb)',
+            fontSize: '42px',
+            fontWeight: '700',
+            background: 'linear-gradient(135deg, #a78bfa 0%, #818cf8 50%, #6366f1 100%)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
-            marginBottom: '12px'
+            marginBottom: '12px',
+            letterSpacing: '-0.5px',
+            fontFamily: '"Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+            position: 'relative' as const,
+            textShadow: '0 0 40px rgba(139, 92, 246, 0.3)',
+            filter: 'drop-shadow(0 4px 12px rgba(99, 102, 241, 0.2))'
           }}>
             Music Transcription App
           </h1>
           <p style={{ color: '#9ca3af', fontSize: '18px' }}>
-            Transform any YouTube video into chords and lyrics
+            Upload your audio file to extract chords and lyrics
           </p>
         </div>
 
-        {/* Search Bar */}
-        <form onSubmit={handleSubmit}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-            border: '1px solid #e5e7eb',
-            overflow: 'hidden',
-            transition: 'box-shadow 0.3s'
-          }}>
-            
-            {/* Sparkle Icon */}
-            <div style={{ paddingLeft: '20px', paddingRight: '12px' }}>
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="#9333ea">
-                <path d="M12 2L9.19 8.63L2 9.24l5.46 4.73L5.82 21L12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2z"/>
-              </svg>
-            </div>
-
-            {/* Input */}
+        {/* File Upload Area */}
+        {!jobId && (
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            style={{
+              padding: '32px',
+              background: isDragging 
+                ? 'linear-gradient(135deg, rgba(147, 51, 234, 0.15) 0%, rgba(99, 102, 241, 0.15) 100%)'
+                : 'rgba(255, 255, 255, 0.05)',
+              backdropFilter: 'blur(10px)',
+              borderRadius: '20px',
+              boxShadow: isDragging 
+                ? '0 8px 32px rgba(147, 51, 234, 0.3), inset 0 0 0 1px rgba(147, 51, 234, 0.3)'
+                : '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+              border: isDragging ? '2px dashed rgba(147, 51, 234, 0.5)' : '2px dashed rgba(255, 255, 255, 0.1)',
+              textAlign: 'center',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              position: 'relative' as const,
+              overflow: 'hidden'
+            }}
+            onClick={() => document.getElementById('fileInput')?.click()}
+          >
             <input
-              type="text"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              placeholder="Paste YouTube URL here..."
-              disabled={isLoading}
-              style={{
-                flex: 1,
-                padding: '20px 0',
-                fontSize: '16px',
-                border: 'none',
-                outline: 'none',
-                color: '#1f2937',
-                backgroundColor: 'transparent'
-              }}
+              id="fileInput"
+              type="file"
+              accept="audio/*"
+              onChange={handleFileSelect}
+              style={{ display: 'none' }}
             />
-
-            {/* Button */}
-            <button
-              type="submit"
-              disabled={!url.trim() || isLoading}
-              style={{
-                margin: '8px',
-                padding: '12px 24px',
-                background: 'linear-gradient(to right, #9333ea, #2563eb)',
-                color: 'white',
-                fontWeight: '500',
-                borderRadius: '12px',
-                border: 'none',
-                cursor: url.trim() && !isLoading ? 'pointer' : 'not-allowed',
-                opacity: !url.trim() || isLoading ? 0.5 : 1,
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                transition: 'all 0.2s'
-              }}
-            >
-              {isLoading ? 'Processing...' : 'Start'}
-              {!isLoading && (
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                </svg>
-              )}
-            </button>
+            
+            {!file ? (
+              <>
+                <div style={{ 
+                  fontSize: '48px', 
+                  marginBottom: '12px',
+                  filter: 'drop-shadow(0 0 20px rgba(147, 51, 234, 0.3))'
+                }}>
+                  📁
+                </div>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  color: '#ffffff', 
+                  marginBottom: '6px',
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+                }}>
+                  {isDragging ? 'Drop your file here' : 'Drag & drop your audio file'}
+                </h3>
+                <p style={{ 
+                  color: 'rgba(255, 255, 255, 0.7)', 
+                  marginBottom: '12px', 
+                  fontSize: '14px' 
+                }}>
+                  or click to browse
+                </p>
+                <p style={{ 
+                  color: 'rgba(255, 255, 255, 0.5)', 
+                  fontSize: '13px' 
+                }}>
+                  Supported: MP3, WAV, M4A, FLAC, OGG (max 50MB)
+                </p>
+              </>
+            ) : (
+              <>
+                <div style={{ 
+                  fontSize: '48px', 
+                  marginBottom: '12px',
+                  filter: 'drop-shadow(0 0 20px rgba(99, 102, 241, 0.5))'
+                }}>
+                  🎵
+                </div>
+                <h3 style={{ 
+                  fontSize: '18px', 
+                  fontWeight: '600', 
+                  color: '#ffffff', 
+                  marginBottom: '6px',
+                  textShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+                }}>
+                  {file.name}
+                </h3>
+                <p style={{ 
+                  color: 'rgba(255, 255, 255, 0.7)', 
+                  marginBottom: '12px', 
+                  fontSize: '14px' 
+                }}>
+                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleUpload();
+                    }}
+                    disabled={isUploading}
+                    style={{
+                      padding: '12px 32px',
+                      background: 'linear-gradient(135deg, #9333ea 0%, #6366f1 100%)',
+                      color: 'white',
+                      fontWeight: '600',
+                      borderRadius: '12px',
+                      border: 'none',
+                      cursor: isUploading ? 'not-allowed' : 'pointer',
+                      opacity: isUploading ? 0.5 : 1,
+                      fontSize: '16px',
+                      boxShadow: '0 4px 15px rgba(147, 51, 234, 0.4)',
+                      transition: 'all 0.3s ease',
+                      transform: isUploading ? 'scale(0.98)' : 'scale(1)'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.boxShadow = '0 6px 20px rgba(147, 51, 234, 0.6)';
+                        e.currentTarget.style.transform = 'scale(1.02)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.boxShadow = '0 4px 15px rgba(147, 51, 234, 0.4)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }
+                    }}
+                  >
+                    {isUploading ? 'Uploading...' : 'Upload & Process'}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setFile(null);
+                    }}
+                    disabled={isUploading}
+                    style={{
+                      padding: '12px 24px',
+                      background: 'rgba(255, 255, 255, 0.1)',
+                      backdropFilter: 'blur(10px)',
+                      color: 'rgba(255, 255, 255, 0.9)',
+                      fontWeight: '500',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(255, 255, 255, 0.2)',
+                      cursor: isUploading ? 'not-allowed' : 'pointer',
+                      opacity: isUploading ? 0.5 : 1,
+                      transition: 'all 0.3s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isUploading) {
+                        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                      }
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        </form>
+        )}
 
-        {/* Progress */}
-        {isLoading && job && (
+        {/* Upload Progress */}
+        {isUploading && uploadProgress < 100 && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
-            backgroundColor: 'white',
-            borderRadius: '16px',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-            border: '1px solid #e5e7eb'
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <span style={{ color: '#374151', fontWeight: '500' }}>{job.currentStep || 'Processing...'}</span>
-              <span style={{ color: '#9333ea', fontWeight: '600' }}>{job.progress || 0}%</span>
+              <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>Uploading...</span>
+              <span style={{ 
+                color: '#a78bfa', 
+                fontWeight: '600',
+                textShadow: '0 0 10px rgba(167, 139, 250, 0.5)'
+              }}>
+                {uploadProgress}%
+              </span>
             </div>
             <div style={{
               width: '100%',
               height: '10px',
-              backgroundColor: '#e5e7eb',
+              background: 'rgba(255, 255, 255, 0.1)',
               borderRadius: '999px',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3)'
             }}>
               <div style={{
                 height: '100%',
-                background: 'linear-gradient(to right, #9333ea, #2563eb)',
+                background: 'linear-gradient(90deg, #9333ea 0%, #6366f1 50%, #8b5cf6 100%)',
                 borderRadius: '999px',
-                width: `${job.progress || 0}%`,
-                transition: 'width 0.5s'
+                width: `${uploadProgress}%`,
+                transition: 'width 0.3s ease',
+                boxShadow: '0 0 10px rgba(147, 51, 234, 0.5)',
+                position: 'relative' as const
               }}/>
             </div>
+          </div>
+        )}
+
+        {/* Processing Progress */}
+        {isUploading && job && uploadProgress === 100 && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
+                {job.status === 'PROCESSING' ? 'Analyzing audio...' : 'Processing...'}
+              </span>
+              <span style={{ 
+                color: '#a78bfa', 
+                fontWeight: '600',
+                textShadow: '0 0 10px rgba(167, 139, 250, 0.5)'
+              }}>
+                {job.progress || 0}%
+              </span>
+            </div>
+            <div style={{
+              width: '100%',
+              height: '10px',
+              background: 'rgba(255, 255, 255, 0.1)',
+              borderRadius: '999px',
+              overflow: 'hidden',
+              boxShadow: 'inset 0 2px 4px rgba(0, 0, 0, 0.3)'
+            }}>
+              <div style={{
+                height: '100%',
+                background: 'linear-gradient(90deg, #9333ea 0%, #6366f1 50%, #8b5cf6 100%)',
+                borderRadius: '999px',
+                width: `${job.progress || 0}%`,
+                transition: 'width 0.5s ease',
+                boxShadow: '0 0 10px rgba(147, 51, 234, 0.5)'
+              }}/>
+            </div>
+            <p style={{ 
+              marginTop: '12px', 
+              fontSize: '14px', 
+              color: 'rgba(255, 255, 255, 0.6)',
+              textAlign: 'center'
+            }}>
+              Enhanced chord detection with 84 templates and bass-weighted key detection
+            </p>
           </div>
         )}
 
@@ -201,16 +513,24 @@ function App() {
               ❌ Error
             </h2>
             <p style={{ color: '#dc2626', marginBottom: '16px' }}>{error}</p>
-            <details style={{ color: '#7f1d1d', fontSize: '14px' }}>
-              <summary style={{ cursor: 'pointer', fontWeight: '500' }}>Troubleshooting</summary>
-              <ul style={{ marginTop: '12px', paddingLeft: '20px' }}>
-                <li>Check if the backend infrastructure is deployed</li>
-                <li>Verify the API Gateway URL in transcriptionService.ts</li>
-                <li>Check AWS CloudWatch logs for errors</li>
-                <li>Ensure all Lambda functions are deployed</li>
-                <li>Run: <code style={{ backgroundColor: '#fee2e2', padding: '2px 6px', borderRadius: '4px' }}>./deploy-backend.sh</code></li>
-              </ul>
-            </details>
+            <button
+              onClick={() => {
+                setError(null);
+                setFile(null);
+                setJobId(null);
+              }}
+              style={{
+                padding: '10px 20px',
+                backgroundColor: '#dc2626',
+                color: 'white',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Try Again
+            </button>
           </div>
         )}
 
@@ -226,13 +546,14 @@ function App() {
             <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#991b1b', marginBottom: '8px' }}>
               ❌ Transcription Failed
             </h2>
-            <p style={{ color: '#dc2626', marginBottom: '8px' }}>{job.error || 'An unknown error occurred'}</p>
+            <p style={{ color: '#dc2626', marginBottom: '8px' }}>{job.errorMessage || 'An unknown error occurred'}</p>
             <button
               onClick={() => {
                 setJob(null);
                 setJobId(null);
                 setError(null);
-                setIsLoading(false);
+                setIsUploading(false);
+                setFile(null);
               }}
               style={{
                 padding: '10px 20px',
@@ -250,7 +571,7 @@ function App() {
         )}
 
         {/* Results */}
-        {job?.status === 'COMPLETE' && (
+        {job?.status === 'COMPLETED' && job.chordsData && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
@@ -258,10 +579,330 @@ function App() {
             borderRadius: '16px',
             border: '1px solid #86efac'
           }}>
-            <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#166534', marginBottom: '8px' }}>
-              ✓ Transcription Complete!
-            </h2>
-            <p style={{ color: '#15803d', marginBottom: '16px' }}>{job.title}</p>
+            {/* Process Another File Button - Top */}
+            <button
+              onClick={() => {
+                setFile(null);
+                setJobId(null);
+                setJob(null);
+                setError(null);
+                setIsUploading(false);
+                setPdfUrl(null);
+                setUploadProgress(0);
+                setShowDownbeatConfirmation(false);
+                setDownbeatData(null);
+                setAudioUrl(null);
+              }}
+              style={{
+                marginBottom: '24px',
+                padding: '12px 24px',
+                background: 'linear-gradient(135deg, #9333ea 0%, #6366f1 100%)',
+                color: 'white',
+                fontWeight: '600',
+                borderRadius: '12px',
+                border: 'none',
+                cursor: 'pointer',
+                fontSize: '16px',
+                boxShadow: '0 4px 15px rgba(147, 51, 234, 0.4)',
+                transition: 'all 0.3s ease',
+                width: '100%'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.boxShadow = '0 6px 20px rgba(147, 51, 234, 0.6)';
+                e.currentTarget.style.transform = 'scale(1.02)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.boxShadow = '0 4px 15px rgba(147, 51, 234, 0.4)';
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
+            >
+              ← Process Another File
+            </button>
+            
+            {/* Song Metadata */}
+            <div style={{
+              marginBottom: '24px',
+              padding: '20px',
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              border: '1px solid #d1fae5'
+            }}>
+              <h2 style={{ 
+                fontSize: '24px', 
+                fontWeight: '700', 
+                color: '#166534', 
+                marginBottom: '16px',
+                borderBottom: '2px solid #d1fae5',
+                paddingBottom: '12px'
+              }}>
+                {job.filename || job.title}
+              </h2>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+                gap: '16px'
+              }}>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Key</div>
+                  <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
+                    {job.chordsData.key}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Tempo</div>
+                  <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
+                    {job.chordsData.tempo} BPM
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Time Signature</div>
+                  <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
+                    {job.chordsData.timeSignature}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Duration</div>
+                  <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
+                    {Math.floor(job.chordsData.duration / 60)}:{String(Math.floor(job.chordsData.duration % 60)).padStart(2, '0')}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section-Based Chord Sheet */}
+            {job.chordsData.chords && job.chordsData.chords.length > 0 ? (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                  🎸 Chord Sheet
+                </h3>
+                {(() => {
+                  // Debug logging
+                  console.log('Rendering chord sheet with data:', {
+                    chordsCount: job.chordsData.chords.length,
+                    sectionsCount: job.chordsData.songStructure?.length || 0,
+                    firstChord: job.chordsData.chords[0],
+                    sections: job.chordsData.songStructure,
+                    allKeys: Object.keys(job.chordsData)
+                  });
+                  
+                  // Helper function to calculate Nashville Number
+                  const getNashvilleNumber = (chordName: string, key: string) => {
+                    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                    const flatToSharp: any = {'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#'};
+                    
+                    // Extract root from chord
+                    let root = chordName[0];
+                    if (chordName.length > 1 && (chordName[1] === '#' || chordName[1] === 'b')) {
+                      root = chordName.substring(0, 2);
+                    }
+                    
+                    // Normalize to sharp
+                    if (root in flatToSharp) root = flatToSharp[root];
+                    
+                    // Extract key root (handle "E Minor / G Major" format)
+                    let keyRoot = key.split(' ')[0];
+                    if (keyRoot in flatToSharp) keyRoot = flatToSharp[keyRoot];
+                    
+                    try {
+                      const rootIdx = noteNames.indexOf(root);
+                      const keyIdx = noteNames.indexOf(keyRoot);
+                      if (rootIdx === -1 || keyIdx === -1) return '';
+                      
+                      const degree = ((rootIdx - keyIdx + 12) % 12) + 1;
+                      const degreeMap: any = {1: '1', 2: '2', 3: '3', 4: '4', 5: '5', 6: '6', 7: '7', 8: '1', 9: '2', 10: '3', 11: '4', 12: '5'};
+                      let nns = degreeMap[degree] || '';
+                      
+                      // Add quality suffix
+                      if (chordName.toLowerCase().includes('m') && !chordName.toLowerCase().includes('maj')) {
+                        nns += 'm';
+                      }
+                      
+                      return nns;
+                    } catch {
+                      return '';
+                    }
+                  };
+                  
+                  // Group chords by song sections
+                  const sections = job.chordsData.songStructure || [];
+                  const chords = job.chordsData.chords;
+                  const key = job.chordsData.key;
+                  
+                  if (sections.length === 0) {
+                    // No sections detected, display all chords in one section
+                    const chordLines = [];
+                    for (let i = 0; i < chords.length; i += 16) {
+                      chordLines.push(chords.slice(i, i + 16));
+                    }
+                    
+                    return (
+                      <div style={{ marginBottom: '20px' }}>
+                        <div style={{
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          color: '#166534',
+                          marginBottom: '12px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          Full Song
+                        </div>
+                        {chordLines.map((line, lineIdx) => (
+                          <div key={lineIdx} style={{
+                            display: 'flex',
+                            gap: '4px',
+                            marginBottom: '8px',
+                            fontFamily: 'monospace',
+                            fontSize: '16px',
+                            flexWrap: 'wrap'
+                          }}>
+                            {line.map((chord: any, chordIdx: number) => (
+                              <span key={chordIdx}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#f9fafb',
+                                  borderRadius: '4px',
+                                  border: '1px solid #e5e7eb'
+                                }}>
+                                  <span style={{
+                                    fontWeight: '600',
+                                    color: '#1f2937'
+                                  }}>
+                                    {chord.chord}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '11px',
+                                    color: '#9333ea',
+                                    fontStyle: 'italic',
+                                    marginTop: '2px'
+                                  }}>
+                                    ({getNashvilleNumber(chord.chord, key)})
+                                  </span>
+                                </span>
+                                {chordIdx < line.length - 1 && chordIdx % 4 === 3 && (
+                                  <span style={{ margin: '0 8px', color: '#9ca3af' }}>|</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  }
+                  
+                  // Group chords by sections
+                  return sections.map((section: any, sectionIdx: number) => {
+                    // Handle both property names: start/end or startTime/endTime
+                    const sectionStart = parseFloat(section.start || section.startTime || 0);
+                    const sectionEnd = parseFloat(section.end || section.endTime || (sectionIdx < sections.length - 1 ? sections[sectionIdx + 1].startTime : 999999));
+                    
+                    console.log(`Section ${sectionIdx} (${section.label}): ${sectionStart}s - ${sectionEnd}s`);
+                    
+                    // Find chords within this section's time range
+                    const sectionChords = chords.filter((chord: any) => {
+                      const chordTime = parseFloat(chord.start || 0);
+                      return chordTime >= sectionStart && chordTime < sectionEnd;
+                    });
+                    
+                    console.log(`  Found ${sectionChords.length} chords in this section`);
+                    
+                    if (sectionChords.length === 0) return null;
+                    
+                    // Split into lines of up to 16 chords
+                    const chordLines = [];
+                    for (let i = 0; i < sectionChords.length; i += 16) {
+                      chordLines.push(sectionChords.slice(i, i + 16));
+                    }
+                    
+                    return (
+                      <div key={sectionIdx} style={{ marginBottom: '20px' }}>
+                        <div style={{
+                          fontSize: '16px',
+                          fontWeight: '600',
+                          color: '#166534',
+                          marginBottom: '8px',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.5px'
+                        }}>
+                          {section.label}
+                        </div>
+                        {chordLines.map((line, lineIdx) => (
+                          <div key={lineIdx} style={{
+                            display: 'flex',
+                            gap: '4px',
+                            marginBottom: '8px',
+                            fontFamily: 'monospace',
+                            fontSize: '16px',
+                            flexWrap: 'wrap'
+                          }}>
+                            {line.map((chord: any, chordIdx: number) => (
+                              <span key={chordIdx}>
+                                <span style={{
+                                  display: 'inline-flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  padding: '4px 8px',
+                                  backgroundColor: '#f9fafb',
+                                  borderRadius: '4px',
+                                  border: '1px solid #e5e7eb'
+                                }}>
+                                  <span style={{
+                                    fontWeight: '600',
+                                    color: '#1f2937'
+                                  }}>
+                                    {chord.chord}
+                                  </span>
+                                  <span style={{
+                                    fontSize: '11px',
+                                    color: '#9333ea',
+                                    fontStyle: 'italic',
+                                    marginTop: '2px'
+                                  }}>
+                                    ({getNashvilleNumber(chord.chord, key)})
+                                  </span>
+                                </span>
+                                {chordIdx < line.length - 1 && chordIdx % 4 === 3 && (
+                                  <span style={{ margin: '0 8px', color: '#9ca3af' }}>|</span>
+                                )}
+                              </span>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            ) : (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                  🎸 Chord Sheet
+                </h3>
+                <p style={{ color: '#6b7280' }}>
+                  No chords detected. Debug: {JSON.stringify({
+                    hasChordsData: !!job.chordsData,
+                    hasChords: !!job.chordsData?.chords,
+                    chordsLength: job.chordsData?.chords?.length || 0
+                  })}
+                </p>
+              </div>
+            )}
+            
             {pdfUrl && (
               <div style={{ display: 'flex', gap: '12px' }}>
                 <a 
@@ -300,6 +941,19 @@ function App() {
           </div>
         )}
       </div>
+      
+      {/* Downbeat Confirmation Modal */}
+      {showDownbeatConfirmation && downbeatData && audioUrl && (
+        <DownbeatConfirmation
+          audioUrl={audioUrl}
+          detectedDownbeat={downbeatData.downbeat}
+          detectedTempo={downbeatData.tempo}
+          detectedTimeSignature={downbeatData.timeSignature}
+          beatTimes={downbeatData.beatTimes}
+          onConfirm={handleDownbeatConfirm}
+          onCancel={handleDownbeatCancel}
+        />
+      )}
     </div>
   );
 }

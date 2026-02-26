@@ -1,0 +1,149 @@
+{
+  "Comment": "Optimized Music Transcription Workflow - Async ECS, No Wait",
+  "StartAt": "AudioExtraction",
+  "States": {
+    "AudioExtraction": {
+      "Type": "Task",
+      "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-youtube-downloader-dev",
+      "Parameters": {
+        "youtubeUrl.$": "$.youtubeUrl",
+        "jobId.$": "$.jobId"
+      },
+      "ResultPath": "$.audioResult",
+      "Next": "ParallelAnalysis",
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "ParallelAnalysis": {
+      "Type": "Parallel",
+      "ResultPath": "$.analysisResults",
+      "Branches": [
+        {
+          "StartAt": "ChordDetection",
+          "States": {
+            "ChordDetection": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::ecs:runTask",
+              "Parameters": {
+                "LaunchType": "FARGATE",
+                "Cluster": "arn:aws:ecs:us-east-1:090130568474:cluster/ChordScout-dev",
+                "TaskDefinition": "chordscout-chord-detector-dev:9",
+                "NetworkConfiguration": {
+                  "AwsvpcConfiguration": {
+                    "Subnets": [
+                      "subnet-0309ad2863e513dd3",
+                      "subnet-01a9aca5a7a25f7b4"
+                    ],
+                    "SecurityGroups": ["sg-0f34e2bad6dda9b0f"],
+                    "AssignPublicIp": "ENABLED"
+                  }
+                },
+                "Overrides": {
+                  "ContainerOverrides": [
+                    {
+                      "Name": "chord-detector",
+                      "Environment": [
+                        {
+                          "Name": "JOB_ID",
+                          "Value.$": "$.jobId"
+                        },
+                        {
+                          "Name": "AUDIO_BUCKET",
+                          "Value.$": "$.audioResult.body.bucket"
+                        },
+                        {
+                          "Name": "AUDIO_KEY",
+                          "Value.$": "$.audioResult.body.key"
+                        },
+                        {
+                          "Name": "DYNAMODB_JOBS_TABLE",
+                          "Value": "ChordScout-Jobs-V2-dev"
+                        },
+                        {
+                          "Name": "PDF_GENERATOR_FUNCTION",
+                          "Value": "chordscout-v2-pdf-generator-dev"
+                        },
+                        {
+                          "Name": "ENHANCED_MODE",
+                          "Value": "true"
+                        },
+                        {
+                          "Name": "DETECTION_INTERVAL",
+                          "Value": "0.2"
+                        },
+                        {
+                          "Name": "ENABLE_DOWNBEAT_DETECTION",
+                          "Value": "true"
+                        },
+                        {
+                          "Name": "ENABLE_TEMPO_ANALYSIS",
+                          "Value": "true"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        },
+        {
+          "StartAt": "LyricsTranscription",
+          "States": {
+            "LyricsTranscription": {
+              "Type": "Task",
+              "Resource": "arn:aws:lambda:us-east-1:090130568474:function:chordscout-v2-lyrics-transcriber-dev",
+              "Parameters": {
+                "jobId.$": "$.jobId",
+                "bucket.$": "$.audioResult.body.bucket",
+                "key.$": "$.audioResult.body.key"
+              },
+              "End": true,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "End": true,
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleError"
+        }
+      ]
+    },
+    "HandleError": {
+      "Type": "Pass",
+      "Result": "Error occurred",
+      "End": true
+    }
+  }
+}

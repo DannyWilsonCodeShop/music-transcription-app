@@ -163,7 +163,7 @@ Resources:
       RequiresCompatibilities:
         - FARGATE
       Cpu: '1024'
-      Memory: '3072'
+      Memory: '4096'  # Increased from 3072 to 4096 (4GB) for stem separation
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
@@ -177,6 +177,10 @@ Resources:
               Value: !Ref AudioTempBucket
             - Name: PDF_GENERATOR_FUNCTION
               Value: !Sub 'chordscout-v2-pdf-generator-${Environment}'
+            - Name: ENABLE_STEM_SEPARATION
+              Value: 'true'  # Enable Demucs stem separation
+            - Name: CHUNK_DURATION
+              Value: '30'  # Process audio in 30-second chunks
           LogConfiguration:
             LogDriver: awslogs
             Options:

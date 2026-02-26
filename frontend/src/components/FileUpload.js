@@ -1,8 +1,10 @@
 import React, { useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { API } from 'aws-amplify';
 import axios from 'axios';
 import './FileUpload.css';
+
+// API endpoint from the new pipeline
+const API_ENDPOINT = process.env.REACT_APP_API_ENDPOINT || 'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
 function FileUpload({ onJobCreated }) {
   const [uploading, setUploading] = useState(false);
@@ -18,16 +20,14 @@ function FileUpload({ onJobCreated }) {
     setError(null);
 
     try {
-      // Request upload URL from API
-      const response = await API.post('transcriptionAPI', '/transcribe/upload', {
-        body: {
-          fileName: file.name,
-          fileType: file.type,
-          userId: 'guest' // Replace with actual user ID from Cognito
-        }
+      // Request upload URL from new API
+      const response = await axios.post(`${API_ENDPOINT}/upload`, {
+        filename: file.name,
+        contentType: file.type,
+        userId: 'guest'
       });
 
-      const { jobId, uploadUrl } = response;
+      const { jobId, uploadUrl } = response.data;
 
       // Upload file to S3 using presigned URL
       await axios.put(uploadUrl, file, {
@@ -47,7 +47,7 @@ function FileUpload({ onJobCreated }) {
       
     } catch (err) {
       console.error('Upload error:', err);
-      setError(err.message || 'Upload failed. Please try again.');
+      setError(err.response?.data?.error || err.message || 'Upload failed. Please try again.');
       setUploading(false);
     }
   }, [onJobCreated]);

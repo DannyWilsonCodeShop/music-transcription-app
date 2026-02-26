@@ -16,3 +16,4 @@ cookies (1).txt
 # yt-dlp library (contains example credentials that trigger GitHub security)
 backend/functions-v2/youtube-downloader/yt_dlp/
 backend/functions-v2/youtube-downloader/
+*.zip

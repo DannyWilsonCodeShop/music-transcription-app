@@ -1,0 +1,340 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ECS YouTube Downloader Infrastructure'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: test
+  AudioBucket:
+    Type: String
+    Description: S3 bucket for audio files
+  JobsTable:
+    Type: String
+    Description: DynamoDB table for jobs
+
+Resources:
+  # ECS Cluster
+  ECSCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub 'music-transcription-${Environment}'
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE_SPOT
+          Weight: 1
+
+  # ECS Task Execution Role
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MusicTranscription-ECS-Execution-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
+  # ECS Task Role (for application permissions)
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MusicTranscription-ECS-Task-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub 'arn:aws:s3:::${AudioBucket}/*'
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobsTable}'
+
+  # ECS Task Definition
+  YouTubeDownloaderTask:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub 'music-transcription-youtube-downloader-${Environment}'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '1024'  # 1 vCPU
+      Memory: '2048'  # 2 GB
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: youtube-downloader
+          Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/music-transcription-youtube-downloader:latest'
+          Essential: true
+          Environment:
+            - Name: AWS_REGION
+              Value: !Ref AWS::Region
+            - Name: S3_BUCKET
+              Value: !Ref AudioBucket
+            - Name: DYNAMODB_TABLE
+              Value: !Ref JobsTable
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: youtube-downloader
+
+  # CloudWatch Log Group
+  ECSLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/music-transcription-youtube-downloader-${Environment}'
+      RetentionInDays: 7
+
+  # Lambda Function to Trigger ECS Task
+  ECSTrigggerFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'music-transcription-ecs-trigger-${Environment}'
+      Runtime: python3.9
+      Handler: index.lambda_handler
+      Role: !GetAtt LambdaTriggerRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          ECS_CLUSTER: !Ref ECSCluster
+          ECS_TASK_DEFINITION: !Ref YouTubeDownloaderTask
+          ECS_SUBNETS: !GetAtt GetSubnets.Data
+          AUDIO_BUCKET: !Ref AudioBucket
+          JOBS_TABLE: !Ref JobsTable
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import os
+          from datetime import datetime
+          
+          ecs = boto3.client('ecs')
+          dynamodb = boto3.resource('dynamodb')
+          
+          ECS_CLUSTER = os.environ['ECS_CLUSTER']
+          ECS_TASK_DEFINITION = os.environ['ECS_TASK_DEFINITION']
+          ECS_SUBNETS_STR = os.environ['ECS_SUBNETS']
+          ECS_SUBNETS = ECS_SUBNETS_STR.split(',') if isinstance(ECS_SUBNETS_STR, str) else ECS_SUBNETS_STR
+          AUDIO_BUCKET = os.environ['AUDIO_BUCKET']
+          JOBS_TABLE = os.environ['JOBS_TABLE']
+          
+          def lambda_handler(event, context):
+              print(f"Event: {json.dumps(event)}")
+              
+              # Parse body
+              if 'body' in event:
+                  body = json.loads(event['body']) if isinstance(event['body'], str) else event['body']
+              else:
+                  body = event
+              
+              youtube_url = body.get('youtubeUrl')
+              job_id = body.get('jobId')
+              
+              if not youtube_url or not job_id:
+                  return {
+                      'statusCode': 400,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': 'Missing youtubeUrl or jobId'})
+                  }
+              
+              try:
+                  # Create job in DynamoDB
+                  table = dynamodb.Table(JOBS_TABLE)
+                  table.put_item(Item={
+                      'jobId': job_id,
+                      'status': 'QUEUED',
+                      'progress': 0,
+                      'youtubeUrl': youtube_url,
+                      'createdAt': datetime.utcnow().isoformat()
+                  })
+                  
+                  # Start ECS task
+                  response = ecs.run_task(
+                      cluster=ECS_CLUSTER,
+                      taskDefinition=ECS_TASK_DEFINITION,
+                      launchType='FARGATE',
+                      networkConfiguration={
+                          'awsvpcConfiguration': {
+                              'subnets': ECS_SUBNETS,
+                              'assignPublicIp': 'ENABLED'
+                          }
+                      },
+                      overrides={
+                          'containerOverrides': [{
+                              'name': 'youtube-downloader',
+                              'environment': [
+                                  {'name': 'YOUTUBE_URL', 'value': youtube_url},
+                                  {'name': 'JOB_ID', 'value': job_id}
+                              ]
+                          }]
+                      }
+                  )
+                  
+                  task_arn = response['tasks'][0]['taskArn']
+                  print(f"Started ECS task: {task_arn}")
+                  
+                  # Update job with task ARN
+                  table.update_item(
+                      Key={'jobId': job_id},
+                      UpdateExpression='SET taskArn = :arn, #status = :status',
+                      ExpressionAttributeNames={'#status': 'status'},
+                      ExpressionAttributeValues={
+                          ':arn': task_arn,
+                          ':status': 'RUNNING'
+                      }
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({
+                          'jobId': job_id,
+                          'status': 'RUNNING',
+                          'taskArn': task_arn
+                      })
+                  }
+                  
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  return {
+                      'statusCode': 500,
+                      'headers': {'Content-Type': 'application/json'},
+                      'body': json.dumps({'error': str(e)})
+                  }
+
+  # Lambda Execution Role
+  LambdaTriggerRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'MusicTranscription-ECS-Trigger-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ECSAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecs:RunTask
+                  - ecs:DescribeTasks
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt ECSTaskExecutionRole.Arn
+                  - !GetAtt ECSTaskRole.Arn
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                Resource: !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${JobsTable}'
+
+  # Lambda to get default VPC subnets
+  GetSubnetsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt GetSubnetsRole.Arn
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                      return
+                  
+                  ec2 = boto3.client('ec2')
+                  
+                  # Get default VPC
+                  vpcs = ec2.describe_vpcs(Filters=[{'Name': 'isDefault', 'Values': ['true']}])
+                  vpc_id = vpcs['Vpcs'][0]['VpcId']
+                  
+                  # Get subnets
+                  subnets = ec2.describe_subnets(Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}])
+                  subnet_ids = [s['SubnetId'] for s in subnets['Subnets']]
+                  
+                  response_data = {'Data': ','.join(subnet_ids)}
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)
+              except Exception as e:
+                  print(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {})
+
+  GetSubnetsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: EC2Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ec2:DescribeVpcs
+                  - ec2:DescribeSubnets
+                Resource: '*'
+
+  # Custom resource to get subnets
+  GetSubnets:
+    Type: Custom::GetSubnets
+    Properties:
+      ServiceToken: !GetAtt GetSubnetsFunction.Arn
+
+Outputs:
+  ECSCluster:
+    Value: !Ref ECSCluster
+  TaskDefinition:
+    Value: !Ref YouTubeDownloaderTask
+  TriggerFunction:
+    Value: !Ref ECSTrigggerFunction
