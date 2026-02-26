@@ -18,6 +18,21 @@ function App() {
   const [showDownbeatConfirmation, setShowDownbeatConfirmation] = useState(false);
   const [downbeatData, setDownbeatData] = useState<any>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+
+  // Timer effect - updates every second while processing
+  useEffect(() => {
+    if (!processingStartTime || job?.status === 'COMPLETED' || job?.status === 'FAILED') {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - processingStartTime) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [processingStartTime, job?.status]);
 
   useEffect(() => {
     if (!jobId) return;
@@ -129,6 +144,8 @@ function App() {
     setJob(null);
     setPdfUrl(null);
     setUploadProgress(0);
+    setProcessingStartTime(Date.now());
+    setElapsedTime(0);
     
     try {
       console.log('Requesting upload URL for:', file.name, file.type);
@@ -489,14 +506,32 @@ function App() {
                 boxShadow: '0 0 10px rgba(147, 51, 234, 0.5)'
               }}/>
             </div>
-            <p style={{ 
+            <div style={{ 
               marginTop: '12px', 
-              fontSize: '14px', 
-              color: 'rgba(255, 255, 255, 0.6)',
-              textAlign: 'center'
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              Enhanced chord detection with 84 templates and bass-weighted key detection
-            </p>
+              <p style={{ 
+                fontSize: '14px', 
+                color: 'rgba(255, 255, 255, 0.6)',
+              }}>
+                Enhanced chord detection with 84 templates and bass-weighted key detection
+              </p>
+              <div style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#00ffff',
+                textShadow: '0 0 10px rgba(0, 255, 255, 0.5)',
+                fontFamily: 'monospace',
+                padding: '4px 12px',
+                background: 'rgba(0, 255, 255, 0.1)',
+                borderRadius: '8px',
+                border: '1px solid rgba(0, 255, 255, 0.3)'
+              }}>
+                ⏱️ {Math.floor(elapsedTime / 60)}:{String(elapsedTime % 60).padStart(2, '0')}
+              </div>
+            </div>
           </div>
         )}
 
@@ -518,6 +553,8 @@ function App() {
                 setError(null);
                 setFile(null);
                 setJobId(null);
+                setProcessingStartTime(null);
+                setElapsedTime(0);
               }}
               style={{
                 padding: '10px 20px',
@@ -554,6 +591,8 @@ function App() {
                 setError(null);
                 setIsUploading(false);
                 setFile(null);
+                setProcessingStartTime(null);
+                setElapsedTime(0);
               }}
               style={{
                 padding: '10px 20px',
@@ -592,6 +631,8 @@ function App() {
                 setShowDownbeatConfirmation(false);
                 setDownbeatData(null);
                 setAudioUrl(null);
+                setProcessingStartTime(null);
+                setElapsedTime(0);
               }}
               style={{
                 marginBottom: '24px',
@@ -666,6 +707,14 @@ function App() {
                     {Math.floor(job.chordsData.duration / 60)}:{String(Math.floor(job.chordsData.duration % 60)).padStart(2, '0')}
                   </div>
                 </div>
+                {elapsedTime > 0 && (
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Processing Time</div>
+                    <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
+                      {Math.floor(elapsedTime / 60)}:{String(elapsedTime % 60).padStart(2, '0')}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
