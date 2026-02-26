@@ -99,7 +99,7 @@ Resources:
       RequiresCompatibilities:
         - FARGATE
       Cpu: '2048'  # 2 vCPU
-      Memory: '4096'  # 4 GB
+      Memory: '8192'  # 8 GB (increased for Demucs + Whisper)
       ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
