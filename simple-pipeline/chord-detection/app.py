@@ -1,6 +1,8 @@
 """
 ECS Task: Chord Detector with Enhanced Logging
 Comprehensive logging to debug the 60% stuck issue
+
+Key Detection Fix: Properly handles major/minor chord quality detection
 """
 
 import os
