@@ -718,6 +718,39 @@ function App() {
               </div>
             </div>
 
+            {/* Lyrics Section */}
+            {job.chordsData.lyrics && job.chordsData.lyrics.text && (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                  🎤 Lyrics
+                </h3>
+                <div style={{
+                  fontSize: '14px',
+                  lineHeight: '1.8',
+                  color: '#1f2937',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'Georgia, serif'
+                }}>
+                  {job.chordsData.lyrics.text}
+                </div>
+                <div style={{
+                  marginTop: '12px',
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  fontStyle: 'italic'
+                }}>
+                  Language: {job.chordsData.lyrics.language || 'unknown'} • 
+                  Words: {job.chordsData.lyrics.words?.length || 0}
+                </div>
+              </div>
+            )}
+
             {/* Section-Based Chord Sheet */}
             {job.chordsData.chords && job.chordsData.chords.length > 0 ? (
               <div style={{

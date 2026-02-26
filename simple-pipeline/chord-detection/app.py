@@ -126,8 +126,38 @@ def main():
         log(f"  Audio duration: {chords_data.get('duration', 0):.2f}s")
         log(f"  Key detected: {chords_data.get('key', 'Unknown')}")
         
+        # Extract lyrics (Step 3.5)
+        log("Step 3.5: Extracting lyrics...")
+        update_job_status(job_id, 'PROCESSING', 60)
+        
+        lyrics_data = None
+        if WHISPER_AVAILABLE and DEMUCS_AVAILABLE:
+            try:
+                # Separate vocal stem
+                vocal_path = separate_vocal_stem(audio_path)
+                
+                if vocal_path:
+                    # Extract lyrics from vocal stem
+                    lyrics_service = LyricsExtractionService(model_size='base')
+                    lyrics_data = lyrics_service.extract_lyrics(vocal_path)
+                    
+                    # Add lyrics to chords_data
+                    chords_data['lyrics'] = lyrics_data
+                    
+                    log(f"✓ Lyrics extraction complete")
+                    log(f"  Words extracted: {len(lyrics_data.get('words', []))}")
+                    log(f"  Language: {lyrics_data.get('language', 'unknown')}")
+                else:
+                    log("⚠️ Vocal separation failed, skipping lyrics", "WARNING")
+            except Exception as e:
+                log(f"⚠️ Lyrics extraction failed: {e}", "WARNING")
+                log(traceback.format_exc(), "WARNING")
+        else:
+            log("⚠️ Whisper or Demucs not available, skipping lyrics", "WARNING")
+        
         # Update job with chord data
         log("Step 4: Updating job with chord data...")
+        update_job_status(job_id, 'PROCESSING', 80)
         update_job_with_chords(job_id, chords_data)
         log("✓ Job updated with chord data")
         
