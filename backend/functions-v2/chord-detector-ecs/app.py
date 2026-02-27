@@ -34,6 +34,14 @@ try:
 except ImportError:
     DEMUCS_AVAILABLE = False
 
+# Optional: Whisper for lyrics extraction
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    print("WARNING: whisper not available, lyrics extraction disabled")
+
 # MSAF for structural segmentation
 try:
     import msaf
@@ -133,15 +141,40 @@ def main():
         log(f"  Audio duration: {chords_data.get('duration', 0):.2f}s")
         log(f"  Key detected: {chords_data.get('key', 'Unknown')}")
         
-        # Check if lyrics data exists and perform alignment
-        log("Step 3.5: Checking for lyrics data...")
-        job_data = get_job_from_dynamodb(job_id)
+        # Extract lyrics with Whisper
+        log("Step 3.5: Extracting lyrics with Whisper...")
+        lyrics_data = None
+        if WHISPER_AVAILABLE:
+            try:
+                lyrics_start = time.time()
+                lyrics_service = LyricsExtractionService(model_size='base')
+                lyrics_data = lyrics_service.extract_lyrics(audio_path, job_id)
+                lyrics_time = time.time() - lyrics_start
+                
+                if lyrics_data and lyrics_data.get('words'):
+                    log(f"✓ Lyrics extraction complete")
+                    log(f"  Words extracted: {len(lyrics_data['words'])}")
+                    log(f"  Language: {lyrics_data.get('language', 'unknown')}")
+                    log(f"  Extraction time: {lyrics_time:.2f}s")
+                    
+                    # Store lyrics data in job for alignment
+                    update_job_with_lyrics(job_id, lyrics_data)
+                else:
+                    log("⚠️ No lyrics detected (instrumental track?)", "WARNING")
+            except Exception as e:
+                log(f"ERROR during lyrics extraction: {str(e)}", "ERROR")
+                log(traceback.format_exc(), "ERROR")
+                log("⚠️ Continuing without lyrics", "WARNING")
+        else:
+            log("ℹ️ Whisper not available, skipping lyrics extraction")
         
-        if job_data and job_data.get('lyricsData'):
+        # Perform lyrics-chord alignment if lyrics were extracted
+        log("Step 3.6: Checking for lyrics data for alignment...")
+        if lyrics_data and lyrics_data.get('words'):
             log("✓ Lyrics data found, performing lyrics-chord alignment...")
             try:
                 alignment_start = time.time()
-                lead_sheet = align_lyrics_with_chords(chords_data, job_data['lyricsData'])
+                lead_sheet = align_lyrics_with_chords(chords_data, lyrics_data)
                 alignment_time = time.time() - alignment_start
                 
                 if lead_sheet:
@@ -290,6 +323,127 @@ class ChordDetector:
             log(traceback.format_exc(), "ERROR")
             log("Falling back to full mix", "WARNING")
             return librosa.load(audio_path, sr=22050)
+
+
+class LyricsExtractionService:
+    """
+    Service for extracting lyrics from audio using Whisper
+    Provides word-level timestamps for alignment with chords
+    """
+    
+    def __init__(self, model_size='base'):
+        """
+        Initialize Whisper model
+        
+        Args:
+            model_size: Whisper model size ('tiny', 'base', 'small', 'medium', 'large')
+                       'base' is recommended for speed/accuracy balance
+        """
+        self.model = None
+        self.model_size = model_size
+        
+        if not WHISPER_AVAILABLE:
+            log("Whisper not available, lyrics extraction disabled", "WARNING")
+            return
+        
+        try:
+            log(f"Loading Whisper model ({model_size})...")
+            self.model = whisper.load_model(model_size)
+            log(f"✓ Whisper model loaded successfully")
+        except Exception as e:
+            log(f"Failed to load Whisper model: {e}", "ERROR")
+            self.model = None
+    
+    def extract_lyrics(self, audio_path: str, job_id: str = None) -> dict:
+        """
+        Extract lyrics with word-level timestamps from audio
+        
+        Args:
+            audio_path: Path to audio file
+            job_id: Job ID for status updates (optional)
+        
+        Returns:
+            dict with:
+                - text: Full lyrics text
+                - words: List of {word, start, end} dicts with timestamps
+                - segments: List of phrase segments with timestamps
+                - language: Detected language
+                - duration: Audio duration in seconds
+        """
+        if not self.model:
+            log("Whisper model not available", "WARNING")
+            return {
+                'text': '',
+                'words': [],
+                'segments': [],
+                'language': 'unknown',
+                'duration': 0
+            }
+        
+        try:
+            log(f"🎤 Extracting lyrics from: {audio_path}")
+            
+            # Transcribe with word-level timestamps
+            if job_id:
+                update_job_status(job_id, 'PROCESSING', 72, status_message="Running AI transcription on audio...")
+            result = self.model.transcribe(
+                audio_path,
+                word_timestamps=True,
+                verbose=False
+            )
+            
+            # Extract word-level data
+            if job_id:
+                update_job_status(job_id, 'PROCESSING', 75, status_message="Processing transcribed lyrics...")
+            words = []
+            for segment in result.get('segments', []):
+                for word_data in segment.get('words', []):
+                    words.append({
+                        'word': word_data['word'].strip(),
+                        'start': word_data['start'],
+                        'end': word_data['end']
+                    })
+            
+            # Get audio duration
+            try:
+                audio_info = torchaudio.info(audio_path)
+                duration = audio_info.num_frames / audio_info.sample_rate
+            except:
+                # Fallback to librosa if torchaudio fails
+                y, sr = librosa.load(audio_path, sr=None)
+                duration = librosa.get_duration(y=y, sr=sr)
+            
+            lyrics_data = {
+                'text': result['text'].strip(),
+                'words': words,
+                'segments': result.get('segments', []),
+                'language': result.get('language', 'unknown'),
+                'duration': duration
+            }
+            
+            log(f"✓ Lyrics extracted successfully")
+            log(f"  Total words: {len(words)}")
+            log(f"  Language: {lyrics_data['language']}")
+            log(f"  Duration: {duration:.1f}s")
+            
+            # Check for instrumental sections (no vocals)
+            if len(words) == 0:
+                log("  ⚠️ No lyrics detected - may be instrumental", "WARNING")
+            
+            return lyrics_data
+            
+        except Exception as e:
+            log(f"Error extracting lyrics: {e}", "ERROR")
+            log(traceback.format_exc(), "ERROR")
+            return {
+                'text': '',
+                'words': [],
+                'segments': [],
+                'language': 'unknown',
+                'duration': 0,
+                'error': str(e)
+            }
+
 
 # Initialize detector globally
 detector = ChordDetector()
@@ -1769,6 +1923,32 @@ def convert_floats_to_decimal(obj):
         return int(obj)
     else:
         return obj
+
+def update_job_with_lyrics(job_id, lyrics_data):
+    """Update job with lyrics extraction results"""
+    log(f"Updating job with lyrics data ({len(lyrics_data.get('words', []))} words)")
+    
+    table = dynamodb.Table(JOBS_TABLE)
+    
+    try:
+        # Convert all floats to Decimal for DynamoDB compatibility
+        log("Converting lyrics data to DynamoDB format...")
+        lyrics_data_decimal = convert_floats_to_decimal(lyrics_data)
+        log(f"✓ Converted lyrics data to DynamoDB format")
+        
+        table.update_item(
+            Key={'jobId': job_id},
+            UpdateExpression='SET lyricsData = :lyrics, updatedAt = :updated',
+            ExpressionAttributeValues={
+                ':lyrics': lyrics_data_decimal,
+                ':updated': time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
+            }
+        )
+        log(f"✓ Job updated with lyrics data")
+    except Exception as e:
+        log(f"ERROR updating job with lyrics: {str(e)}", "ERROR")
+        raise
+
 
 def update_job_with_chords(job_id, chords_data):
     """Update job with chord detection results"""

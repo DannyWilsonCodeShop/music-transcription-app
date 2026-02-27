@@ -8,3 +8,4 @@ torchaudio
 # essentia - removed due to build issues, using enhanced librosa instead
 msaf
 scikit-learn
+openai-whisper
