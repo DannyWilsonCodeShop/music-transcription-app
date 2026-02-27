@@ -890,6 +890,29 @@ def detect_chords_librosa(audio_path, job_id, confirmed_downbeat=None, confirmed
     log(f"  Beats detected: {len(beats)}")
     log(f"  Detection time: {tempo_time:.2f}s")
     
+    # Detect downbeat if not confirmed
+    if confirmed_downbeat is None:
+        log("Detecting downbeat automatically...")
+        try:
+            sys.path.insert(0, '/app/simple-pipeline/chord-detection')
+            from downbeat_detection import detect_downbeats
+            
+            beat_times = librosa.frames_to_time(beats, sr=sr)
+            downbeats, first_downbeat, downbeat_info = detect_downbeats(
+                audio_path, 
+                beat_times, 
+                tempo_value, 
+                time_signature if confirmed_time_signature else time_signature
+            )
+            
+            confirmed_downbeat = first_downbeat
+            log(f"✓ Downbeat detected automatically: {confirmed_downbeat:.3f}s")
+            log(f"  Confidence: {downbeat_info.get('confidence', 0):.2f}")
+            log(f"  Method: {downbeat_info.get('method', 'unknown')}")
+        except Exception as e:
+            log(f"⚠ Downbeat detection failed, using first beat: {str(e)}", "WARNING")
+            confirmed_downbeat = None
+    
     # Use confirmed downbeat if provided
     if confirmed_downbeat is not None:
         log(f"✓ Using CONFIRMED downbeat: {confirmed_downbeat}s")

@@ -65,19 +65,19 @@ The implementation is organized into discrete phases: audio analysis infrastruct
   - Ensure all tests pass, ask the user if questions arise
 
 - [ ] 5. Implement lyrics extraction system
-  - [ ] 5.1 Add Whisper to Docker container
+  - [x] 5.1 Add Whisper to Docker container
     - Update Dockerfile to install openai-whisper package
     - Add required dependencies (ffmpeg, torch)
     - Test Whisper installation in container
     - _Requirements: 6.1_
   
-  - [ ] 5.2 Implement vocal separation
+  - [x] 5.2 Implement vocal separation
     - Enable Demucs vocal stem separation (already in pipeline)
     - Extract vocal-only audio track
     - Save vocal stem for Whisper processing
     - _Requirements: 6.1_
   
-  - [ ] 5.3 Create LyricsExtractionService class
+  - [x] 5.3 Create LyricsExtractionService class
     - Load Whisper model (base or small for speed)
     - Implement extract_lyrics method with word-level timestamps
     - Handle instrumental sections (no vocals detected)

@@ -206,40 +206,9 @@ function App() {
       console.log('Upload complete!');
       setUploadProgress(100);
       
-      // Trigger downbeat detection
-      console.log('Triggering downbeat detection...');
-      setUploadProgress(60);
-      
-      // Extract bucket name from S3 key
-      const s3Key = response.data.s3Key;
-      const actualBucket = 'music-transcription-audio-test-090130568474'; // The actual upload bucket
-      
-      const downbeatResponse = await axios.post(`${API_ENDPOINT}/api/detect-downbeat`, {
-        jobId: newJobId,
-        bucket: actualBucket,
-        key: s3Key
-      });
-      
-      console.log('Downbeat detection triggered:', downbeatResponse.data);
-      setUploadProgress(70);
-      
-      // Poll for downbeat results
-      console.log('Polling for downbeat results...');
-      const downbeatData = await pollForDownbeatResults(newJobId);
-      console.log('Downbeat data received:', downbeatData);
-      setUploadProgress(80);
-      
-      // Show downbeat confirmation modal
-      setDownbeatData({
-        audioUrl: uploadUrl.split('?')[0], // Remove query params for playback
-        downbeat: downbeatData.detectedDownbeat,
-        tempo: downbeatData.tempo,
-        timeSignature: downbeatData.timeSignature,
-        beatTimes: downbeatData.beatTimes,
-      });
-      
+      // Start polling for chord detection results
+      console.log('Starting chord detection...');
       setIsUploading(false);
-      setShowDownbeatConfirmation(true);
       
     } catch (error: any) {
       console.error('Upload failed:', error);
