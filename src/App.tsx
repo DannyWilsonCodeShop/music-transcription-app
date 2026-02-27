@@ -112,7 +112,7 @@ function App() {
   };
 
   const pollForDownbeatResults = async (jobId: string): Promise<any> => {
-    const maxAttempts = 120; // 120 seconds (2 minutes)
+    const maxAttempts = 180; // 180 seconds (3 minutes)
     const pollInterval = 1000; // 1 second
     
     for (let i = 0; i < maxAttempts; i++) {
