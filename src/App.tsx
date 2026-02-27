@@ -4,7 +4,7 @@ import { DownbeatConfirmation } from './components/DownbeatConfirmation';
 import LeadSheetDisplay from './components/LeadSheetDisplay';
 import axios from 'axios';
 
-const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com';
+const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com/dev';
 const UPLOAD_API_ENDPOINT = 'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
 function App() {
