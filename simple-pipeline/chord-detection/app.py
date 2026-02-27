@@ -128,18 +128,19 @@ def main():
         
         # Extract lyrics (Step 3.5)
         log("Step 3.5: Extracting lyrics...")
-        update_job_status(job_id, 'PROCESSING', 60)
+        update_job_status(job_id, 'PROCESSING', 60, status_message="Separating vocal track with AI (1-2 minutes)...")
         
         lyrics_data = None
         if WHISPER_AVAILABLE and DEMUCS_AVAILABLE:
             try:
                 # Separate vocal stem
-                vocal_path = separate_vocal_stem(audio_path)
+                vocal_path = separate_vocal_stem(audio_path, job_id)
                 
                 if vocal_path:
                     # Extract lyrics from vocal stem
+                    update_job_status(job_id, 'PROCESSING', 70, status_message="Transcribing lyrics with AI (1 minute)...")
                     lyrics_service = LyricsExtractionService(model_size='base')
-                    lyrics_data = lyrics_service.extract_lyrics(vocal_path)
+                    lyrics_data = lyrics_service.extract_lyrics(vocal_path, job_id)
                     
                     # Add lyrics to chords_data
                     chords_data['lyrics'] = lyrics_data
@@ -157,7 +158,7 @@ def main():
         
         # Update job with chord data
         log("Step 4: Updating job with chord data...")
-        update_job_status(job_id, 'PROCESSING', 80)
+        update_job_status(job_id, 'PROCESSING', 80, status_message="Finalizing results...")
         update_job_with_chords(job_id, chords_data)
         log("✓ Job updated with chord data")
         
@@ -176,12 +177,13 @@ def main():
         update_job_status(job_id, 'FAILED', 0, str(e))
         raise
 
-def separate_vocal_stem(audio_path: str, output_path: str = None) -> str:
+def separate_vocal_stem(audio_path: str, job_id: str = None, output_path: str = None) -> str:
     """
     Separate vocal stem from audio using Demucs
     
     Args:
         audio_path: Path to input audio file
+        job_id: Job ID for status updates (optional)
         output_path: Path to save vocal stem (optional, defaults to /tmp/{job_id}-vocals.wav)
     
     Returns:
@@ -195,11 +197,15 @@ def separate_vocal_stem(audio_path: str, output_path: str = None) -> str:
         log("🎤 Separating vocal stem with Demucs...")
         
         # Load Demucs model (use mdx_extra for better quality)
+        if job_id:
+            update_job_status(job_id, 'PROCESSING', 61, status_message="Loading AI vocal separation model...")
         model = pretrained.get_model('mdx_extra')
         log(f"  Model loaded: mdx_extra")
         log(f"  Model sample rate: {model.samplerate}Hz")
         
         # Load audio using librosa (handles MP3/M4A better than torchaudio)
+        if job_id:
+            update_job_status(job_id, 'PROCESSING', 62, status_message="Loading audio file for vocal separation...")
         log(f"  Loading audio with librosa...")
         audio_np, sr = librosa.load(audio_path, sr=model.samplerate, mono=False)
         
@@ -216,6 +222,8 @@ def separate_vocal_stem(audio_path: str, output_path: str = None) -> str:
         log(f"  Audio loaded: {wav.shape[1] / sr:.1f}s at {sr}Hz")
         
         # Apply source separation
+        if job_id:
+            update_job_status(job_id, 'PROCESSING', 65, status_message="Separating vocals from music (1-2 minutes)...")
         log("  Running Demucs separation (this may take 1-2 minutes)...")
         with torch.no_grad():
             sources = apply_model(model, wav[None], device='cpu')[0]
@@ -228,6 +236,8 @@ def separate_vocal_stem(audio_path: str, output_path: str = None) -> str:
         if output_path is None:
             output_path = audio_path.replace('.mp3', '_vocals.wav').replace('.m4a', '_vocals.wav')
         
+        if job_id:
+            update_job_status(job_id, 'PROCESSING', 68, status_message="Saving vocal track...")
         torchaudio.save(output_path, vocals.cpu(), sr)
         log(f"  ✓ Vocal stem saved to: {output_path}")
         
@@ -267,12 +277,13 @@ class LyricsExtractionService:
             log(f"Failed to load Whisper model: {e}", "ERROR")
             self.model = None
     
-    def extract_lyrics(self, audio_path: str) -> dict:
+    def extract_lyrics(self, audio_path: str, job_id: str = None) -> dict:
         """
         Extract lyrics with word-level timestamps from audio
         
         Args:
             audio_path: Path to audio file (preferably vocal stem)
+            job_id: Job ID for status updates (optional)
         
         Returns:
             dict with:
@@ -296,6 +307,8 @@ class LyricsExtractionService:
             log(f"🎤 Extracting lyrics from: {audio_path}")
             
             # Transcribe with word-level timestamps
+            if job_id:
+                update_job_status(job_id, 'PROCESSING', 72, status_message="Running AI transcription on vocals...")
             result = self.model.transcribe(
                 audio_path,
                 word_timestamps=True,
@@ -303,6 +316,8 @@ class LyricsExtractionService:
             )
             
             # Extract word-level data
+            if job_id:
+                update_job_status(job_id, 'PROCESSING', 75, status_message="Processing transcribed lyrics...")
             words = []
             for segment in result.get('segments', []):
                 for word_data in segment.get('words', []):
@@ -1964,7 +1979,7 @@ def detect_song_structure(chords, pattern_info, tempo):
     
     return essential_sections
 
-def update_job_status(job_id, status, progress, error=None):
+def update_job_status(job_id, status, progress, error=None, status_message=None):
     """Update job status in DynamoDB"""
     log(f"Updating job status: {status} ({progress}%)")
     table = dynamodb.Table(JOBS_TABLE)
@@ -1976,6 +1991,11 @@ def update_job_status(job_id, status, progress, error=None):
         ':updated': time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
     }
     expr_names = {'#status': 'status'}
+    
+    if status_message:
+        update_expr += ', statusMessage = :statusMessage'
+        expr_values[':statusMessage'] = status_message
+        log(f"  Status message: {status_message}")
     
     if error:
         update_expr += ', errorMessage = :error'

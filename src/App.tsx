@@ -479,7 +479,7 @@ function App() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
               <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
-                {job.status === 'PROCESSING' ? 'Analyzing audio...' : 'Processing...'}
+                {job.statusMessage || (job.status === 'PROCESSING' ? 'Analyzing audio...' : 'Processing...')}
               </span>
               <span style={{ 
                 color: '#a78bfa', 
@@ -516,7 +516,9 @@ function App() {
                 fontSize: '14px', 
                 color: 'rgba(255, 255, 255, 0.6)',
               }}>
-                Enhanced chord detection with 84 templates and bass-weighted key detection
+                {job.statusMessage || (job.progress >= 60 && job.progress < 80 
+                  ? 'Extracting lyrics with AI (this may take 2-3 minutes)...'
+                  : 'Enhanced chord detection with 84 templates')}
               </p>
               <div style={{
                 fontSize: '16px',

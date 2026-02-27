@@ -9,6 +9,7 @@ export interface TranscriptionJob {
   status: 'PENDING' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   currentStep?: string;
   progress?: number;
+  statusMessage?: string;
   createdAt: string;
   updatedAt?: string;
   completedAt?: string;
@@ -116,6 +117,7 @@ export async function getJobStatus(jobId: string): Promise<TranscriptionJob | nu
       status: data.status,
       currentStep: getStepDescription(data.status),
       progress: data.progress || 0,
+      statusMessage: data.statusMessage,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       completedAt: data.completedAt,
