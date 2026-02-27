@@ -1843,11 +1843,11 @@ def run_downbeat_detection():
         
         # Import downbeat detection module
         sys.path.insert(0, '/app/simple-pipeline/chord-detection')
-        from downbeat_detection import detect_downbeats_complete
+        from downbeat_detection import detect_downbeats
         
         # Detect downbeat
         log("Detecting downbeat...")
-        result = detect_downbeats_complete(audio_path)
+        result = detect_downbeats(audio_path)
         
         log(f"✓ Downbeat detection complete:")
         log(f"  Tempo: {result['tempo']} BPM")
