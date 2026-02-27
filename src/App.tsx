@@ -204,8 +204,36 @@ function App() {
       console.log('Upload complete!');
       setUploadProgress(100);
       
-      // Skip downbeat detection for now - using simple pipeline
-      console.log('Skipping downbeat detection, using simple pipeline');
+      // Trigger downbeat detection
+      console.log('Triggering downbeat detection...');
+      setUploadProgress(60);
+      
+      const downbeatResponse = await axios.post(`${API_ENDPOINT}/api/detect-downbeat`, {
+        jobId: newJobId,
+        bucket: 'chordscout-audio-uploads-dev',
+        key: `uploads/${newJobId}/${file.name}`
+      });
+      
+      console.log('Downbeat detection triggered:', downbeatResponse.data);
+      setUploadProgress(70);
+      
+      // Poll for downbeat results
+      console.log('Polling for downbeat results...');
+      const downbeatData = await pollForDownbeatResults(newJobId);
+      console.log('Downbeat data received:', downbeatData);
+      setUploadProgress(80);
+      
+      // Show downbeat confirmation modal
+      setDownbeatData({
+        audioUrl: uploadUrl.split('?')[0], // Remove query params for playback
+        downbeat: downbeatData.detectedDownbeat,
+        tempo: downbeatData.tempo,
+        timeSignature: downbeatData.timeSignature,
+        beatTimes: downbeatData.beatTimes,
+      });
+      
+      setIsUploading(false);
+      setShowDownbeatConfirmation(true);
       
     } catch (error: any) {
       console.error('Upload failed:', error);
