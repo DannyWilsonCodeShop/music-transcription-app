@@ -1841,13 +1841,29 @@ def run_downbeat_detection():
         s3.download_file(audio_bucket, audio_key, audio_path)
         log("✓ Audio downloaded successfully")
         
-        # Import downbeat detection module
+        # Import detection modules
         sys.path.insert(0, '/app/simple-pipeline/chord-detection')
+        from chord_detection_v2 import detect_tempo_and_beats
         from downbeat_detection import detect_downbeats
+        
+        # Detect tempo and beats first
+        log("Detecting tempo and beats...")
+        tempo, beats, time_signature = detect_tempo_and_beats(audio_path)
+        log(f"✓ Detected {len(beats)} beats at {tempo:.1f} BPM, time signature: {time_signature}")
         
         # Detect downbeat
         log("Detecting downbeat...")
-        result = detect_downbeats(audio_path)
+        downbeats, first_downbeat, info = detect_downbeats(audio_path, beats, tempo, time_signature)
+        
+        result = {
+            'tempo': tempo,
+            'time_signature': time_signature,
+            'first_downbeat': first_downbeat,
+            'confidence': info.get('confidence', 0.8),
+            'beat_times': beats.tolist(),
+            'downbeats': downbeats.tolist(),
+            'method_info': info
+        }
         
         log(f"✓ Downbeat detection complete:")
         log(f"  Tempo: {result['tempo']} BPM")
