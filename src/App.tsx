@@ -210,10 +210,14 @@ function App() {
       console.log('Triggering downbeat detection...');
       setUploadProgress(60);
       
+      // Extract bucket name from S3 key
+      const s3Key = response.data.s3Key;
+      const actualBucket = 'music-transcription-audio-test-090130568474'; // The actual upload bucket
+      
       const downbeatResponse = await axios.post(`${API_ENDPOINT}/api/detect-downbeat`, {
         jobId: newJobId,
-        bucket: 'chordscout-audio-uploads-dev',
-        key: `uploads/${newJobId}/${file.name}`
+        bucket: actualBucket,
+        key: s3Key
       });
       
       console.log('Downbeat detection triggered:', downbeatResponse.data);
