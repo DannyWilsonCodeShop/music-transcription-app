@@ -38,22 +38,29 @@ function App() {
 
   useEffect(() => {
     if (!jobId) return;
+    
     const pollInterval = setInterval(async () => {
-      const status = await getJobStatus(jobId);
-      if (status) {
-        setJob(status);
-        if (status.status === 'COMPLETED') {
-          clearInterval(pollInterval);
-          setIsUploading(false);
-          if (status.pdfUrl) {
-            setPdfUrl(status.pdfUrl);
+      try {
+        const status = await getJobStatus(jobId);
+        if (status) {
+          setJob(status);
+          if (status.status === 'COMPLETED') {
+            clearInterval(pollInterval);
+            setIsUploading(false);
+            if (status.pdfUrl) {
+              setPdfUrl(status.pdfUrl);
+            }
+          } else if (status.status === 'FAILED') {
+            clearInterval(pollInterval);
+            setIsUploading(false);
+            setError(status.errorMessage || 'Processing failed');
           }
-        } else if (status.status === 'FAILED') {
-          clearInterval(pollInterval);
-          setIsUploading(false);
         }
+      } catch (error) {
+        console.error('Error polling job status:', error);
       }
     }, 2000);
+    
     return () => clearInterval(pollInterval);
   }, [jobId]);
 
@@ -206,9 +213,8 @@ function App() {
       console.log('Upload complete!');
       setUploadProgress(100);
       
-      // Start polling for chord detection results
+      // Keep isUploading true so progress bar continues to show during processing
       console.log('Starting chord detection...');
-      setIsUploading(false);
       
     } catch (error: any) {
       console.error('Upload failed:', error);
