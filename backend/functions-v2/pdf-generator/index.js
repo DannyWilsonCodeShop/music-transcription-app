@@ -41,9 +41,9 @@ exports.handler = async (event) => {
     const jobData = await getJobData(jobId);
     console.log('[STEP 2] ✓ Job data retrieved successfully');
 
-    // Generate diagnostic PDF
-    console.log('[STEP 3] Generating diagnostic PDF');
-    const pdfBuffer = await generateDiagnosticPDF(jobData);
+    // Generate PDF (lead sheet if available, otherwise diagnostic)
+    console.log('[STEP 3] Generating PDF');
+    const pdfBuffer = await generatePDF(jobData);
     console.log(`[STEP 3] ✓ PDF generated successfully (${pdfBuffer.length} bytes)`);
 
     // Upload to S3
@@ -105,9 +105,161 @@ exports.handler = async (event) => {
   }
 };
 
-async function generateDiagnosticPDF(jobData) {
-  console.log('📄 Generating diagnostic PDF...');
+async function generatePDF(jobData) {
+  const chordsData = jobData.chordsData || {};
   
+  // Check if lead sheet data exists
+  if (chordsData.leadSheet && chordsData.leadSheet.sections) {
+    console.log('📄 Generating lead sheet PDF...');
+    return generateLeadSheetPDF(jobData);
+  } else {
+    console.log('📄 Generating diagnostic PDF (no lead sheet data)...');
+    return generateDiagnosticPDF(jobData);
+  }
+}
+
+function renderLineWithChords(doc, line, yPos) {
+  const startX = 60; // Leave space for measure numbers
+  const marginX = 20; // Left margin for measure numbers
+  
+  // Measure numbers in left margin
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(102, 102, 102); // Gray color
+  
+  const measureText = line.measureStart === line.measureEnd 
+    ? `${line.measureStart}`
+    : `${line.measureStart}-${line.measureEnd}`;
+  
+  doc.text(measureText, marginX, yPos + 10, { align: 'left' });
+  
+  // Chord symbols (above lyrics)
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(0, 102, 204); // Blue color for chords
+  
+  const chords = line.chords || [];
+  for (const chord of chords) {
+    // Calculate x position based on character position
+    // Approximate character width in PDF units (using Courier-like spacing)
+    const charWidth = 3.5;
+    const xPos = startX + (chord.charPosition || 0) * charWidth;
+    
+    doc.text(chord.chord, xPos, yPos);
+  }
+  
+  // Lyrics text (below chords)
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(0, 0, 0); // Black color for lyrics
+  
+  if (line.isInstrumental) {
+    doc.setFont('helvetica', 'italic');
+    doc.setTextColor(153, 153, 153); // Light gray for instrumental
+    doc.text('[Instrumental]', startX, yPos + 10);
+  } else {
+    const lyrics = line.lyrics || '';
+    // Handle long lines by wrapping
+    const maxWidth = 130; // Maximum width for lyrics
+    const lyricsLines = doc.splitTextToSize(lyrics, maxWidth);
+    
+    lyricsLines.forEach((textLine, index) => {
+      doc.text(textLine, startX, yPos + 10 + (index * 6));
+    });
+    
+    // Return updated yPos accounting for wrapped lines
+    return yPos + (lyricsLines.length * 6);
+  }
+  
+  return yPos;
+}
+
+async function generateLeadSheetPDF(jobData) {
+  const doc = new jsPDF();
+  const chordsData = jobData.chordsData || {};
+  const leadSheet = chordsData.leadSheet;
+  let yPos = 20;
+
+  // Title
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text(jobData.videoTitle || 'Untitled', 105, yPos, { align: 'center' });
+  yPos += 15;
+
+  // Metadata header (key, tempo, time signature)
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  const metadata = leadSheet.metadata || {};
+  const metadataText = [
+    metadata.key ? `Key: ${metadata.key}` : null,
+    metadata.tempo ? `Tempo: ${metadata.tempo} BPM` : null,
+    metadata.timeSignature ? `Time: ${metadata.timeSignature}` : null
+  ].filter(Boolean).join('  |  ');
+  
+  doc.text(metadataText, 105, yPos, { align: 'center' });
+  yPos += 15;
+
+  // Separator
+  doc.setDrawColor(0, 0, 0);
+  doc.line(20, yPos, 190, yPos);
+  yPos += 10;
+
+  // Render each section
+  const sections = leadSheet.sections || [];
+  
+  for (let i = 0; i < sections.length; i++) {
+    const section = sections[i];
+    
+    // Check if we need a new page
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    // Section label
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(section.label || 'Section', 20, yPos);
+    yPos += 10;
+
+    // Render lines within section
+    const lines = section.lines || [];
+    for (let j = 0; j < lines.length; j++) {
+      const line = lines[j];
+      
+      // Check for page break before rendering line
+      if (yPos > 260) {
+        doc.addPage();
+        yPos = 20;
+        
+        // Re-render section label after page break
+        doc.setFontSize(14);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${section.label} (continued)`, 20, yPos);
+        yPos += 10;
+      }
+
+      // Render the line with chords
+      yPos = renderLineWithChords(doc, line, yPos);
+      yPos += 15; // Space between lines
+    }
+
+    yPos += 10; // Extra space between sections
+  }
+
+  // Footer
+  if (yPos > 270) {
+    doc.addPage();
+    yPos = 20;
+  }
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'italic');
+  doc.text('Generated by ChordScout', 105, yPos, { align: 'center' });
+  
+  return Buffer.from(doc.output('arraybuffer'));
+}
+
+async function generateDiagnosticPDF(jobData) {
   const doc = new jsPDF();
   const chordsData = jobData.chordsData || {};
   let yPos = 20;

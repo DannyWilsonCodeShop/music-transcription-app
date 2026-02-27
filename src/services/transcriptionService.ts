@@ -2,6 +2,9 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
                      'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
+// Import lead sheet types from LeadSheetDisplay component
+import type { AlignedLeadSheet } from '../components/LeadSheetDisplay';
+
 export interface TranscriptionJob {
   id: string;
   filename?: string;
@@ -45,6 +48,7 @@ export interface TranscriptionJob {
       occurrences: number;
       positions: number[];
     }>;
+    leadSheet?: AlignedLeadSheet;
     model?: string;
   };
   pdfUrl?: string;

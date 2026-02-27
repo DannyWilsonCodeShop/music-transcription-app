@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getJobStatus, TranscriptionJob } from './services/transcriptionService';
 import { DownbeatConfirmation } from './components/DownbeatConfirmation';
+import LeadSheetDisplay from './components/LeadSheetDisplay';
 import axios from 'axios';
 
 const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com';
@@ -20,6 +21,7 @@ function App() {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [showDebugMode, setShowDebugMode] = useState(false);
 
   // Timer effect - updates every second while processing
   useEffect(() => {
@@ -781,8 +783,50 @@ function App() {
               </div>
             )}
 
-            {/* Section-Based Chord Sheet */}
-            {job.chordsData.chords && job.chordsData.chords.length > 0 ? (
+            {/* Lead Sheet Display (if leadSheet data exists) or Chord-Only Display */}
+            {job.chordsData.leadSheet ? (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', margin: 0 }}>
+                    🎼 Lead Sheet
+                  </h3>
+                  <button
+                    onClick={() => setShowDebugMode(!showDebugMode)}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      backgroundColor: showDebugMode ? '#9333ea' : '#e5e7eb',
+                      color: showDebugMode ? 'white' : '#6b7280',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {showDebugMode ? '🐛 Debug ON' : '🐛 Debug OFF'}
+                  </button>
+                </div>
+                <LeadSheetDisplay 
+                  leadSheet={job.chordsData.leadSheet}
+                  showMeasureNumbers={true}
+                  showTimestamps={showDebugMode}
+                />
+              </div>
+            ) : (
+              /* Fallback to chord-only display if no lead sheet */
+              job.chordsData.chords && job.chordsData.chords.length > 0 ? (
               <div style={{
                 marginBottom: '24px',
                 padding: '20px',
@@ -1013,6 +1057,7 @@ function App() {
                   })}
                 </p>
               </div>
+            )
             )}
             
             {pdfUrl && (
