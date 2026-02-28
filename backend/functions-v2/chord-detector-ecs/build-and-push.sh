@@ -25,6 +25,7 @@ echo "Build directory: $BUILD_DIR"
 
 # Copy app files
 cp app.py "$BUILD_DIR/"
+cp section_detection.py "$BUILD_DIR/"
 cp test_chord_detection.py "$BUILD_DIR/"
 cp requirements.txt "$BUILD_DIR/"
 cp Dockerfile "$BUILD_DIR/"

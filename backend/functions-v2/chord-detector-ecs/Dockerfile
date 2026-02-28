@@ -19,12 +19,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY backend/functions-v2/chord-detector-ecs/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
-COPY backend/functions-v2/chord-detector-ecs/app.py .
-COPY backend/functions-v2/chord-detector-ecs/section_detection.py .
+COPY app.py .
+COPY section_detection.py .
 
 # Copy simple-pipeline directory for downbeat detection and chord detection modules
 COPY simple-pipeline ./simple-pipeline
