@@ -36,8 +36,8 @@ cp -r ../../../simple-pipeline "$BUILD_DIR/"
 
 # Build Docker image
 echo ""
-echo "🐳 Building Docker image..."
-docker build -t $REPO_NAME:latest "$BUILD_DIR"
+echo "🐳 Building Docker image for linux/amd64..."
+docker build --platform linux/amd64 -t $REPO_NAME:latest "$BUILD_DIR"
 
 # Clean up build directory
 rm -rf "$BUILD_DIR"
