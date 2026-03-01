@@ -22,6 +22,13 @@ def lambda_handler(event, context):
     filename = body.get('filename', 'audio.mp3')
     content_type = body.get('contentType', 'audio/mpeg')
     user_id = body.get('userId', 'anonymous')
+    analysis_options = body.get('analysisOptions', {
+        'musicPart': 'bass',
+        'includeLyrics': False,
+        'includeKey': True,
+        'includeTempo': True,
+        'includeTimeSignature': True
+    })
     
     # Generate job ID
     job_id = str(uuid.uuid4())
@@ -51,6 +58,7 @@ def lambda_handler(event, context):
         's3Key': s3_key,
         'filename': filename,
         'contentType': content_type,
+        'analysisOptions': analysis_options,
         'createdAt': datetime.utcnow().isoformat(),
         'updatedAt': datetime.utcnow().isoformat()
     })

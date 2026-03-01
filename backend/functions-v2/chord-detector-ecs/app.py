@@ -50,6 +50,14 @@ except ImportError:
     MSAF_AVAILABLE = False
     print("WARNING: msaf not available, using pattern-based structure detection only")
 
+# Bass note transcription
+try:
+    from bass_note_transcription import detect_bass_notes
+    BASS_TRANSCRIPTION_AVAILABLE = True
+except ImportError:
+    BASS_TRANSCRIPTION_AVAILABLE = False
+    print("WARNING: bass_note_transcription not available")
+
 # AWS clients
 s3 = boto3.client('s3')
 dynamodb = boto3.resource('dynamodb')
@@ -111,8 +119,8 @@ def main():
     
     try:
         # Update status
-        log("Step 1: Updating job status to DETECTING_CHORDS (70%)")
-        update_job_status(job_id, 'DETECTING_CHORDS', 70)
+        log("Step 1: Updating job status to PROCESSING (30%)")
+        update_job_status(job_id, 'PROCESSING', 30, status_message="Downloading audio file...")
         log("✓ Status updated successfully")
         
         # Download audio from S3
@@ -129,11 +137,25 @@ def main():
         log(f"  File size: {file_size / 1024 / 1024:.2f} MB")
         log(f"  Download time: {download_time:.2f}s")
         
-        # Detect chords
-        log("Step 3: Starting chord detection...")
-        start_time = time.time()
-        chords_data = detect_chords(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
-        detection_time = time.time() - start_time
+        # Detect chords or transcribe bass notes based on music part
+        log("Step 3: Starting music analysis...")
+        music_part = os.environ.get('MUSIC_PART', 'full').lower()
+        
+        if music_part == 'bass':
+            # Bass note transcription mode
+            update_job_status(job_id, 'PROCESSING', 40, status_message="Transcribing bass notes...")
+            log("Using BASS NOTE TRANSCRIPTION mode")
+            start_time = time.time()
+            chords_data = transcribe_bass_line(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
+            detection_time = time.time() - start_time
+            log(f"✓ Bass transcription complete")
+        else:
+            # Chord detection mode (full mix or other stems)
+            update_job_status(job_id, 'PROCESSING', 40, status_message="Analyzing audio and detecting chords...")
+            start_time = time.time()
+            chords_data = detect_chords(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
+            detection_time = time.time() - start_time
+            log(f"✓ Chord detection complete")
         
         log(f"✓ Chord detection complete")
         log(f"  Total chords found: {len(chords_data['chords'])}")
@@ -143,6 +165,7 @@ def main():
         
         # Extract lyrics with Whisper
         log("Step 3.5: Extracting lyrics with Whisper...")
+        update_job_status(job_id, 'PROCESSING', 70, status_message="Extracting lyrics with AI (this may take 2-3 minutes)...")
         lyrics_data = None
         if WHISPER_AVAILABLE:
             try:
@@ -172,6 +195,7 @@ def main():
         log("Step 3.6: Checking for lyrics data for alignment...")
         if lyrics_data and lyrics_data.get('words'):
             log("✓ Lyrics data found, performing lyrics-chord alignment...")
+            update_job_status(job_id, 'PROCESSING', 78, status_message="Aligning lyrics with chords...")
             try:
                 alignment_start = time.time()
                 lead_sheet = align_lyrics_with_chords(chords_data, lyrics_data)
@@ -193,11 +217,13 @@ def main():
         
         # Update job with chord data
         log("Step 4: Updating job with chord data...")
+        update_job_status(job_id, 'PROCESSING', 85, status_message="Saving chord data...")
         update_job_with_chords(job_id, chords_data)
         log("✓ Job updated with chord data")
         
         # Trigger PDF generation
         log("Step 5: Triggering PDF generation Lambda...")
+        update_job_status(job_id, 'PROCESSING', 90, status_message="Generating PDF chord sheet...")
         trigger_pdf_generation(job_id)
         log("✓ PDF generation triggered")
         
@@ -233,6 +259,87 @@ class ChordDetector:
                 log("Stem separation enabled but Demucs not available", "WARNING")
             else:
                 log("Stem separation disabled (ENABLE_STEM_SEPARATION=false)")
+    
+    def separate_stems(self, audio_path: str) -> dict:
+        """
+        Separate audio into individual stems
+        
+        Returns:
+            dict with keys: 'bass', 'drums', 'other', 'vocals', 'sample_rate'
+        """
+        if not self.demucs_model:
+            log("Using full mix (no stem separation)")
+            y, sr = librosa.load(audio_path, sr=22050)
+            return {
+                'bass': y,
+                'drums': y,
+                'other': y,
+                'vocals': y,
+                'sample_rate': sr
+            }
+        
+        try:
+            log("🎵 Separating audio into individual stems...")
+            
+            # Load audio
+            wav, sr = torchaudio.load(audio_path)
+            log(f"  Audio loaded: {wav.shape}, {sr}Hz")
+            
+            # Ensure stereo (Demucs expects stereo)
+            if wav.shape[0] == 1:
+                wav = wav.repeat(2, 1)
+                log("  Converted mono to stereo")
+            
+            # Resample if needed
+            if sr != self.demucs_model.samplerate:
+                log(f"  Resampling from {sr}Hz to {self.demucs_model.samplerate}Hz...")
+                resampler = torchaudio.transforms.Resample(sr, self.demucs_model.samplerate)
+                wav = resampler(wav)
+                sr = self.demucs_model.samplerate
+            
+            # Separate stems (no gradient needed for inference)
+            log("  Running Demucs separation...")
+            with torch.no_grad():
+                sources = apply_model(self.demucs_model, wav[None], device='cpu')[0]
+            
+            # Demucs output order: [drums, bass, other, vocals]
+            drums = sources[0]
+            bass = sources[1]
+            other = sources[2]
+            vocals = sources[3]
+            
+            log("✓ Stem separation complete")
+            log(f"  Drums: {drums.shape}")
+            log(f"  Bass: {bass.shape}")
+            log(f"  Other (piano/guitar/keys): {other.shape}")
+            log(f"  Vocals: {vocals.shape}")
+            
+            # Convert to mono and numpy
+            stems = {
+                'bass': torch.mean(bass, dim=0).numpy(),
+                'drums': torch.mean(drums, dim=0).numpy(),
+                'other': torch.mean(other, dim=0).numpy(),
+                'vocals': torch.mean(vocals, dim=0).numpy(),
+                'sample_rate': sr
+            }
+            
+            # Clean up
+            del wav, sources, drums, bass, other, vocals
+            
+            return stems
+            
+        except Exception as e:
+            log(f"Stem separation failed: {e}", "ERROR")
+            log(traceback.format_exc(), "ERROR")
+            log("Falling back to full mix", "WARNING")
+            y, sr = librosa.load(audio_path, sr=22050)
+            return {
+                'bass': y,
+                'drums': y,
+                'other': y,
+                'vocals': y,
+                'sample_rate': sr
+            }
     
     def separate_harmonic_stem_chunked(self, audio_path: str) -> tuple:
         """
@@ -447,6 +554,121 @@ class LyricsExtractionService:
 
 # Initialize detector globally
 detector = ChordDetector()
+
+
+def transcribe_bass_line(audio_path, job_id, confirmed_downbeat=None, confirmed_time_signature=None):
+    """
+    Transcribe bass line to individual notes with Nashville Number System
+    
+    This is used when MUSIC_PART='bass' - transcribes monophonic bass notes
+    instead of detecting chords.
+    """
+    log("=" * 80)
+    log("BASS LINE TRANSCRIPTION MODE")
+    log("=" * 80)
+    
+    if not BASS_TRANSCRIPTION_AVAILABLE:
+        log("ERROR: Bass transcription module not available", "ERROR")
+        raise ImportError("bass_note_transcription module required for bass analysis")
+    
+    # Step 1: Separate stems and extract bass
+    log("Step 1: Extracting bass stem...")
+    stems = detector.separate_stems(audio_path)
+    bass_audio = stems['bass']
+    sr = stems['sample_rate']
+    
+    # Resample to 22050 if needed
+    if sr != 22050:
+        log(f"  Resampling from {sr}Hz to 22050Hz...")
+        bass_audio = librosa.resample(bass_audio, orig_sr=sr, target_sr=22050)
+        sr = 22050
+    
+    duration = len(bass_audio) / sr
+    log(f"✓ Bass stem extracted")
+    log(f"  Duration: {duration:.2f}s")
+    log(f"  Sample rate: {sr}Hz")
+    
+    # Step 2: Detect tempo and beats
+    log("Step 2: Detecting tempo and beats...")
+    tempo, beats = librosa.beat.beat_track(y=bass_audio, sr=sr)
+    tempo_value = float(tempo) if isinstance(tempo, (int, float)) else float(tempo[0])
+    
+    # Use confirmed time signature if provided
+    if confirmed_time_signature:
+        time_signature = confirmed_time_signature
+        log(f"✓ Using CONFIRMED time signature: {time_signature}")
+    else:
+        time_signature = "4/4"  # Default
+        log(f"✓ Time signature: {time_signature} (default)")
+    
+    log(f"✓ Tempo: {tempo_value:.1f} BPM")
+    log(f"  Beats detected: {len(beats)}")
+    
+    # Step 3: Detect or use confirmed downbeat
+    if confirmed_downbeat is None:
+        log("Step 3: Detecting downbeat automatically...")
+        try:
+            sys.path.insert(0, '/app/simple-pipeline/chord-detection')
+            from downbeat_detection import detect_downbeats
+            
+            beat_times = librosa.frames_to_time(beats, sr=sr)
+            downbeats, first_downbeat, downbeat_info = detect_downbeats(
+                audio_path,
+                beat_times,
+                tempo_value,
+                time_signature
+            )
+            
+            confirmed_downbeat = first_downbeat
+            log(f"✓ Downbeat detected: {confirmed_downbeat:.3f}s")
+        except Exception as e:
+            log(f"⚠ Downbeat detection failed: {str(e)}", "WARNING")
+            confirmed_downbeat = 0.0
+            log(f"  Using first beat as downbeat: {confirmed_downbeat:.3f}s")
+    else:
+        log(f"Step 3: Using CONFIRMED downbeat: {confirmed_downbeat:.3f}s")
+    
+    # Step 4: Transcribe bass notes
+    log("Step 4: Transcribing bass notes to NNS...")
+    bass_data = detect_bass_notes(
+        bass_audio,
+        sr,
+        tempo_value,
+        time_signature,
+        confirmed_downbeat
+    )
+    
+    log(f"✓ Bass transcription complete")
+    log(f"  Total notes: {bass_data['totalNotes']}")
+    log(f"  Total measures: {bass_data['totalMeasures']}")
+    log(f"  Key: {bass_data['key']} {bass_data['mode']}")
+    log(f"  Relative major: {bass_data['relativeMajor']}")
+    
+    # Convert to format compatible with existing pipeline
+    # This allows the PDF generator and frontend to work without changes
+    result = {
+        'analysisType': 'bass_notes',  # NEW: indicates this is bass note analysis
+        'notes': bass_data['notes'],
+        'measures': bass_data['measures'],
+        'key': bass_data['key'],
+        'mode': bass_data['mode'],
+        'relativeMajor': bass_data['relativeMajor'],
+        'keyConfidence': bass_data['confidence'],
+        'tempo': tempo_value,
+        'timeSignature': time_signature,
+        'duration': duration,
+        'totalNotes': bass_data['totalNotes'],
+        'totalMeasures': bass_data['totalMeasures'],
+        'stemUsed': 'bass',
+        'stemSeparationEnabled': True,
+        'model': 'bass-note-transcription-basic-pitch',
+        # For backwards compatibility with chord-based display
+        'chords': [],  # Empty - we're using notes instead
+        'songStructure': []  # Will be populated if needed
+    }
+    
+    log("=" * 80)
+    return result
 
 def detect_key_improved(chroma):
     """
@@ -1005,24 +1227,47 @@ def detect_chords(audio_path, job_id, confirmed_downbeat=None, confirmed_time_si
 
 def detect_chords_librosa(audio_path, job_id, confirmed_downbeat=None, confirmed_time_signature=None):
     """Detect chords using librosa chromagram analysis with optional stem separation"""
-    log("Loading audio file...")
-    start_time = time.time()
     
-    # Use stem separation if enabled, otherwise load full mix
-    if ENABLE_STEM_SEPARATION and detector.demucs_model:
-        log("Using stem separation for improved chord detection...")
-        y, sr = detector.separate_harmonic_stem_chunked(audio_path)
+    # Get music part to analyze from environment variable
+    music_part = os.environ.get('MUSIC_PART', 'bass').lower()
+    log(f"🎸 Music part to analyze: {music_part}")
+    
+    # Separate stems if analyzing specific part
+    if music_part in ['bass', 'piano', 'guitar', 'other']:
+        log("Separating audio stems...")
+        stems = detector.separate_stems(audio_path)
+        
+        # Select the appropriate stem
+        if music_part == 'bass':
+            y = stems['bass']
+            sr = stems['sample_rate']
+            log("✓ Using BASS stem for chord detection")
+        elif music_part in ['piano', 'guitar', 'other']:
+            y = stems['other']  # Piano/guitar/keys are in 'other' stem
+            sr = stems['sample_rate']
+            log(f"✓ Using OTHER stem (piano/guitar/keys) for chord detection")
+        else:
+            y = stems['bass']  # Default to bass
+            sr = stems['sample_rate']
+        
+        # Resample to 22050 if needed
+        if sr != 22050:
+            log(f"  Resampling from {sr}Hz to 22050Hz...")
+            y = librosa.resample(y, orig_sr=sr, target_sr=22050)
+            sr = 22050
     else:
+        # Use full mix
+        log("Loading full mix audio...")
         y, sr = librosa.load(audio_path, sr=22050)
+        log("✓ Using FULL MIX for chord detection")
     
     duration = librosa.get_duration(y=y, sr=sr)
-    load_time = time.time() - start_time
     
     log(f"✓ Audio loaded successfully")
     log(f"  Duration: {duration:.2f}s")
     log(f"  Sample rate: {sr}Hz")
     log(f"  Samples: {len(y)}")
-    log(f"  Load time: {load_time:.2f}s")
+    log(f"  Stem used: {music_part}")
     
     # Detect tempo and time signature using beat tracking
     log("Detecting tempo and time signature...")
@@ -1405,7 +1650,9 @@ def detect_chords_librosa(audio_path, job_id, confirmed_downbeat=None, confirmed
         'totalChords': len(chords),
         'songStructure': song_structure,
         'patternAnalysis': format_pattern_analysis(pattern_info, key),  # Pass detected key
-        'model': 'librosa-enhanced-84-templates'  # 84 chord templates (major, minor, 7th, maj7, m7, sus4, dim)
+        'model': 'librosa-enhanced-84-templates',  # 84 chord templates (major, minor, 7th, maj7, m7, sus4, dim)
+        'stemUsed': music_part,  # Which stem was analyzed (bass, other, or full)
+        'stemSeparationEnabled': music_part in ['bass', 'piano', 'guitar', 'other']
     }
 
 def format_pattern_analysis(pattern_info, key='C'):
@@ -1845,9 +2092,12 @@ def detect_song_structure(chords, pattern_info, tempo):
     
     return essential_sections
 
-def update_job_status(job_id, status, progress, error=None):
+def update_job_status(job_id, status, progress, error=None, status_message=None):
     """Update job status in DynamoDB"""
     log(f"Updating job status: {status} ({progress}%)")
+    if status_message:
+        log(f"  Status message: {status_message}")
+    
     table = dynamodb.Table(JOBS_TABLE)
     
     update_expr = 'SET #status = :status, progress = :progress, updatedAt = :updated'
@@ -1862,6 +2112,10 @@ def update_job_status(job_id, status, progress, error=None):
         update_expr += ', errorMessage = :error'
         expr_values[':error'] = error
         log(f"  Error message: {error}", "ERROR")
+    
+    if status_message:
+        update_expr += ', statusMessage = :statusMessage'
+        expr_values[':statusMessage'] = status_message
     
     try:
         table.update_item(

@@ -1,11 +1,14 @@
 {
-  "body": "{\"youtubeUrl\":\"https://www.youtube.com/watch?v=kJQP7kiw5Fk\"}",
-  "headers": {
-    "Content-Type": "application/json"
-  },
-  "requestContext": {
-    "http": {
-      "method": "POST"
+  "Records": [
+    {
+      "s3": {
+        "bucket": {
+          "name": "chordscout-audio-temp-dev-090130568474"
+        },
+        "object": {
+          "key": "uploads/c1e59a5a-a54d-416d-8ae7-3c8298025cba/04 CUFF IT.m4a"
+        }
+      }
     }
-  }
+  ]
 }

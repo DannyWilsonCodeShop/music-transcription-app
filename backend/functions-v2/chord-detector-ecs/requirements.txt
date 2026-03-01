@@ -9,3 +9,4 @@ torchaudio
 msaf
 scikit-learn
 openai-whisper
+basic-pitch>=0.2.5  # For bass note transcription

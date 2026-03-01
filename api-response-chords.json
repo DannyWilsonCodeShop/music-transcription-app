@@ -1,0 +1,37 @@
+[
+  {
+    "chord": "Csus4",
+    "start": "2.14",
+    "duration": "0.78",
+    "end": "2.91",
+    "confidence": "0.11"
+  },
+  {
+    "chord": "Am",
+    "start": "2.91",
+    "duration": "0.52",
+    "end": "3.44",
+    "confidence": "0.12"
+  },
+  {
+    "chord": "F#dim",
+    "start": "3.44",
+    "duration": "0.52",
+    "end": "3.96",
+    "confidence": "0.11"
+  },
+  {
+    "chord": "Amaj7",
+    "start": "3.96",
+    "duration": "1.31",
+    "end": "5.27",
+    "confidence": "0.11"
+  },
+  {
+    "chord": "Dsus4",
+    "start": "5.27",
+    "duration": "1.04",
+    "end": "6.32",
+    "confidence": "0.12"
+  }
+]

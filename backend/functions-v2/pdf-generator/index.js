@@ -60,21 +60,22 @@ exports.handler = async (event) => {
     console.log(`[STEP 4] ✓ PDF uploaded to S3: ${pdfUrl}`);
 
     // Update job as complete
-    console.log('[STEP 5] Updating job status to COMPLETE (100%)');
+    console.log('[STEP 5] Updating job status to COMPLETED (100%)');
     await docClient.send(new UpdateCommand({
       TableName: JOBS_TABLE,
       Key: { jobId },
-      UpdateExpression: 'SET pdfUrl = :url, #status = :status, progress = :progress, completedAt = :completed, updatedAt = :updated',
+      UpdateExpression: 'SET pdfUrl = :url, #status = :status, progress = :progress, statusMessage = :statusMessage, completedAt = :completed, updatedAt = :updated',
       ExpressionAttributeNames: { '#status': 'status' },
       ExpressionAttributeValues: {
         ':url': pdfUrl,
-        ':status': 'COMPLETE',
+        ':status': 'COMPLETED',
         ':progress': 100,
+        ':statusMessage': 'Complete! Your chord sheet is ready.',
         ':completed': new Date().toISOString(),
         ':updated': new Date().toISOString()
       }
     }));
-    console.log('[STEP 5] ✓ Job marked as COMPLETE');
+    console.log('[STEP 5] ✓ Job marked as COMPLETED');
 
     console.log('=' .repeat(80));
     console.log('✅ DIAGNOSTIC PDF GENERATION COMPLETED SUCCESSFULLY');
