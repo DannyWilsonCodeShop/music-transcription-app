@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getJobStatus, TranscriptionJob } from './services/transcriptionService';
 import { DownbeatConfirmation } from './components/DownbeatConfirmation';
+import { AnalysisOptionsModal, AnalysisOptions } from './components/AnalysisOptionsModal';
 import LeadSheetDisplay from './components/LeadSheetDisplay';
+import { BassNNSDisplay } from './components/BassNNSDisplay';
 import axios from 'axios';
 
 const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com/dev';
@@ -22,6 +24,8 @@ function App() {
   const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [showDebugMode, setShowDebugMode] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions | null>(null);
 
   // Timer effect - updates every second while processing
   useEffect(() => {
@@ -90,6 +94,7 @@ function App() {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
+      setShowAnalysisModal(true); // Show modal after file selection
     }
   };
 
@@ -145,8 +150,26 @@ function App() {
     throw new Error('Downbeat detection timed out');
   };
 
-  const handleUpload = async () => {
+  const handleAnalysisConfirm = (options: AnalysisOptions) => {
+    setAnalysisOptions(options);
+    setShowAnalysisModal(false);
+    // Automatically start upload after options are selected
+    handleUpload(options);
+  };
+
+  const handleAnalysisCancel = () => {
+    setShowAnalysisModal(false);
+    setFile(null); // Clear file selection if user cancels
+  };
+
+  const handleUpload = async (options?: AnalysisOptions) => {
     if (!file) return;
+    
+    const uploadOptions = options || analysisOptions;
+    if (!uploadOptions) {
+      console.error('No analysis options provided');
+      return;
+    }
     
     setIsUploading(true);
     setError(null);
@@ -159,11 +182,12 @@ function App() {
     try {
       console.log('Requesting upload URL for:', file.name, file.type);
       
-      // Request upload URL
+      // Request upload URL with analysis options
       const response = await axios.post(`${UPLOAD_API_ENDPOINT}/upload`, {
         filename: file.name,
         contentType: file.type || 'audio/mpeg',
-        userId: 'guest'
+        userId: 'guest',
+        analysisOptions: uploadOptions // Include analysis options
       });
 
       console.log('Upload URL response:', response.data);
@@ -234,6 +258,14 @@ function App() {
       justifyContent: 'center',
       padding: '20px'
     }}>
+      {/* Analysis Options Modal */}
+      <AnalysisOptionsModal
+        isOpen={showAnalysisModal}
+        onClose={handleAnalysisCancel}
+        onConfirm={handleAnalysisConfirm}
+        filename={file?.name || ''}
+      />
+
       <div style={{ width: '100%', maxWidth: '800px' }}>
         
         {/* Header */}
@@ -269,7 +301,7 @@ function App() {
         </div>
 
         {/* File Upload Area */}
-        {!jobId && (
+        {!jobId && !showAnalysisModal && (
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -488,7 +520,7 @@ function App() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
               <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
-                {job.statusMessage || (job.status === 'PROCESSING' ? 'Analyzing audio...' : 'Processing...')}
+                {job.statusMessage || 'Processing...'}
               </span>
               <span style={{ 
                 color: '#a78bfa', 
@@ -525,9 +557,7 @@ function App() {
                 fontSize: '14px', 
                 color: 'rgba(255, 255, 255, 0.6)',
               }}>
-                {job.statusMessage || (job.progress >= 60 && job.progress < 80 
-                  ? 'Extracting lyrics with AI (this may take 2-3 minutes)...'
-                  : 'Enhanced chord detection with 84 templates')}
+                {job.statusMessage || 'Processing...'}
               </p>
               <div style={{
                 fontSize: '16px',
@@ -759,6 +789,16 @@ function App() {
                   Language: {job.chordsData.lyrics.language || 'unknown'} • 
                   Words: {job.chordsData.lyrics.words?.length || 0}
                 </div>
+              </div>
+            )}
+
+            {/* Bass NNS Display (if bassData exists) */}
+            {job.bassData && (
+              <div style={{ marginBottom: '24px' }}>
+                <BassNNSDisplay 
+                  bassData={job.bassData}
+                  pdfUrl={pdfUrl || undefined}
+                />
               </div>
             )}
 
