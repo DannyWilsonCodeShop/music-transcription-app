@@ -1,0 +1,39 @@
+{
+  "family": "bass-transcription-dev",
+  "taskRoleArn": "arn:aws:iam::090130568474:role/chordscout-v2-dev-ECSTaskRole-QBhvp2gMiDG7",
+  "executionRoleArn": "arn:aws:iam::090130568474:role/chordscout-v2-dev-ECSTaskExecutionRole-tKJbfiovNGLj",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "4096",
+  "containerDefinitions": [
+    {
+      "name": "bass-transcription",
+      "image": "090130568474.dkr.ecr.us-east-1.amazonaws.com/bass-transcription:latest",
+      "essential": true,
+      "environment": [
+        {
+          "name": "S3_AUDIO_BUCKET",
+          "value": "chordscout-audio-temp-dev-090130568474"
+        },
+        {
+          "name": "DYNAMODB_JOBS_TABLE",
+          "value": "ChordScout-Jobs-V2-dev"
+        },
+        {
+          "name": "PDF_GENERATOR_FUNCTION",
+          "value": "bass-nns-pdf-generator-dev"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bass-transcription-dev",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "ecs",
+          "awslogs-create-group": "true"
+        }
+      }
+    }
+  ]
+}

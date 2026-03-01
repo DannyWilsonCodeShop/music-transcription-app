@@ -1,0 +1,10 @@
+boto3
+librosa
+soundfile
+scipy
+numpy
+demucs
+torch
+torchaudio
+basic-pitch>=0.2.5
+scikit-learn
