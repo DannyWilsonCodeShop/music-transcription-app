@@ -1,4 +1,9 @@
 version: 1
+backend:
+  phases:
+    build:
+      commands:
+        - echo "Skipping backend build - using direct AWS services"
 frontend:
   phases:
     preBuild:
