@@ -3,6 +3,10 @@
 
 set -e
 
+# Get the directory where this script is located
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+cd "$SCRIPT_DIR"
+
 export AWS_PROFILE=production
 REGION="us-east-1"
 ACCOUNT_ID="090130568474"
