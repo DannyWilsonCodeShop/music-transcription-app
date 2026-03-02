@@ -2,9 +2,10 @@ boto3
 librosa
 soundfile
 scipy
-numpy
+numpy<2.0.0
 demucs
 torch
 torchaudio
-basic-pitch>=0.2.5
+tensorflow==2.15.0
+basic-pitch==0.3.2
 scikit-learn

@@ -118,6 +118,9 @@ def transcribe_bass_notes(audio: np.ndarray, sr: int) -> List[Dict]:
 
 def transcribe_with_basic_pitch(audio: np.ndarray, sr: int) -> List[Dict]:
     """Transcribe using Basic Pitch (preferred method)"""
+    import tempfile
+    import soundfile as sf
+    
     log.info("  Using Basic Pitch for transcription...")
     
     # Basic Pitch expects audio at 22050 Hz
@@ -125,18 +128,31 @@ def transcribe_with_basic_pitch(audio: np.ndarray, sr: int) -> List[Dict]:
         audio = librosa.resample(audio, orig_sr=sr, target_sr=22050)
         sr = 22050
     
-    # Run Basic Pitch
-    model_output, midi_data, note_events = predict(audio, sr, ICASSP_2022_MODEL_PATH)
+    # Save audio to temporary file (basic-pitch expects file path)
+    with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmp_file:
+        tmp_path = tmp_file.name
+        sf.write(tmp_path, audio, sr)
+    
+    try:
+        # Run Basic Pitch with file path
+        model_output, midi_data, note_events = predict(tmp_path, ICASSP_2022_MODEL_PATH)
+    finally:
+        # Clean up temp file
+        import os
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
     
     # Convert to our format
+    # note_events is a list of tuples: (start_time, end_time, pitch_midi, amplitude, [bends])
     notes = []
     for note in note_events:
+        start_time, end_time, pitch_midi, amplitude = note[:4]  # Unpack first 4 elements
         notes.append({
-            'pitch': int(note['pitch_midi']),
-            'start': float(note['start_time']),
-            'end': float(note['end_time']),
-            'velocity': float(note.get('amplitude', 0.8)),
-            'note_name': librosa.midi_to_note(int(note['pitch_midi']))
+            'pitch': int(pitch_midi),
+            'start': float(start_time),
+            'end': float(end_time),
+            'velocity': float(amplitude),
+            'note_name': librosa.midi_to_note(int(pitch_midi))
         })
     
     log.info(f"  Basic Pitch detected {len(notes)} notes")
