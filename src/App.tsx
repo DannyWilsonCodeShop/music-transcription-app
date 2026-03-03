@@ -240,6 +240,8 @@ function App() {
         contentType: file.type || 'audio/mpeg',
         userId: 'guest',
         analysisOptions: uploadOptions // Include analysis options
+      }, {
+        timeout: 120000 // 2 minutes timeout for upload URL request
       });
 
       console.log('Upload URL response:', response.data);
