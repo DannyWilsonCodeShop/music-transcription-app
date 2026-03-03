@@ -58,7 +58,7 @@ def lambda_handler(event, context):
             ExpressionAttributeValues={
                 ':status': 'PROCESSING',
                 ':progress': 10,
-                ':statusMessage': f'Starting {music_part} line analysis...',
+                ':statusMessage': f'Warming up analysis container (this takes a few minutes)...',
                 ':updatedAt': datetime.utcnow().isoformat()
             }
         )
