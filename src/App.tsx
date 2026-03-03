@@ -59,9 +59,11 @@ function App() {
       
       try {
         const status = await getJobStatus(jobId);
+        console.log('Poll result:', { status, jobId, consecutiveErrors });
         if (status) {
           consecutiveErrors = 0; // Reset error counter on success
           setJob(status);
+          console.log('Job status updated:', status.status, status.progress);
           if (status.status === 'COMPLETED') {
             clearInterval(pollInterval);
             setIsUploading(false);
@@ -601,6 +603,27 @@ function App() {
               }}>
                 ⏱️ {Math.floor(elapsedTime / 60)}:{String(elapsedTime % 60).padStart(2, '0')}
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Fallback: Show minimal progress if we have jobId but no job data yet */}
+        {jobId && !job && uploadProgress === 100 && (
+          <div style={{
+            marginTop: '24px',
+            padding: '24px',
+            background: 'rgba(255, 255, 255, 0.05)',
+            backdropFilter: 'blur(10px)',
+            borderRadius: '20px',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            textAlign: 'center'
+          }}>
+            <div style={{ color: 'rgba(255, 255, 255, 0.9)', marginBottom: '12px' }}>
+              ⏳ Initializing processing...
+            </div>
+            <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>
+              Job ID: {jobId}
             </div>
           </div>
         )}
