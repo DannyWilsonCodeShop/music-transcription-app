@@ -217,7 +217,7 @@ export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
               <div style={{
                 display: 'flex',
                 fontFamily: 'monospace',
-                fontSize: '20px',
+                fontSize: '14px',
                 fontWeight: '700',
                 color: '#818cf8',
                 marginBottom: showNoteNames ? '8px' : '0'
@@ -228,9 +228,12 @@ export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
                     style={{
                       flex: 1,
                       textAlign: 'center',
-                      padding: '8px 4px',
+                      padding: '8px 2px',
                       borderRight: idx < lineMeasures.length - 1 ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
-                      letterSpacing: '2px'
+                      letterSpacing: '0.5px',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap'
                     }}
                   >
                     {measure.nns_display}
@@ -243,7 +246,7 @@ export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
                 <div style={{
                   display: 'flex',
                   fontFamily: 'monospace',
-                  fontSize: '12px',
+                  fontSize: '10px',
                   color: 'rgba(255, 255, 255, 0.5)'
                 }}>
                   {lineMeasures.map((measure, idx) => (
@@ -252,9 +255,12 @@ export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
                       style={{
                         flex: 1,
                         textAlign: 'center',
-                        padding: '4px',
+                        padding: '4px 2px',
                         borderRight: idx < lineMeasures.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
-                        letterSpacing: '1px'
+                        letterSpacing: '0.5px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap'
                       }}
                     >
                       {measure.notes_display}
