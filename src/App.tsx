@@ -713,7 +713,7 @@ function App() {
         )}
 
         {/* Results */}
-        {job?.status === 'COMPLETED' && job.chordsData && (
+        {job?.status === 'COMPLETED' && (job.chordsData || job.bassData) && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
@@ -763,7 +763,8 @@ function App() {
               ← Process Another File
             </button>
             
-            {/* Song Metadata */}
+            {/* Song Metadata - only show if chordsData exists */}
+            {job.chordsData && (
             <div style={{
               marginBottom: '24px',
               padding: '20px',
@@ -820,9 +821,10 @@ function App() {
                 )}
               </div>
             </div>
+            )}
 
             {/* Lyrics Section */}
-            {job.chordsData.lyrics && job.chordsData.lyrics.text && (
+            {job.chordsData && job.chordsData.lyrics && job.chordsData.lyrics.text && (
               <div style={{
                 marginBottom: '24px',
                 padding: '20px',
