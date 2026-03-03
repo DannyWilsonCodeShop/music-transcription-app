@@ -174,103 +174,65 @@ export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
         </label>
       </div>
 
-      {/* Measures - 8 per line */}
-      <div style={{ marginBottom: '24px' }}>
-        {Array.from({ length: Math.ceil(bassData.measures.length / 8) }, (_, lineIndex) => {
-          const startMeasure = lineIndex * 8;
-          const lineMeasures = bassData.measures.slice(startMeasure, startMeasure + 8);
-          
-          return (
-            <div
-              key={lineIndex}
-              style={{
-                marginBottom: '24px',
-                padding: '20px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                borderRadius: '12px',
-                border: '1px solid rgba(255, 255, 255, 0.1)'
-              }}
-            >
-              {/* Measure numbers */}
-              <div style={{
-                display: 'flex',
-                marginBottom: '8px',
-                fontFamily: 'monospace'
-              }}>
-                {lineMeasures.map((measure) => (
-                  <div
-                    key={measure.measure}
-                    style={{
-                      flex: 1,
-                      textAlign: 'center',
-                      fontSize: '11px',
-                      fontWeight: '600',
-                      color: 'rgba(255, 255, 255, 0.4)'
-                    }}
-                  >
-                    {measure.measure}
-                  </div>
-                ))}
-              </div>
-
-              {/* NNS Display */}
-              <div style={{
-                display: 'flex',
-                fontFamily: 'monospace',
-                fontSize: '14px',
-                fontWeight: '700',
-                color: '#818cf8',
-                marginBottom: showNoteNames ? '8px' : '0'
-              }}>
-                {lineMeasures.map((measure, idx) => (
-                  <div
-                    key={measure.measure}
-                    style={{
-                      flex: 1,
-                      textAlign: 'center',
-                      padding: '8px 2px',
-                      borderRight: idx < lineMeasures.length - 1 ? '2px solid rgba(255, 255, 255, 0.2)' : 'none',
-                      letterSpacing: '0.5px',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}
-                  >
-                    {measure.nns_display}
-                  </div>
-                ))}
-              </div>
-
-              {/* Note Names (if enabled) */}
-              {showNoteNames && (
-                <div style={{
-                  display: 'flex',
-                  fontFamily: 'monospace',
-                  fontSize: '10px',
-                  color: 'rgba(255, 255, 255, 0.5)'
-                }}>
-                  {lineMeasures.map((measure, idx) => (
-                    <div
-                      key={measure.measure}
-                      style={{
-                        flex: 1,
-                        textAlign: 'center',
-                        padding: '4px 2px',
-                        borderRight: idx < lineMeasures.length - 1 ? '1px solid rgba(255, 255, 255, 0.1)' : 'none',
-                        letterSpacing: '0.5px',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap'
-                      }}
-                    >
-                      {measure.notes_display}
-                    </div>
-                  ))}
-                </div>
-              )}
+      {/* Measures - Dynamic layout with flex wrap */}
+      <div style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: '16px',
+        marginBottom: '24px'
+      }}>
+        {bassData.measures.map((measure) => (
+          <div
+            key={measure.measure}
+            style={{
+              minWidth: '120px',
+              maxWidth: '140px',
+              flex: '1 1 auto',
+              padding: '16px 12px',
+              background: 'rgba(255, 255, 255, 0.03)',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              fontFamily: 'monospace'
+            }}
+          >
+            {/* Measure number */}
+            <div style={{
+              textAlign: 'center',
+              fontSize: '11px',
+              fontWeight: '600',
+              color: 'rgba(255, 255, 255, 0.4)',
+              marginBottom: '8px'
+            }}>
+              {measure.measure}
             </div>
-          );
-        })}
+
+            {/* NNS Display */}
+            <div style={{
+              textAlign: 'center',
+              fontSize: '14px',
+              fontWeight: '700',
+              color: '#818cf8',
+              letterSpacing: '1px',
+              marginBottom: showNoteNames ? '8px' : '0',
+              wordBreak: 'break-word'
+            }}>
+              {measure.nns_display}
+            </div>
+
+            {/* Note Names (if enabled) */}
+            {showNoteNames && (
+              <div style={{
+                textAlign: 'center',
+                fontSize: '10px',
+                color: 'rgba(255, 255, 255, 0.5)',
+                letterSpacing: '0.5px',
+                wordBreak: 'break-word'
+              }}>
+                {measure.notes_display}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Download PDF Button */}
