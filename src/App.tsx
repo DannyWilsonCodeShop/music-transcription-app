@@ -43,10 +43,25 @@ function App() {
   useEffect(() => {
     if (!jobId) return;
     
+    let consecutiveErrors = 0;
+    const MAX_ERRORS = 5;
+    const POLL_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+    const startTime = Date.now();
+    
     const pollInterval = setInterval(async () => {
+      // Check if we've exceeded the timeout
+      if (Date.now() - startTime > POLL_TIMEOUT) {
+        clearInterval(pollInterval);
+        setIsUploading(false);
+        setError('Processing timeout. Please check the job status manually or try again.');
+        console.error('Polling timeout exceeded');
+        return;
+      }
+      
       try {
         const status = await getJobStatus(jobId);
         if (status) {
+          consecutiveErrors = 0; // Reset error counter on success
           setJob(status);
           if (status.status === 'COMPLETED') {
             clearInterval(pollInterval);
@@ -59,9 +74,26 @@ function App() {
             setIsUploading(false);
             setError(status.errorMessage || 'Processing failed');
           }
+        } else {
+          // getJobStatus returned null (network error or 404)
+          consecutiveErrors++;
+          console.warn(`Failed to get job status (${consecutiveErrors}/${MAX_ERRORS})`);
+          
+          if (consecutiveErrors >= MAX_ERRORS) {
+            clearInterval(pollInterval);
+            setIsUploading(false);
+            setError('Lost connection to server. Please refresh the page to check job status.');
+          }
         }
       } catch (error) {
-        console.error('Error polling job status:', error);
+        consecutiveErrors++;
+        console.error(`Error polling job status (${consecutiveErrors}/${MAX_ERRORS}):`, error);
+        
+        if (consecutiveErrors >= MAX_ERRORS) {
+          clearInterval(pollInterval);
+          setIsUploading(false);
+          setError('Connection error. Please refresh the page to check job status.');
+        }
       }
     }, 2000);
     
