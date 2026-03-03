@@ -41,16 +41,23 @@ function App() {
   }, [processingStartTime, job?.status]);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId) {
+      console.log('Polling effect: No jobId, skipping');
+      return;
+    }
     
+    console.log('Starting polling for jobId:', jobId);
     let consecutiveErrors = 0;
     const MAX_ERRORS = 5;
     const POLL_TIMEOUT = 10 * 60 * 1000; // 10 minutes
     const startTime = Date.now();
     
     const pollInterval = setInterval(async () => {
+      const elapsed = Date.now() - startTime;
+      console.log(`Polling attempt for ${jobId} (elapsed: ${Math.floor(elapsed/1000)}s)`);
+      
       // Check if we've exceeded the timeout
-      if (Date.now() - startTime > POLL_TIMEOUT) {
+      if (elapsed > POLL_TIMEOUT) {
         clearInterval(pollInterval);
         setError('Processing timeout. The job may still be running. Please refresh to check status.');
         console.error('Polling timeout exceeded');
@@ -58,19 +65,30 @@ function App() {
       }
       
       try {
+        console.log('Calling getJobStatus...');
         const status = await getJobStatus(jobId);
-        console.log('Poll result:', { status, jobId, consecutiveErrors });
+        console.log('Poll result:', { 
+          hasStatus: !!status, 
+          status: status?.status, 
+          progress: status?.progress,
+          jobId, 
+          consecutiveErrors 
+        });
+        
         if (status) {
           consecutiveErrors = 0; // Reset error counter on success
           setJob(status);
-          console.log('Job status updated:', status.status, status.progress);
+          console.log('Job status updated:', status.status, status.progress, status.statusMessage);
+          
           if (status.status === 'COMPLETED') {
+            console.log('Job completed!');
             clearInterval(pollInterval);
             setIsUploading(false);
             if (status.pdfUrl) {
               setPdfUrl(status.pdfUrl);
             }
           } else if (status.status === 'FAILED') {
+            console.error('Job failed:', status.errorMessage);
             clearInterval(pollInterval);
             setIsUploading(false);
             setError(status.errorMessage || 'Processing failed');
@@ -78,7 +96,7 @@ function App() {
         } else {
           // getJobStatus returned null (network error or 404)
           consecutiveErrors++;
-          console.warn(`Failed to get job status (${consecutiveErrors}/${MAX_ERRORS})`);
+          console.warn(`Failed to get job status (${consecutiveErrors}/${MAX_ERRORS}) - returned null`);
           
           if (consecutiveErrors >= MAX_ERRORS) {
             clearInterval(pollInterval);
@@ -96,7 +114,10 @@ function App() {
       }
     }, 2000);
     
-    return () => clearInterval(pollInterval);
+    return () => {
+      console.log('Cleaning up polling interval for jobId:', jobId);
+      clearInterval(pollInterval);
+    };
   }, [jobId]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -538,8 +559,8 @@ function App() {
           </div>
         )}
 
-        {/* Processing Progress */}
-        {job && job.status !== 'COMPLETED' && job.status !== 'FAILED' && uploadProgress === 100 && (
+        {/* Processing Progress - Show whenever we have a jobId and upload is complete, until job is done */}
+        {jobId && uploadProgress === 100 && (!job || (job.status !== 'COMPLETED' && job.status !== 'FAILED')) && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
@@ -551,14 +572,14 @@ function App() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
               <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
-                {job.statusMessage || 'Processing...'}
+                {job?.statusMessage || 'Initializing processing...'}
               </span>
               <span style={{ 
                 color: '#a78bfa', 
                 fontWeight: '600',
                 textShadow: '0 0 10px rgba(167, 139, 250, 0.5)'
               }}>
-                {job.progress || 0}%
+                {job?.progress || 0}%
               </span>
             </div>
             <div style={{
@@ -573,7 +594,7 @@ function App() {
                 height: '100%',
                 background: 'linear-gradient(90deg, #9333ea 0%, #6366f1 50%, #8b5cf6 100%)',
                 borderRadius: '999px',
-                width: `${job.progress || 0}%`,
+                width: `${job?.progress || 0}%`,
                 transition: 'width 0.5s ease',
                 boxShadow: '0 0 10px rgba(147, 51, 234, 0.5)'
               }}/>
@@ -588,7 +609,7 @@ function App() {
                 fontSize: '14px', 
                 color: 'rgba(255, 255, 255, 0.6)',
               }}>
-                {job.statusMessage || 'Processing...'}
+                {job?.statusMessage || 'Waiting for job to start...'}
               </p>
               <div style={{
                 fontSize: '16px',
@@ -604,27 +625,16 @@ function App() {
                 ⏱️ {Math.floor(elapsedTime / 60)}:{String(elapsedTime % 60).padStart(2, '0')}
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Fallback: Show minimal progress if we have jobId but no job data yet */}
-        {jobId && !job && uploadProgress === 100 && (
-          <div style={{
-            marginTop: '24px',
-            padding: '24px',
-            background: 'rgba(255, 255, 255, 0.05)',
-            backdropFilter: 'blur(10px)',
-            borderRadius: '20px',
-            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            textAlign: 'center'
-          }}>
-            <div style={{ color: 'rgba(255, 255, 255, 0.9)', marginBottom: '12px' }}>
-              ⏳ Initializing processing...
-            </div>
-            <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '14px' }}>
-              Job ID: {jobId}
-            </div>
+            {!job && (
+              <div style={{ 
+                marginTop: '12px',
+                color: 'rgba(255, 255, 255, 0.5)', 
+                fontSize: '12px',
+                fontFamily: 'monospace'
+              }}>
+                Job ID: {jobId}
+              </div>
+            )}
           </div>
         )}
 
