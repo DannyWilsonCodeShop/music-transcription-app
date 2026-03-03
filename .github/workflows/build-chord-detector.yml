@@ -39,7 +39,8 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
-          context: ./backend/functions-v2/chord-detector-ecs
+          context: .
+          file: ./backend/functions-v2/chord-detector-ecs/Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
