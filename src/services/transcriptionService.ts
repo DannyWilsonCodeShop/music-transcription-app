@@ -51,6 +51,7 @@ export interface TranscriptionJob {
     leadSheet?: AlignedLeadSheet;
     model?: string;
   };
+  bassData?: any;  // Bass transcription data
   pdfUrl?: string;
   errorMessage?: string;
 }
@@ -134,12 +135,13 @@ export async function getJobStatus(jobId: string): Promise<TranscriptionJob | nu
       title: data.filename || 'Processing...',
       status: data.status,
       currentStep: getStepDescription(data.status),
-      progress: data.progress || 0,
+      progress: parseInt(data.progress) || 0,  // Convert string to number
       statusMessage: data.statusMessage,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       completedAt: data.completedAt,
       chordsData: data.chordsData,
+      bassData: data.bassData,  // Include bassData
       pdfUrl: data.pdfUrl,
       errorMessage: data.errorMessage,
     } as TranscriptionJob;
