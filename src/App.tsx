@@ -867,7 +867,7 @@ function App() {
             )}
 
             {/* Lead Sheet Display (if leadSheet data exists) or Chord-Only Display */}
-            {job.chordsData.leadSheet ? (
+            {job.chordsData?.leadSheet ? (
               <div style={{
                 marginBottom: '24px',
                 padding: '20px',
@@ -909,7 +909,7 @@ function App() {
               </div>
             ) : (
               /* Fallback to chord-only display if no lead sheet */
-              job.chordsData.chords && job.chordsData.chords.length > 0 ? (
+              job.chordsData?.chords && job.chordsData.chords.length > 0 ? (
               <div style={{
                 marginBottom: '24px',
                 padding: '20px',
