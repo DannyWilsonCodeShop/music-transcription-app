@@ -52,8 +52,7 @@ function App() {
       // Check if we've exceeded the timeout
       if (Date.now() - startTime > POLL_TIMEOUT) {
         clearInterval(pollInterval);
-        setIsUploading(false);
-        setError('Processing timeout. Please check the job status manually or try again.');
+        setError('Processing timeout. The job may still be running. Please refresh to check status.');
         console.error('Polling timeout exceeded');
         return;
       }
@@ -81,8 +80,7 @@ function App() {
           
           if (consecutiveErrors >= MAX_ERRORS) {
             clearInterval(pollInterval);
-            setIsUploading(false);
-            setError('Lost connection to server. Please refresh the page to check job status.');
+            setError('Lost connection to server. The job may still be running. Please refresh to check status.');
           }
         }
       } catch (error) {
@@ -91,8 +89,7 @@ function App() {
         
         if (consecutiveErrors >= MAX_ERRORS) {
           clearInterval(pollInterval);
-          setIsUploading(false);
-          setError('Connection error. Please refresh the page to check job status.');
+          setError('Connection error. The job may still be running. Please refresh to check status.');
         }
       }
     }, 2000);
@@ -540,7 +537,7 @@ function App() {
         )}
 
         {/* Processing Progress */}
-        {isUploading && job && uploadProgress === 100 && (
+        {job && job.status !== 'COMPLETED' && job.status !== 'FAILED' && uploadProgress === 100 && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
