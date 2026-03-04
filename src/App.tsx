@@ -327,8 +327,8 @@ function App() {
           <h1 className="Cipher" style={{
             fontSize: '24px',
             fontWeight: 'bold',
-            color: '#00ffff',
-            textShadow: '0 0 10px #00ffff, 0 0 20px #00ffff, 0 0 30px #00ffff',
+            color: '#ff6b6b',
+            textShadow: '0 0 10px #ff6b6b, 0 0 20px #ff6b6b, 0 0 30px #ff6b6b',
             marginBottom: '16px',
             letterSpacing: '2px'
           }}>
@@ -864,6 +864,7 @@ function App() {
                 <BassNNSDisplay 
                   bassData={job.bassData}
                   pdfUrl={pdfUrl || undefined}
+                  songTitle={job.filename}
                 />
               </div>
             )}
