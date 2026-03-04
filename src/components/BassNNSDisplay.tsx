@@ -26,9 +26,10 @@ interface BassNNSDisplayProps {
     }>;
   };
   pdfUrl?: string;
+  songTitle?: string;
 }
 
-export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
+export function BassNNSDisplay({ bassData, pdfUrl, songTitle }: BassNNSDisplayProps) {
   const [showNoteNames, setShowNoteNames] = useState(false);
 
   const formatTime = (seconds: number) => {
@@ -49,6 +50,17 @@ export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
     }}>
       {/* Header */}
       <div style={{ marginBottom: '32px', textAlign: 'center' }}>
+        {songTitle && (
+          <h3 style={{
+            fontSize: '20px',
+            fontWeight: '600',
+            color: '#ffffff',
+            marginBottom: '12px',
+            opacity: 0.9
+          }}>
+            {songTitle}
+          </h3>
+        )}
         <h2 style={{
           fontSize: '28px',
           fontWeight: '700',

@@ -864,6 +864,7 @@ function App() {
                 <BassNNSDisplay 
                   bassData={job.bassData}
                   pdfUrl={pdfUrl || undefined}
+                  songTitle={job.filename}
                 />
               </div>
             )}
