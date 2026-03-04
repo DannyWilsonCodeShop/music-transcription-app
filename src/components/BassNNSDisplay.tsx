@@ -174,64 +174,54 @@ export function BassNNSDisplay({ bassData, pdfUrl }: BassNNSDisplayProps) {
         </label>
       </div>
 
-      {/* Measures - Dynamic layout with flex wrap */}
+      {/* Measures - Inline sheet music style */}
       <div style={{
-        display: 'flex',
-        flexWrap: 'wrap',
-        gap: '16px',
-        marginBottom: '24px'
+        padding: '24px',
+        background: 'rgba(255, 255, 255, 0.03)',
+        borderRadius: '12px',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        marginBottom: '24px',
+        fontFamily: 'monospace',
+        lineHeight: '2.5'
       }}>
-        {bassData.measures.map((measure) => (
-          <div
-            key={measure.measure}
-            style={{
-              minWidth: '120px',
-              maxWidth: '140px',
-              flex: '1 1 auto',
-              padding: '16px 12px',
-              background: 'rgba(255, 255, 255, 0.03)',
-              borderRadius: '8px',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
-              fontFamily: 'monospace'
-            }}
-          >
-            {/* Measure number */}
-            <div style={{
-              textAlign: 'center',
-              fontSize: '11px',
-              fontWeight: '600',
-              color: 'rgba(255, 255, 255, 0.4)',
-              marginBottom: '8px'
+        {bassData.measures.map((measure, idx) => (
+          <span key={measure.measure} style={{ display: 'inline-block', marginRight: '4px' }}>
+            <span style={{
+              display: 'inline-block',
+              padding: '4px 8px',
+              borderRight: '1px solid rgba(255, 255, 255, 0.2)',
+              minWidth: '80px',
+              textAlign: 'center'
             }}>
-              {measure.measure}
-            </div>
-
-            {/* NNS Display */}
-            <div style={{
-              textAlign: 'center',
-              fontSize: '14px',
-              fontWeight: '700',
-              color: '#818cf8',
-              letterSpacing: '1px',
-              marginBottom: showNoteNames ? '8px' : '0',
-              wordBreak: 'break-word'
-            }}>
-              {measure.nns_display}
-            </div>
-
-            {/* Note Names (if enabled) */}
-            {showNoteNames && (
-              <div style={{
-                textAlign: 'center',
+              <span style={{
                 fontSize: '10px',
-                color: 'rgba(255, 255, 255, 0.5)',
-                letterSpacing: '0.5px',
-                wordBreak: 'break-word'
+                color: 'rgba(255, 255, 255, 0.4)',
+                display: 'block',
+                marginBottom: '4px'
               }}>
-                {measure.notes_display}
-              </div>
-            )}
-          </div>
+                {measure.measure}
+              </span>
+              <span style={{
+                fontSize: '14px',
+                fontWeight: '700',
+                color: '#818cf8',
+                letterSpacing: '1px',
+                display: 'block'
+              }}>
+                {measure.nns_display}
+              </span>
+              {showNoteNames && (
+                <span style={{
+                  fontSize: '10px',
+                  color: 'rgba(255, 255, 255, 0.5)',
+                  display: 'block',
+                  marginTop: '4px'
+                }}>
+                  {measure.notes_display}
+                </span>
+              )}
+            </span>
+          </span>
         ))}
       </div>
 
