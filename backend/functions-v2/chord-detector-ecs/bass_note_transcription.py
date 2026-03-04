@@ -47,7 +47,7 @@ def detect_bass_notes(bass_audio: np.ndarray, sr: int, tempo: float,
     
     # Step 1: Transcribe bass notes
     log.info("\nStep 1: Transcribing bass notes...")
-    notes = transcribe_bass_notes(bass_audio, sr)
+    notes = transcribe_bass_notes(bass_audio, sr, tempo)
     log.info(f"✓ Transcribed {len(notes)} note events")
     
     if len(notes) == 0:
@@ -105,7 +105,7 @@ def detect_bass_notes(bass_audio: np.ndarray, sr: int, tempo: float,
     }
 
 
-def transcribe_bass_notes(audio: np.ndarray, sr: int) -> List[Dict]:
+def transcribe_bass_notes(audio: np.ndarray, sr: int, tempo: float = 120.0) -> List[Dict]:
     """
     Transcribe bass notes using Basic Pitch or librosa
     
@@ -113,12 +113,12 @@ def transcribe_bass_notes(audio: np.ndarray, sr: int) -> List[Dict]:
         List of note events with pitch, start, end, velocity
     """
     if BASIC_PITCH_AVAILABLE:
-        return transcribe_with_basic_pitch(audio, sr)
+        return transcribe_with_basic_pitch(audio, sr, tempo)
     else:
         return transcribe_with_librosa(audio, sr)
 
 
-def transcribe_with_basic_pitch(audio: np.ndarray, sr: int) -> List[Dict]:
+def transcribe_with_basic_pitch(audio: np.ndarray, sr: int, tempo: float = 120.0) -> List[Dict]:
     """Transcribe using Basic Pitch (preferred method)"""
     log.info("  Using Basic Pitch for transcription...")
     
@@ -127,8 +127,20 @@ def transcribe_with_basic_pitch(audio: np.ndarray, sr: int) -> List[Dict]:
         audio = librosa.resample(audio, orig_sr=sr, target_sr=22050)
         sr = 22050
     
-    # Run Basic Pitch
-    model_output, midi_data, note_events = predict(audio, sr, ICASSP_2022_MODEL_PATH)
+    # Calculate minimum note length from tempo (60% of 8th note)
+    eighth_note_ms = int((60.0 / tempo / 2) * 1000) if tempo else 125
+    
+    # Run Basic Pitch with frequency constraints for bass range
+    model_output, midi_data, note_events = predict(
+        audio,
+        sr,
+        ICASSP_2022_MODEL_PATH,
+        minimum_note_length=eighth_note_ms * 0.6,
+        minimum_frequency=40.0,   # E1 — low bass limit
+        maximum_frequency=300.0,  # D4 — high bass limit
+        onset_threshold=0.5,
+        frame_threshold=0.3,
+    )
     
     # Convert to our format
     notes = []
@@ -238,26 +250,26 @@ def filter_to_monophonic(notes: List[Dict]) -> List[Dict]:
 def quantize_notes(notes: List[Dict], tempo: float, time_signature: str, 
                    first_downbeat: float) -> List[Dict]:
     """
-    Quantize note start times to 16th note grid
+    Quantize note start times to 8th note grid
     """
     beats_per_measure = int(time_signature.split('/')[0])
     beat_duration = 60.0 / tempo
-    sixteenth_duration = beat_duration / 4
+    eighth_duration = beat_duration / 2
     
     quantized = []
     for note in notes:
         # Calculate time from first downbeat
         time_from_downbeat = note['start'] - first_downbeat
         
-        # Quantize to nearest 16th note
-        sixteenth_index = round(time_from_downbeat / sixteenth_duration)
-        quantized_time = first_downbeat + (sixteenth_index * sixteenth_duration)
+        # Quantize to nearest 8th note
+        eighth_index = round(time_from_downbeat / eighth_duration)
+        quantized_time = first_downbeat + (eighth_index * eighth_duration)
         
         # Calculate measure and beat
-        beats_from_downbeat = sixteenth_index / 4
+        beats_from_downbeat = eighth_index / 2
         measure = int(beats_from_downbeat / beats_per_measure) + 1
         beat_in_measure = (beats_from_downbeat % beats_per_measure) + 1
-        subdivision = (sixteenth_index % 4) + 1  # 1-4 (quarter, 8th, 8th, 16th positions)
+        subdivision = (eighth_index % 2) + 1  # 1=downbeat, 2=upbeat ("and")
         
         quantized.append({
             **note,
@@ -265,7 +277,8 @@ def quantize_notes(notes: List[Dict], tempo: float, time_signature: str,
             'measure': measure,
             'beat': beat_in_measure,
             'subdivision': subdivision,
-            'sixteenth_index': sixteenth_index
+            'eighth_index': eighth_index,
+            'quantization_resolution': '8th'
         })
     
     return quantized
