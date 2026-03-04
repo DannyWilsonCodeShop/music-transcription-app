@@ -2,6 +2,9 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
                      'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
+// Import lead sheet types from LeadSheetDisplay component
+import type { AlignedLeadSheet } from '../components/LeadSheetDisplay';
+
 export interface TranscriptionJob {
   id: string;
   filename?: string;
@@ -9,6 +12,7 @@ export interface TranscriptionJob {
   status: 'PENDING' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   currentStep?: string;
   progress?: number;
+  statusMessage?: string;
   createdAt: string;
   updatedAt?: string;
   completedAt?: string;
@@ -44,8 +48,10 @@ export interface TranscriptionJob {
       occurrences: number;
       positions: number[];
     }>;
+    leadSheet?: AlignedLeadSheet;
     model?: string;
   };
+  bassData?: any;  // Bass transcription data
   pdfUrl?: string;
   errorMessage?: string;
 }
@@ -89,45 +95,69 @@ export async function requestUploadUrl(
  * Get the status of a transcription job via File Upload Pipeline API
  */
 export async function getJobStatus(jobId: string): Promise<TranscriptionJob | null> {
+  console.log(`[transcriptionService] getJobStatus called for jobId: ${jobId}`);
   try {
-    const response = await fetch(`${API_BASE_URL}/jobs/${jobId}`, {
+    const url = `${API_BASE_URL}/jobs/${jobId}`;
+    console.log(`[transcriptionService] Fetching: ${url}`);
+    
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
       },
     });
 
+    console.log(`[transcriptionService] Response status: ${response.status}`);
+
     if (response.status === 404) {
+      console.log('[transcriptionService] Job not found (404)');
       return null;
     }
 
     if (!response.ok) {
       const error = await response.json();
+      console.error('[transcriptionService] Error response:', error);
       throw new Error(error.error || 'Failed to get job status');
     }
 
     const data = await response.json();
+    console.log('[transcriptionService] Job data received:', {
+      jobId: data.jobId,
+      status: data.status,
+      progress: data.progress,
+      statusMessage: data.statusMessage
+    });
     
     // Map backend response to frontend format
-    return {
+    const mappedJob = {
       id: data.jobId,
       filename: data.filename,
       title: data.filename || 'Processing...',
       status: data.status,
       currentStep: getStepDescription(data.status),
-      progress: data.progress || 0,
+      progress: parseInt(data.progress) || 0,  // Convert string to number
+      statusMessage: data.statusMessage,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       completedAt: data.completedAt,
       chordsData: data.chordsData,
+      bassData: data.bassData,  // Include bassData
       pdfUrl: data.pdfUrl,
       errorMessage: data.errorMessage,
     } as TranscriptionJob;
+    
+    console.log('[transcriptionService] Mapped job:', {
+      id: mappedJob.id,
+      status: mappedJob.status,
+      progress: mappedJob.progress
+    });
+    
+    return mappedJob;
   } catch (error) {
-    console.error('Error getting job status:', error);
+    console.error('[transcriptionService] Error getting job status:', error);
     // Return null on network errors to allow retry
     if (error instanceof TypeError && error.message === 'Failed to fetch') {
-      console.log('Network error, will retry...');
+      console.log('[transcriptionService] Network error, will retry...');
       return null;
     }
     return null;

@@ -8,3 +8,5 @@ torchaudio
 # essentia - removed due to build issues, using enhanced librosa instead
 msaf
 scikit-learn
+openai-whisper
+basic-pitch>=0.2.5  # For bass note transcription

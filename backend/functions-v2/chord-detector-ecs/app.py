@@ -34,6 +34,14 @@ try:
 except ImportError:
     DEMUCS_AVAILABLE = False
 
+# Optional: Whisper for lyrics extraction
+try:
+    import whisper
+    WHISPER_AVAILABLE = True
+except ImportError:
+    WHISPER_AVAILABLE = False
+    print("WARNING: whisper not available, lyrics extraction disabled")
+
 # MSAF for structural segmentation
 try:
     import msaf
@@ -41,6 +49,14 @@ try:
 except ImportError:
     MSAF_AVAILABLE = False
     print("WARNING: msaf not available, using pattern-based structure detection only")
+
+# Bass note transcription
+try:
+    from bass_note_transcription import detect_bass_notes
+    BASS_TRANSCRIPTION_AVAILABLE = True
+except ImportError:
+    BASS_TRANSCRIPTION_AVAILABLE = False
+    print("WARNING: bass_note_transcription not available")
 
 # AWS clients
 s3 = boto3.client('s3')
@@ -103,8 +119,8 @@ def main():
     
     try:
         # Update status
-        log("Step 1: Updating job status to DETECTING_CHORDS (70%)")
-        update_job_status(job_id, 'DETECTING_CHORDS', 70)
+        log("Step 1: Updating job status to PROCESSING (30%)")
+        update_job_status(job_id, 'PROCESSING', 30, status_message="Downloading audio file...")
         log("✓ Status updated successfully")
         
         # Download audio from S3
@@ -121,11 +137,25 @@ def main():
         log(f"  File size: {file_size / 1024 / 1024:.2f} MB")
         log(f"  Download time: {download_time:.2f}s")
         
-        # Detect chords
-        log("Step 3: Starting chord detection...")
-        start_time = time.time()
-        chords_data = detect_chords(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
-        detection_time = time.time() - start_time
+        # Detect chords or transcribe bass notes based on music part
+        log("Step 3: Starting music analysis...")
+        music_part = os.environ.get('MUSIC_PART', 'full').lower()
+        
+        if music_part == 'bass':
+            # Bass note transcription mode
+            update_job_status(job_id, 'PROCESSING', 40, status_message="Transcribing bass notes...")
+            log("Using BASS NOTE TRANSCRIPTION mode")
+            start_time = time.time()
+            chords_data = transcribe_bass_line(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
+            detection_time = time.time() - start_time
+            log(f"✓ Bass transcription complete")
+        else:
+            # Chord detection mode (full mix or other stems)
+            update_job_status(job_id, 'PROCESSING', 40, status_message="Analyzing audio and detecting chords...")
+            start_time = time.time()
+            chords_data = detect_chords(audio_path, job_id, confirmed_downbeat, confirmed_time_signature)
+            detection_time = time.time() - start_time
+            log(f"✓ Chord detection complete")
         
         log(f"✓ Chord detection complete")
         log(f"  Total chords found: {len(chords_data['chords'])}")
@@ -133,13 +163,67 @@ def main():
         log(f"  Audio duration: {chords_data.get('duration', 0):.2f}s")
         log(f"  Key detected: {chords_data.get('key', 'Unknown')}")
         
+        # Extract lyrics with Whisper
+        log("Step 3.5: Extracting lyrics with Whisper...")
+        update_job_status(job_id, 'PROCESSING', 70, status_message="Extracting lyrics with AI (this may take 2-3 minutes)...")
+        lyrics_data = None
+        if WHISPER_AVAILABLE:
+            try:
+                lyrics_start = time.time()
+                lyrics_service = LyricsExtractionService(model_size='base')
+                lyrics_data = lyrics_service.extract_lyrics(audio_path, job_id)
+                lyrics_time = time.time() - lyrics_start
+                
+                if lyrics_data and lyrics_data.get('words'):
+                    log(f"✓ Lyrics extraction complete")
+                    log(f"  Words extracted: {len(lyrics_data['words'])}")
+                    log(f"  Language: {lyrics_data.get('language', 'unknown')}")
+                    log(f"  Extraction time: {lyrics_time:.2f}s")
+                    
+                    # Store lyrics data in job for alignment
+                    update_job_with_lyrics(job_id, lyrics_data)
+                else:
+                    log("⚠️ No lyrics detected (instrumental track?)", "WARNING")
+            except Exception as e:
+                log(f"ERROR during lyrics extraction: {str(e)}", "ERROR")
+                log(traceback.format_exc(), "ERROR")
+                log("⚠️ Continuing without lyrics", "WARNING")
+        else:
+            log("ℹ️ Whisper not available, skipping lyrics extraction")
+        
+        # Perform lyrics-chord alignment if lyrics were extracted
+        log("Step 3.6: Checking for lyrics data for alignment...")
+        if lyrics_data and lyrics_data.get('words'):
+            log("✓ Lyrics data found, performing lyrics-chord alignment...")
+            update_job_status(job_id, 'PROCESSING', 78, status_message="Aligning lyrics with chords...")
+            try:
+                alignment_start = time.time()
+                lead_sheet = align_lyrics_with_chords(chords_data, lyrics_data)
+                alignment_time = time.time() - alignment_start
+                
+                if lead_sheet:
+                    chords_data['leadSheet'] = lead_sheet
+                    log(f"✓ Lyrics-chord alignment complete")
+                    log(f"  Sections created: {len(lead_sheet.get('sections', []))}")
+                    log(f"  Alignment time: {alignment_time:.2f}s")
+                else:
+                    log("⚠️ Alignment returned None (possibly invalid data)", "WARNING")
+            except Exception as e:
+                log(f"ERROR during lyrics-chord alignment: {str(e)}", "ERROR")
+                log(traceback.format_exc(), "ERROR")
+                log("⚠️ Continuing without lead sheet data", "WARNING")
+        else:
+            log("ℹ️ No lyrics data found, skipping alignment")
+        
         # Update job with chord data
         log("Step 4: Updating job with chord data...")
+        update_job_status(job_id, 'PROCESSING', 85, status_message="Saving chord data...")
         update_job_with_chords(job_id, chords_data)
         log("✓ Job updated with chord data")
         
         # Trigger PDF generation
         log("Step 5: Triggering PDF generation Lambda...")
+        update_job_status(job_id, 'PROCESSING', 90, status_message="Generating PDF chord sheet...")
         trigger_pdf_generation(job_id)
         log("✓ PDF generation triggered")
         
@@ -175,6 +259,87 @@ class ChordDetector:
                 log("Stem separation enabled but Demucs not available", "WARNING")
             else:
                 log("Stem separation disabled (ENABLE_STEM_SEPARATION=false)")
+    
+    def separate_stems(self, audio_path: str) -> dict:
+        """
+        Separate audio into individual stems
+        
+        Returns:
+            dict with keys: 'bass', 'drums', 'other', 'vocals', 'sample_rate'
+        """
+        if not self.demucs_model:
+            log("Using full mix (no stem separation)")
+            y, sr = librosa.load(audio_path, sr=22050)
+            return {
+                'bass': y,
+                'drums': y,
+                'other': y,
+                'vocals': y,
+                'sample_rate': sr
+            }
+        
+        try:
+            log("🎵 Separating audio into individual stems...")
+            
+            # Load audio
+            wav, sr = torchaudio.load(audio_path)
+            log(f"  Audio loaded: {wav.shape}, {sr}Hz")
+            
+            # Ensure stereo (Demucs expects stereo)
+            if wav.shape[0] == 1:
+                wav = wav.repeat(2, 1)
+                log("  Converted mono to stereo")
+            
+            # Resample if needed
+            if sr != self.demucs_model.samplerate:
+                log(f"  Resampling from {sr}Hz to {self.demucs_model.samplerate}Hz...")
+                resampler = torchaudio.transforms.Resample(sr, self.demucs_model.samplerate)
+                wav = resampler(wav)
+                sr = self.demucs_model.samplerate
+            
+            # Separate stems (no gradient needed for inference)
+            log("  Running Demucs separation...")
+            with torch.no_grad():
+                sources = apply_model(self.demucs_model, wav[None], device='cpu')[0]
+            
+            # Demucs output order: [drums, bass, other, vocals]
+            drums = sources[0]
+            bass = sources[1]
+            other = sources[2]
+            vocals = sources[3]
+            
+            log("✓ Stem separation complete")
+            log(f"  Drums: {drums.shape}")
+            log(f"  Bass: {bass.shape}")
+            log(f"  Other (piano/guitar/keys): {other.shape}")
+            log(f"  Vocals: {vocals.shape}")
+            
+            # Convert to mono and numpy
+            stems = {
+                'bass': torch.mean(bass, dim=0).numpy(),
+                'drums': torch.mean(drums, dim=0).numpy(),
+                'other': torch.mean(other, dim=0).numpy(),
+                'vocals': torch.mean(vocals, dim=0).numpy(),
+                'sample_rate': sr
+            }
+            
+            # Clean up
+            del wav, sources, drums, bass, other, vocals
+            
+            return stems
+            
+        except Exception as e:
+            log(f"Stem separation failed: {e}", "ERROR")
+            log(traceback.format_exc(), "ERROR")
+            log("Falling back to full mix", "WARNING")
+            y, sr = librosa.load(audio_path, sr=22050)
+            return {
+                'bass': y,
+                'drums': y,
+                'other': y,
+                'vocals': y,
+                'sample_rate': sr
+            }
     
     def separate_harmonic_stem_chunked(self, audio_path: str) -> tuple:
         """
@@ -266,8 +431,244 @@ class ChordDetector:
             log("Falling back to full mix", "WARNING")
             return librosa.load(audio_path, sr=22050)
 
+
+class LyricsExtractionService:
+    """
+    Service for extracting lyrics from audio using Whisper
+    Provides word-level timestamps for alignment with chords
+    """
+    
+    def __init__(self, model_size='base'):
+        """
+        Initialize Whisper model
+        
+        Args:
+            model_size: Whisper model size ('tiny', 'base', 'small', 'medium', 'large')
+                       'base' is recommended for speed/accuracy balance
+        """
+        self.model = None
+        self.model_size = model_size
+        
+        if not WHISPER_AVAILABLE:
+            log("Whisper not available, lyrics extraction disabled", "WARNING")
+            return
+        
+        try:
+            log(f"Loading Whisper model ({model_size})...")
+            self.model = whisper.load_model(model_size)
+            log(f"✓ Whisper model loaded successfully")
+        except Exception as e:
+            log(f"Failed to load Whisper model: {e}", "ERROR")
+            self.model = None
+    
+    def extract_lyrics(self, audio_path: str, job_id: str = None) -> dict:
+        """
+        Extract lyrics with word-level timestamps from audio
+        
+        Args:
+            audio_path: Path to audio file
+            job_id: Job ID for status updates (optional)
+        
+        Returns:
+            dict with:
+                - text: Full lyrics text
+                - words: List of {word, start, end} dicts with timestamps
+                - segments: List of phrase segments with timestamps
+                - language: Detected language
+                - duration: Audio duration in seconds
+        """
+        if not self.model:
+            log("Whisper model not available", "WARNING")
+            return {
+                'text': '',
+                'words': [],
+                'segments': [],
+                'language': 'unknown',
+                'duration': 0
+            }
+        
+        try:
+            log(f"🎤 Extracting lyrics from: {audio_path}")
+            
+            # Transcribe with word-level timestamps
+            if job_id:
+                update_job_status(job_id, 'PROCESSING', 72, status_message="Running AI transcription on audio...")
+            result = self.model.transcribe(
+                audio_path,
+                word_timestamps=True,
+                verbose=False
+            )
+            
+            # Extract word-level data
+            if job_id:
+                update_job_status(job_id, 'PROCESSING', 75, status_message="Processing transcribed lyrics...")
+            words = []
+            for segment in result.get('segments', []):
+                for word_data in segment.get('words', []):
+                    words.append({
+                        'word': word_data['word'].strip(),
+                        'start': word_data['start'],
+                        'end': word_data['end']
+                    })
+            
+            # Get audio duration
+            try:
+                audio_info = torchaudio.info(audio_path)
+                duration = audio_info.num_frames / audio_info.sample_rate
+            except:
+                # Fallback to librosa if torchaudio fails
+                y, sr = librosa.load(audio_path, sr=None)
+                duration = librosa.get_duration(y=y, sr=sr)
+            
+            lyrics_data = {
+                'text': result['text'].strip(),
+                'words': words,
+                'segments': result.get('segments', []),
+                'language': result.get('language', 'unknown'),
+                'duration': duration
+            }
+            
+            log(f"✓ Lyrics extracted successfully")
+            log(f"  Total words: {len(words)}")
+            log(f"  Language: {lyrics_data['language']}")
+            log(f"  Duration: {duration:.1f}s")
+            
+            # Check for instrumental sections (no vocals)
+            if len(words) == 0:
+                log("  ⚠️ No lyrics detected - may be instrumental", "WARNING")
+            
+            return lyrics_data
+            
+        except Exception as e:
+            log(f"Error extracting lyrics: {e}", "ERROR")
+            log(traceback.format_exc(), "ERROR")
+            return {
+                'text': '',
+                'words': [],
+                'segments': [],
+                'language': 'unknown',
+                'duration': 0,
+                'error': str(e)
+            }
+
+
 # Initialize detector globally
 detector = ChordDetector()
+
+
+def transcribe_bass_line(audio_path, job_id, confirmed_downbeat=None, confirmed_time_signature=None):
+    """
+    Transcribe bass line to individual notes with Nashville Number System
+    
+    This is used when MUSIC_PART='bass' - transcribes monophonic bass notes
+    instead of detecting chords.
+    """
+    log("=" * 80)
+    log("BASS LINE TRANSCRIPTION MODE")
+    log("=" * 80)
+    
+    if not BASS_TRANSCRIPTION_AVAILABLE:
+        log("ERROR: Bass transcription module not available", "ERROR")
+        raise ImportError("bass_note_transcription module required for bass analysis")
+    
+    # Step 1: Separate stems and extract bass
+    log("Step 1: Extracting bass stem...")
+    stems = detector.separate_stems(audio_path)
+    bass_audio = stems['bass']
+    sr = stems['sample_rate']
+    
+    # Resample to 22050 if needed
+    if sr != 22050:
+        log(f"  Resampling from {sr}Hz to 22050Hz...")
+        bass_audio = librosa.resample(bass_audio, orig_sr=sr, target_sr=22050)
+        sr = 22050
+    
+    duration = len(bass_audio) / sr
+    log(f"✓ Bass stem extracted")
+    log(f"  Duration: {duration:.2f}s")
+    log(f"  Sample rate: {sr}Hz")
+    
+    # Step 2: Detect tempo and beats
+    log("Step 2: Detecting tempo and beats...")
+    tempo, beats = librosa.beat.beat_track(y=bass_audio, sr=sr)
+    tempo_value = float(tempo) if isinstance(tempo, (int, float)) else float(tempo[0])
+    
+    # Use confirmed time signature if provided
+    if confirmed_time_signature:
+        time_signature = confirmed_time_signature
+        log(f"✓ Using CONFIRMED time signature: {time_signature}")
+    else:
+        time_signature = "4/4"  # Default
+        log(f"✓ Time signature: {time_signature} (default)")
+    
+    log(f"✓ Tempo: {tempo_value:.1f} BPM")
+    log(f"  Beats detected: {len(beats)}")
+    
+    # Step 3: Detect or use confirmed downbeat
+    if confirmed_downbeat is None:
+        log("Step 3: Detecting downbeat automatically...")
+        try:
+            sys.path.insert(0, '/app/simple-pipeline/chord-detection')
+            from downbeat_detection import detect_downbeats
+            
+            beat_times = librosa.frames_to_time(beats, sr=sr)
+            downbeats, first_downbeat, downbeat_info = detect_downbeats(
+                audio_path,
+                beat_times,
+                tempo_value,
+                time_signature
+            )
+            
+            confirmed_downbeat = first_downbeat
+            log(f"✓ Downbeat detected: {confirmed_downbeat:.3f}s")
+        except Exception as e:
+            log(f"⚠ Downbeat detection failed: {str(e)}", "WARNING")
+            confirmed_downbeat = 0.0
+            log(f"  Using first beat as downbeat: {confirmed_downbeat:.3f}s")
+    else:
+        log(f"Step 3: Using CONFIRMED downbeat: {confirmed_downbeat:.3f}s")
+    
+    # Step 4: Transcribe bass notes
+    log("Step 4: Transcribing bass notes to NNS...")
+    bass_data = detect_bass_notes(
+        bass_audio,
+        sr,
+        tempo_value,
+        time_signature,
+        confirmed_downbeat
+    )
+    
+    log(f"✓ Bass transcription complete")
+    log(f"  Total notes: {bass_data['totalNotes']}")
+    log(f"  Total measures: {bass_data['totalMeasures']}")
+    log(f"  Key: {bass_data['key']} {bass_data['mode']}")
+    log(f"  Relative major: {bass_data['relativeMajor']}")
+    
+    # Convert to format compatible with existing pipeline
+    # This allows the PDF generator and frontend to work without changes
+    result = {
+        'analysisType': 'bass_notes',  # NEW: indicates this is bass note analysis
+        'notes': bass_data['notes'],
+        'measures': bass_data['measures'],
+        'key': bass_data['key'],
+        'mode': bass_data['mode'],
+        'relativeMajor': bass_data['relativeMajor'],
+        'keyConfidence': bass_data['confidence'],
+        'tempo': tempo_value,
+        'timeSignature': time_signature,
+        'duration': duration,
+        'totalNotes': bass_data['totalNotes'],
+        'totalMeasures': bass_data['totalMeasures'],
+        'stemUsed': 'bass',
+        'stemSeparationEnabled': True,
+        'model': 'bass-note-transcription-basic-pitch',
+        # For backwards compatibility with chord-based display
+        'chords': [],  # Empty - we're using notes instead
+        'songStructure': []  # Will be populated if needed
+    }
+    
+    log("=" * 80)
+    return result
 
 def detect_key_improved(chroma):
     """
@@ -826,24 +1227,47 @@ def detect_chords(audio_path, job_id, confirmed_downbeat=None, confirmed_time_si
 
 def detect_chords_librosa(audio_path, job_id, confirmed_downbeat=None, confirmed_time_signature=None):
     """Detect chords using librosa chromagram analysis with optional stem separation"""
-    log("Loading audio file...")
-    start_time = time.time()
     
-    # Use stem separation if enabled, otherwise load full mix
-    if ENABLE_STEM_SEPARATION and detector.demucs_model:
-        log("Using stem separation for improved chord detection...")
-        y, sr = detector.separate_harmonic_stem_chunked(audio_path)
+    # Get music part to analyze from environment variable
+    music_part = os.environ.get('MUSIC_PART', 'bass').lower()
+    log(f"🎸 Music part to analyze: {music_part}")
+    
+    # Separate stems if analyzing specific part
+    if music_part in ['bass', 'piano', 'guitar', 'other']:
+        log("Separating audio stems...")
+        stems = detector.separate_stems(audio_path)
+        
+        # Select the appropriate stem
+        if music_part == 'bass':
+            y = stems['bass']
+            sr = stems['sample_rate']
+            log("✓ Using BASS stem for chord detection")
+        elif music_part in ['piano', 'guitar', 'other']:
+            y = stems['other']  # Piano/guitar/keys are in 'other' stem
+            sr = stems['sample_rate']
+            log(f"✓ Using OTHER stem (piano/guitar/keys) for chord detection")
+        else:
+            y = stems['bass']  # Default to bass
+            sr = stems['sample_rate']
+        
+        # Resample to 22050 if needed
+        if sr != 22050:
+            log(f"  Resampling from {sr}Hz to 22050Hz...")
+            y = librosa.resample(y, orig_sr=sr, target_sr=22050)
+            sr = 22050
     else:
+        # Use full mix
+        log("Loading full mix audio...")
         y, sr = librosa.load(audio_path, sr=22050)
+        log("✓ Using FULL MIX for chord detection")
     
     duration = librosa.get_duration(y=y, sr=sr)
-    load_time = time.time() - start_time
     
     log(f"✓ Audio loaded successfully")
     log(f"  Duration: {duration:.2f}s")
     log(f"  Sample rate: {sr}Hz")
     log(f"  Samples: {len(y)}")
-    log(f"  Load time: {load_time:.2f}s")
+    log(f"  Stem used: {music_part}")
     
     # Detect tempo and time signature using beat tracking
     log("Detecting tempo and time signature...")
@@ -864,6 +1288,29 @@ def detect_chords_librosa(audio_path, job_id, confirmed_downbeat=None, confirmed
     log(f"✓ Tempo detected: {tempo_value:.1f} BPM")
     log(f"  Beats detected: {len(beats)}")
     log(f"  Detection time: {tempo_time:.2f}s")
+    
+    # Detect downbeat if not confirmed
+    if confirmed_downbeat is None:
+        log("Detecting downbeat automatically...")
+        try:
+            sys.path.insert(0, '/app/simple-pipeline/chord-detection')
+            from downbeat_detection import detect_downbeats
+            
+            beat_times = librosa.frames_to_time(beats, sr=sr)
+            downbeats, first_downbeat, downbeat_info = detect_downbeats(
+                audio_path, 
+                beat_times, 
+                tempo_value, 
+                time_signature if confirmed_time_signature else time_signature
+            )
+            
+            confirmed_downbeat = first_downbeat
+            log(f"✓ Downbeat detected automatically: {confirmed_downbeat:.3f}s")
+            log(f"  Confidence: {downbeat_info.get('confidence', 0):.2f}")
+            log(f"  Method: {downbeat_info.get('method', 'unknown')}")
+        except Exception as e:
+            log(f"⚠ Downbeat detection failed, using first beat: {str(e)}", "WARNING")
+            confirmed_downbeat = None
     
     # Use confirmed downbeat if provided
     if confirmed_downbeat is not None:
@@ -1203,7 +1650,9 @@ def detect_chords_librosa(audio_path, job_id, confirmed_downbeat=None, confirmed
         'totalChords': len(chords),
         'songStructure': song_structure,
         'patternAnalysis': format_pattern_analysis(pattern_info, key),  # Pass detected key
-        'model': 'librosa-enhanced-84-templates'  # 84 chord templates (major, minor, 7th, maj7, m7, sus4, dim)
+        'model': 'librosa-enhanced-84-templates',  # 84 chord templates (major, minor, 7th, maj7, m7, sus4, dim)
+        'stemUsed': music_part,  # Which stem was analyzed (bass, other, or full)
+        'stemSeparationEnabled': music_part in ['bass', 'piano', 'guitar', 'other']
     }
 
 def format_pattern_analysis(pattern_info, key='C'):
@@ -1643,9 +2092,12 @@ def detect_song_structure(chords, pattern_info, tempo):
     
     return essential_sections
 
-def update_job_status(job_id, status, progress, error=None):
+def update_job_status(job_id, status, progress, error=None, status_message=None):
     """Update job status in DynamoDB"""
     log(f"Updating job status: {status} ({progress}%)")
+    if status_message:
+        log(f"  Status message: {status_message}")
+    
     table = dynamodb.Table(JOBS_TABLE)
     
     update_expr = 'SET #status = :status, progress = :progress, updatedAt = :updated'
@@ -1661,6 +2113,10 @@ def update_job_status(job_id, status, progress, error=None):
         expr_values[':error'] = error
         log(f"  Error message: {error}", "ERROR")
     
+    if status_message:
+        update_expr += ', statusMessage = :statusMessage'
+        expr_values[':statusMessage'] = status_message
+    
     try:
         table.update_item(
             Key={'jobId': job_id},
@@ -1671,6 +2127,32 @@ def update_job_status(job_id, status, progress, error=None):
         log(f"✓ Job status updated in DynamoDB")
     except Exception as e:
         log(f"ERROR updating job status: {str(e)}", "ERROR")
+        raise
+
+def get_job_from_dynamodb(job_id):
+    """Get job data from DynamoDB"""
+    log(f"Fetching job data for job_id: {job_id}")
+    table = dynamodb.Table(JOBS_TABLE)
+    
+    try:
+        response = table.get_item(Key={'jobId': job_id})
+        
+        if 'Item' not in response:
+            log(f"Job not found: {job_id}", "WARNING")
+            return None
+        
+        job_data = response['Item']
+        log(f"✓ Job data retrieved successfully")
+        
+        # Log what data is available
+        has_lyrics = 'lyricsData' in job_data and job_data['lyricsData']
+        has_chords = 'chordsData' in job_data and job_data['chordsData']
+        log(f"  Has lyrics data: {has_lyrics}")
+        log(f"  Has chords data: {has_chords}")
+        
+        return job_data
+    except Exception as e:
+        log(f"ERROR fetching job data: {str(e)}", "ERROR")
         raise
 
 def convert_floats_to_decimal(obj):
@@ -1696,16 +2178,57 @@ def convert_floats_to_decimal(obj):
     else:
         return obj
 
-def update_job_with_chords(job_id, chords_data):
-    """Update job with chord detection results"""
-    log(f"Updating job with {len(chords_data['chords'])} chords")
+def update_job_with_lyrics(job_id, lyrics_data):
+    """Update job with lyrics extraction results"""
+    log(f"Updating job with lyrics data ({len(lyrics_data.get('words', []))} words)")
+    
     table = dynamodb.Table(JOBS_TABLE)
     
     try:
         # Convert all floats to Decimal for DynamoDB compatibility
+        log("Converting lyrics data to DynamoDB format...")
+        lyrics_data_decimal = convert_floats_to_decimal(lyrics_data)
+        log(f"✓ Converted lyrics data to DynamoDB format")
+        
+        table.update_item(
+            Key={'jobId': job_id},
+            UpdateExpression='SET lyricsData = :lyrics, updatedAt = :updated',
+            ExpressionAttributeValues={
+                ':lyrics': lyrics_data_decimal,
+                ':updated': time.strftime('%Y-%m-%dT%H:%M:%S.000Z', time.gmtime())
+            }
+        )
+        log(f"✓ Job updated with lyrics data")
+    except Exception as e:
+        log(f"ERROR updating job with lyrics: {str(e)}", "ERROR")
+        raise
+
+
+def update_job_with_chords(job_id, chords_data):
+    """Update job with chord detection results"""
+    log(f"Updating job with {len(chords_data['chords'])} chords")
+    
+    # Check if leadSheet data is present
+    has_lead_sheet = 'leadSheet' in chords_data
+    if has_lead_sheet:
+        lead_sheet = chords_data['leadSheet']
+        num_sections = len(lead_sheet.get('sections', []))
+        total_lines = sum(len(section.get('lines', [])) for section in lead_sheet.get('sections', []))
+        log(f"✓ Lead sheet data found: {num_sections} sections, {total_lines} lines")
+    else:
+        log("ℹ️ No lead sheet data (lyrics not available)")
+    
+    table = dynamodb.Table(JOBS_TABLE)
+    
+    try:
+        # Convert all floats to Decimal for DynamoDB compatibility
+        # This handles nested structures including leadSheet automatically
         log("Converting float values to Decimal for DynamoDB...")
         chords_data_decimal = convert_floats_to_decimal(chords_data)
         log(f"✓ Converted {len(chords_data['chords'])} chords to DynamoDB format")
+        
+        if has_lead_sheet:
+            log("✓ Lead sheet data converted to DynamoDB format (nested structures handled)")
         
         table.update_item(
             Key={'jobId': job_id},
@@ -1719,6 +2242,9 @@ def update_job_with_chords(job_id, chords_data):
             }
         )
         log(f"✓ Job updated with chord data (status: CHORDS_DETECTED, progress: 80%)")
+        
+        if has_lead_sheet:
+            log(f"✓ Lead sheet data saved to DynamoDB ({num_sections} sections, {total_lines} lines)")
     except Exception as e:
         log(f"ERROR updating job with chords: {str(e)}", "ERROR")
         raise
@@ -1772,13 +2298,29 @@ def run_downbeat_detection():
         s3.download_file(audio_bucket, audio_key, audio_path)
         log("✓ Audio downloaded successfully")
         
-        # Import downbeat detection module
+        # Import detection modules
         sys.path.insert(0, '/app/simple-pipeline/chord-detection')
-        from downbeat_detection import detect_downbeats_complete
+        from chord_detection_v2 import detect_tempo_and_beats
+        from downbeat_detection import detect_downbeats
+        
+        # Detect tempo and beats first
+        log("Detecting tempo and beats...")
+        tempo, beats, time_signature = detect_tempo_and_beats(audio_path)
+        log(f"✓ Detected {len(beats)} beats at {tempo:.1f} BPM, time signature: {time_signature}")
         
         # Detect downbeat
         log("Detecting downbeat...")
-        result = detect_downbeats_complete(audio_path)
+        downbeats, first_downbeat, info = detect_downbeats(audio_path, beats, tempo, time_signature)
+        
+        result = {
+            'tempo': tempo,
+            'time_signature': time_signature,
+            'first_downbeat': first_downbeat,
+            'confidence': info.get('confidence', 0.8),
+            'beat_times': beats.tolist(),
+            'downbeats': downbeats.tolist(),
+            'method_info': info
+        }
         
         log(f"✓ Downbeat detection complete:")
         log(f"  Tempo: {result['tempo']} BPM")
@@ -1846,6 +2388,615 @@ def run_downbeat_detection():
             log(f"ERROR: Failed to update DynamoDB: {str(update_error)}", "ERROR")
         
         sys.exit(1)
+
+# ============================================================================
+# LYRICS-CHORD ALIGNMENT FUNCTIONS
+# ============================================================================
+
+def find_word_at_timestamp(words, timestamp, tolerance=0.1, max_tolerance=0.5):
+    """
+    Find the word being sung at a given timestamp with adaptive tolerance
+
+    Args:
+        words: List of word dicts with 'start' and 'end' times
+        timestamp: Time in seconds to find word for
+        tolerance: Initial time tolerance in seconds (default 0.1s)
+        max_tolerance: Maximum tolerance to try (default 0.5s)
+
+    Returns:
+        Word index (int) or None if no word found
+    """
+    # Try with initial tolerance
+    for i, word in enumerate(words):
+        if word['start'] - tolerance <= timestamp <= word['end'] + tolerance:
+            return i
+
+    # Check if timestamp is just before a word (anticipation)
+    for i, word in enumerate(words):
+        if word['start'] - 0.2 <= timestamp < word['start']:
+            return i
+
+    # If no match found, try with progressively larger tolerances up to max_tolerance
+    current_tolerance = tolerance
+    while current_tolerance < max_tolerance:
+        # Double the tolerance, but don't exceed max_tolerance
+        current_tolerance = min(current_tolerance * 2, max_tolerance)
+        log(f"  No word found at {timestamp:.2f}s with previous tolerance, trying {current_tolerance:.2f}s", "WARNING")
+
+        # Try again with increased tolerance
+        for i, word in enumerate(words):
+            if word['start'] - current_tolerance <= timestamp <= word['end'] + current_tolerance:
+                log(f"  Found word at index {i} ('{word.get('word', 'N/A')}') with adaptive tolerance {current_tolerance:.2f}s", "INFO")
+                return i
+
+    # Log misalignment if still no match after trying all tolerances
+    log(f"  Timestamp mismatch: No word found at {timestamp:.2f}s even with max tolerance {max_tolerance:.2f}s", "WARNING")
+
+    return None  # Instrumental section
+
+
+
+def calculate_measure_number(timestamp, tempo, time_signature, first_downbeat=0.0):
+    """
+    Convert timestamp to measure number
+    
+    Args:
+        timestamp: Time in seconds
+        tempo: BPM
+        time_signature: String like '4/4'
+        first_downbeat: Time of first downbeat in seconds
+    
+    Returns:
+        Measure number (1-indexed)
+    """
+    beats_per_measure = int(time_signature.split('/')[0])
+    beat_duration = 60.0 / tempo
+    measure_duration = beat_duration * beats_per_measure
+    
+    # Calculate measures from first downbeat
+    time_from_downbeat = timestamp - first_downbeat
+    if time_from_downbeat < 0:
+        return 1
+    
+    measure_number = int(time_from_downbeat / measure_duration) + 1
+    return measure_number
+
+def get_words_in_segment(words, start_time, end_time):
+    """
+    Filter words by time range
+    
+    Args:
+        words: List of word dicts
+        start_time: Segment start time
+        end_time: Segment end time
+    
+    Returns:
+        List of words within time range
+    """
+    return [w for w in words if start_time <= w['start'] <= end_time]
+
+def get_chords_in_segment(chords, start_time, end_time):
+    """
+    Filter chords by time range
+    
+    Args:
+        chords: List of chord dicts
+        start_time: Segment start time
+        end_time: Segment end time
+    
+    Returns:
+        List of chords within time range
+    """
+    return [c for c in chords if start_time <= c['start'] <= end_time]
+
+def get_lines_in_range(lines, start_time, end_time):
+    """
+    Filter lines by time range
+    
+    Args:
+        lines: List of line dicts
+        start_time: Range start time
+        end_time: Range end time
+    
+    Returns:
+        List of lines within time range
+    """
+    result = []
+    for line in lines:
+        # Check if line overlaps with range
+        if line.get('start') is not None and line.get('end') is not None:
+            if line['start'] <= end_time and line['end'] >= start_time:
+                result.append(line)
+    return result
+
+def get_chords_in_range(chords, start_time, end_time):
+    """
+    Filter chords by time range (alias for get_chords_in_segment)
+    """
+    return get_chords_in_segment(chords, start_time, end_time)
+
+def ends_with_punctuation(text):
+    """
+    Check if text ends with punctuation
+    
+    Args:
+        text: String to check
+    
+    Returns:
+        Boolean
+    """
+    if not text:
+        return False
+    return text.strip()[-1] in '.!?,;:'
+
+def get_song_duration(chords_data):
+    """
+    Get total song duration from chords data
+    
+    Args:
+        chords_data: Dict with duration or chords list
+    
+    Returns:
+        Duration in seconds
+    """
+    if 'duration' in chords_data:
+        return chords_data['duration']
+    elif 'chords' in chords_data and len(chords_data['chords']) > 0:
+        return chords_data['chords'][-1]['end']
+    return 0.0
+
+# ============================================================================
+# CHORD-TO-WORD ALIGNMENT
+# ============================================================================
+
+def align_chords_to_words(chords, words):
+    """
+    Align each chord change to the word being sung at that moment
+    
+    Strategy:
+    1. For each chord, find the word that overlaps with chord start time
+    2. If chord starts within 0.2s before word, snap to word start
+    3. If chord is mid-word, associate with that word
+    4. If no word found (instrumental), mark as instrumental
+    
+    Args:
+        chords: List of chord dicts with 'start', 'chord', 'measure', 'beat'
+        words: List of word dicts with 'word', 'start', 'end'
+    
+    Returns:
+        List of aligned chord dicts with wordIndex and positionType
+    """
+    aligned_chords = []
+    
+    for chord in chords:
+        chord_time = chord['start']
+        
+        # Find word at this timestamp
+        word_index = find_word_at_timestamp(words, chord_time)
+        
+        if word_index is not None:
+            word = words[word_index]
+            
+            # Check if chord is close to word start (within 0.2s before)
+            time_before_word = word['start'] - chord_time
+            if 0 <= time_before_word <= 0.2:
+                # Snap to word start for cleaner alignment
+                position_type = 'word_start'
+            elif word['start'] <= chord_time <= word['end']:
+                # Chord change during word
+                position_type = 'mid_word'
+            else:
+                position_type = 'between_words'
+            
+            aligned_chords.append({
+                **chord,
+                'wordIndex': word_index,
+                'word': word['word'],
+                'positionType': position_type
+            })
+        else:
+            # No word found - instrumental section
+            aligned_chords.append({
+                **chord,
+                'wordIndex': None,
+                'word': None,
+                'positionType': 'instrumental'
+            })
+    
+    return aligned_chords
+
+def handle_multiple_chords_per_word(word, chords_for_word):
+    """
+    When multiple chords occur during a single word,
+    space them evenly across the word length
+    
+    Args:
+        word: Word dict with 'word', 'charPosition'
+        chords_for_word: List of chord dicts for this word
+    
+    Returns:
+        List of chords with updated charPosition
+    """
+    word_length = len(word['word'])
+    num_chords = len(chords_for_word)
+    
+    if num_chords <= 1:
+        return chords_for_word
+    
+    for i, chord in enumerate(chords_for_word):
+        # Distribute chords across word
+        offset = (word_length / num_chords) * i
+        chord['charPosition'] = word['charPosition'] + int(offset)
+    
+    return chords_for_word
+
+def ensure_chord_spacing(chords, min_spacing=3):
+    """
+    Ensure chords don't overlap by enforcing minimum spacing
+    Abbreviate chord names if needed
+    
+    Args:
+        chords: List of chord dicts with 'charPosition', 'chord'
+        min_spacing: Minimum characters between chords
+    
+    Returns:
+        List of chords with adjusted spacing and abbreviated names
+    """
+    if len(chords) <= 1:
+        return chords
+    
+    for i in range(1, len(chords)):
+        prev_chord = chords[i-1]
+        curr_chord = chords[i]
+        
+        # Calculate space between chords
+        space = curr_chord['charPosition'] - (prev_chord['charPosition'] + len(prev_chord['chord']))
+        
+        if space < min_spacing:
+            # Abbreviate chord names if needed
+            if len(prev_chord['chord']) > 4:
+                prev_chord['chord'] = abbreviate_chord(prev_chord['chord'])
+            if len(curr_chord['chord']) > 4:
+                curr_chord['chord'] = abbreviate_chord(curr_chord['chord'])
+    
+    return chords
+
+def abbreviate_chord(chord_name):
+    """
+    Shorten chord names for better spacing
+    Examples: Cmaj7 -> CM7, Dm7b5 -> Dm7♭5
+    
+    Args:
+        chord_name: Full chord name string
+    
+    Returns:
+        Abbreviated chord name
+    """
+    chord_name = chord_name.replace('maj', 'M')
+    chord_name = chord_name.replace('min', 'm')
+    chord_name = chord_name.replace('dim', '°')
+    chord_name = chord_name.replace('aug', '+')
+    chord_name = chord_name.replace('b5', '♭5')
+    chord_name = chord_name.replace('#5', '♯5')
+    chord_name = chord_name.replace('b9', '♭9')
+    chord_name = chord_name.replace('#9', '♯9')
+    return chord_name
+
+# ============================================================================
+# PHRASE/LINE GROUPING
+# ============================================================================
+
+def group_into_lines(aligned_chords, words, segments, tempo, time_signature, first_downbeat=0.0):
+    """
+    Group words and chords into readable lines
+    
+    Strategy:
+    1. Use Whisper segments as initial phrase boundaries
+    2. Ensure each line is 2-4 measures (adjustable)
+    3. Break at natural boundaries (punctuation, silence)
+    4. Keep lines roughly equal length for readability
+    
+    Args:
+        aligned_chords: List of chords with word associations
+        words: List of all words with timestamps
+        segments: Whisper's phrase-level segments
+        tempo: BPM
+        time_signature: String like '4/4'
+        first_downbeat: Time of first downbeat in seconds
+    
+    Returns:
+        List of line objects with lyrics and chords
+    """
+    lines = []
+    beats_per_measure = int(time_signature.split('/')[0])
+    beat_duration = 60.0 / tempo
+    measure_duration = beat_duration * beats_per_measure
+    
+    # Target: 2-4 measures per line
+    target_line_duration = measure_duration * 3  # 3 measures average
+    min_line_duration = measure_duration * 2
+    max_line_duration = measure_duration * 4
+    
+    current_line = {
+        'words': [],
+        'chords': [],
+        'start': None,
+        'end': None
+    }
+    
+    for segment in segments:
+        segment_words = get_words_in_segment(words, segment['start'], segment['end'])
+        segment_chords = get_chords_in_segment(aligned_chords, segment['start'], segment['end'])
+        
+        # Check if adding this segment would exceed max line duration
+        if current_line['start'] is not None:
+            potential_duration = segment['end'] - current_line['start']
+            
+            if potential_duration > max_line_duration:
+                # Finish current line and start new one
+                lines.append(finalize_line(current_line, tempo, time_signature, first_downbeat))
+                current_line = {
+                    'words': segment_words,
+                    'chords': segment_chords,
+                    'start': segment['start'],
+                    'end': segment['end']
+                }
+            else:
+                # Add to current line
+                current_line['words'].extend(segment_words)
+                current_line['chords'].extend(segment_chords)
+                current_line['end'] = segment['end']
+        else:
+            # First segment
+            current_line = {
+                'words': segment_words,
+                'chords': segment_chords,
+                'start': segment['start'],
+                'end': segment['end']
+            }
+        
+        # Check if current line meets minimum duration
+        if current_line['start'] is not None:
+            duration = current_line['end'] - current_line['start']
+            
+            # If line is long enough and segment ends with punctuation, break
+            if duration >= min_line_duration and ends_with_punctuation(segment['text']):
+                lines.append(finalize_line(current_line, tempo, time_signature, first_downbeat))
+                current_line = {'words': [], 'chords': [], 'start': None, 'end': None}
+    
+    # Add final line
+    if current_line['words']:
+        lines.append(finalize_line(current_line, tempo, time_signature, first_downbeat))
+    
+    return lines
+
+def finalize_line(line_data, tempo, time_signature, first_downbeat=0.0):
+    """
+    Convert line data to final format with measure numbers
+    
+    Args:
+        line_data: Dict with 'words', 'chords', 'start', 'end'
+        tempo: BPM
+        time_signature: String like '4/4'
+        first_downbeat: Time of first downbeat in seconds
+    
+    Returns:
+        Finalized line dict with measure numbers, lyrics string, and chord positions
+    """
+    # Calculate measure numbers
+    measure_start = calculate_measure_number(line_data['start'], tempo, time_signature, first_downbeat)
+    measure_end = calculate_measure_number(line_data['end'], tempo, time_signature, first_downbeat)
+    
+    # Build lyrics string
+    lyrics_text = ' '.join(word['word'] for word in line_data['words'])
+    
+    # Calculate character positions for each word
+    char_pos = 0
+    for word in line_data['words']:
+        word['charPosition'] = char_pos
+        char_pos += len(word['word']) + 1  # +1 for space
+    
+    # Map chords to character positions
+    for chord in line_data['chords']:
+        if chord.get('wordIndex') is not None:
+            # Find the word in our line's word list
+            word_found = False
+            for i, word in enumerate(line_data['words']):
+                # Match by timestamp since wordIndex is global
+                if abs(word['start'] - chord.get('timestamp', chord['start'])) < 0.1:
+                    chord['charPosition'] = word['charPosition']
+                    word_found = True
+                    break
+            
+            if not word_found:
+                # Fallback: use first word position
+                chord['charPosition'] = 0
+        else:
+            # Instrumental chord
+            chord['charPosition'] = 0
+    
+    return {
+        'measureStart': measure_start,
+        'measureEnd': measure_end,
+        'lyrics': lyrics_text,
+        'words': line_data['words'],
+        'chords': line_data['chords'],
+        'isInstrumental': len(line_data['words']) == 0,
+        'start': line_data['start'],
+        'end': line_data['end']
+    }
+
+
+def align_lyrics_with_chords(chords_data, lyrics_data):
+    """
+    Main function to align lyrics with chords and create lead sheet structure
+    
+    This orchestrates all alignment steps:
+    1. Align chords to words based on timestamps
+    2. Group words/chords into readable lines (2-4 measures)
+    3. Detect and label song sections (Verse, Chorus, etc.)
+    4. Return structured AlignedLeadSheet data
+    
+    Args:
+        chords_data: Dict containing:
+            - chords: List of chord objects with timestamps
+            - key: Detected key (e.g., 'C major')
+            - tempo: BPM
+            - timeSignature: String like '4/4'
+            - songStructure: List of detected sections
+            - duration: Song duration in seconds
+            - firstDownbeat: Time of first downbeat (optional)
+        
+        lyrics_data: Dict containing:
+            - text: Full lyrics text
+            - words: List of word objects with timestamps
+            - segments: Phrase-level segments from Whisper
+            - language: Detected language
+            - confidence: Transcription confidence
+    
+    Returns:
+        AlignedLeadSheet dict with structure:
+        {
+            'metadata': {key, tempo, timeSignature, duration},
+            'sections': [
+                {
+                    'label': 'Verse 1',
+                    'measureStart': 1,
+                    'measureEnd': 8,
+                    'lines': [...]
+                }
+            ]
+        }
+        
+        Returns None if alignment cannot be performed (missing data)
+    """
+    log("=" * 60)
+    log("Starting lyrics-chord alignment...")
+    log("=" * 60)
+    
+    # Validate inputs
+    if not lyrics_data or not lyrics_data.get('words'):
+        log("⚠️  No lyrics data available - skipping alignment", "WARNING")
+        return None
+    
+    if not chords_data or not chords_data.get('chords'):
+        log("❌ No chord data available - cannot perform alignment", "ERROR")
+        return None
+    
+    if not chords_data.get('songStructure'):
+        log("⚠️  No song structure data - will create default sections", "WARNING")
+        # Create a default single section
+        chords_data['songStructure'] = [{
+            'label': 'Song',
+            'start': 0.0,
+            'end': chords_data.get('duration', 300.0),
+            'measureStart': 1,
+            'measureEnd': 100
+        }]
+    
+    try:
+        # Extract required data
+        chords = chords_data['chords']
+        words = lyrics_data['words']
+        segments = lyrics_data.get('segments', [])
+        tempo = chords_data.get('tempo', 120.0)
+        time_signature = chords_data.get('timeSignature', '4/4')
+        first_downbeat = chords_data.get('firstDownbeat', 0.0)
+        
+        log(f"📊 Input data:")
+        log(f"   - Chords: {len(chords)}")
+        log(f"   - Words: {len(words)}")
+        log(f"   - Segments: {len(segments)}")
+        log(f"   - Tempo: {tempo} BPM")
+        log(f"   - Time Signature: {time_signature}")
+        log(f"   - First Downbeat: {first_downbeat:.2f}s")
+        
+        # Step 1: Align chords to words
+        log("\n🎯 Step 1: Aligning chords to words...")
+        aligned_chords = align_chords_to_words(chords, words)
+        
+        # Count alignment types
+        word_start_count = sum(1 for c in aligned_chords if c.get('positionType') == 'word_start')
+        mid_word_count = sum(1 for c in aligned_chords if c.get('positionType') == 'mid_word')
+        instrumental_count = sum(1 for c in aligned_chords if c.get('positionType') == 'instrumental')
+        
+        log(f"   ✓ Aligned {len(aligned_chords)} chords:")
+        log(f"     - At word start: {word_start_count}")
+        log(f"     - Mid-word: {mid_word_count}")
+        log(f"     - Instrumental: {instrumental_count}")
+        
+        # Step 2: Group into lines
+        log("\n📝 Step 2: Grouping into lines...")
+        lines = group_into_lines(
+            aligned_chords,
+            words,
+            segments,
+            tempo,
+            time_signature,
+            first_downbeat
+        )
+        
+        # Count line types
+        lyric_lines = sum(1 for l in lines if not l.get('isInstrumental', False))
+        instrumental_lines = sum(1 for l in lines if l.get('isInstrumental', False))
+        
+        log(f"   ✓ Created {len(lines)} lines:")
+        log(f"     - With lyrics: {lyric_lines}")
+        log(f"     - Instrumental: {instrumental_lines}")
+        
+        # Step 3: Detect and label sections
+        log("\n🏷️  Step 3: Detecting and labeling sections...")
+        
+        # Import section detection function
+        from section_detection import detect_and_label_sections
+        
+        sections = detect_and_label_sections(
+            chords_data['songStructure'],
+            lines,
+            chords
+        )
+        
+        log(f"   ✓ Identified {len(sections)} sections:")
+        for section in sections:
+            line_count = len(section.get('lines', []))
+            log(f"     - {section['label']}: {line_count} lines (M{section['measureStart']}-{section['measureEnd']})")
+        
+        # Step 4: Create final lead sheet structure
+        log("\n📄 Step 4: Creating lead sheet structure...")
+        lead_sheet = {
+            'metadata': {
+                'key': chords_data.get('key', 'Unknown'),
+                'tempo': tempo,
+                'timeSignature': time_signature,
+                'duration': chords_data.get('duration', 0.0),
+                'language': lyrics_data.get('language', 'en'),
+                'confidence': lyrics_data.get('confidence', 1.0)
+            },
+            'sections': sections
+        }
+        
+        # Calculate statistics
+        total_lines = sum(len(s.get('lines', [])) for s in sections)
+        total_chords = sum(len(l.get('chords', [])) for l in lines)
+        
+        log(f"   ✓ Lead sheet created:")
+        log(f"     - Sections: {len(sections)}")
+        log(f"     - Total lines: {total_lines}")
+        log(f"     - Total chords: {total_chords}")
+        
+        log("\n" + "=" * 60)
+        log("✅ Lyrics-chord alignment complete!")
+        log("=" * 60)
+        
+        return lead_sheet
+        
+    except Exception as e:
+        log(f"❌ Error during lyrics-chord alignment: {str(e)}", "ERROR")
+        log(f"   Exception type: {type(e).__name__}", "ERROR")
+        import traceback
+        log(f"   Traceback: {traceback.format_exc()}", "ERROR")
+        return None
+
 
 if __name__ == '__main__':
     main()

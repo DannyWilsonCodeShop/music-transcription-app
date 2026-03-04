@@ -4,3 +4,7 @@ soundfile
 scipy
 numpy
 scikit-learn
+openai-whisper
+torch
+torchaudio
+demucs

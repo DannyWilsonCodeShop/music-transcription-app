@@ -1,1 +1,1 @@
-{"statusCode": 500, "body": {"error": "Failed to download audio: ERROR: Postprocessing: ffprobe and ffmpeg not found. Please install or provide the path using --ffmpeg-location"}}
+{"errorMessage": "'size'", "errorType": "KeyError", "requestId": "4ec69010-4cf5-4066-9a80-252c70ff705f", "stackTrace": ["  File \"/var/task/process-audio-lambda.py\", line 29, in lambda_handler\n    size = record['s3']['object']['size']\n"]}

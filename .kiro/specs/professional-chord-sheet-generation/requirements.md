@@ -116,19 +116,36 @@ Transform the current basic chord detection into a professional-grade music tran
 - 5.4: Extended chord qualities shown (7, maj7, sus4, etc.)
 - 5.5: Slash chords notated properly (e.g., "1/3" for C/E in key of C)
 
-### US-6: Publication-Quality Layout
+### US-6: Lyrics Extraction and Alignment
+**As a** musician  
+**I want** song lyrics extracted and aligned with chords  
+**So that** I can see which chords to play over which lyrics
+
+**Acceptance Criteria**:
+- 6.1: System extracts lyrics from audio using speech-to-text
+- 6.2: Lyrics are timestamped at word or phrase level
+- 6.3: Lyrics are aligned with chord changes based on timing
+- 6.4: Lyrics are formatted in verse/chorus structure when possible
+- 6.5: Chords are positioned above the corresponding lyrics
+- 6.6: Nashville numbers appear below chords
+- 6.7: Handles instrumental sections (no lyrics)
+- 6.8: Accuracy minimum 85% for clear vocal tracks
+
+### US-7: Publication-Quality Layout
 **As a** musician  
 **I want** a professionally formatted chord sheet  
 **So that** I can use it for performances and share it with other musicians
 
 **Acceptance Criteria**:
-- 6.1: Clean, readable typography with proper font sizes
-- 6.2: Song metadata in header (title, artist, key, tempo, time signature)
-- 6.3: Measures per line optimized for readability (typically 4-8)
-- 6.4: Proper spacing between staves
-- 6.5: Page numbers on multi-page sheets
-- 6.6: Copyright/attribution footer
-- 6.7: Consistent formatting throughout document
+- 7.1: Clean, readable typography with proper font sizes
+- 7.2: Song metadata in header (title, artist, key, tempo, time signature)
+- 7.3: Lyrics with chords above them in traditional chord sheet format
+- 7.4: Nashville numbers below chords for easy transposition
+- 7.5: Proper spacing between lines and sections
+- 7.6: Page numbers on multi-page sheets
+- 7.7: Copyright/attribution footer
+- 7.8: Consistent formatting throughout document
+- 7.9: Optimized to fit most songs on 1-2 pages
 
 ---
 
@@ -152,17 +169,35 @@ Transform the current basic chord detection into a professional-grade music tran
 - Key detection with confidence scoring
 - Song structure analysis (optional, nice-to-have)
 
-### TR-4: Professional PDF Generation
-- Replace basic jsPDF with music notation library
-- Consider: VexFlow, abcjs, or custom SVG-to-PDF pipeline
-- Support for musical symbols and notation
-- High-quality rendering suitable for printing
+### TR-4: Lyrics Extraction System
+- Use Whisper (OpenAI) for speech-to-text transcription
+- Extract lyrics with word-level timestamps
+- Separate vocals using Demucs (already available in pipeline)
+- Handle instrumental sections gracefully
+- Store lyrics data in DynamoDB with timing information
 
-### TR-5: Data Model Updates
+### TR-5: Lyrics-Chord Alignment Engine
+- Match lyrics timestamps with chord timestamps
+- Group lyrics into lines based on natural phrasing
+- Position chords above corresponding lyrics
+- Handle cases where chords change mid-word
+- Format output for traditional chord sheet layout
+
+### TR-6: Professional PDF Generation
+- Replace basic jsPDF with lyrics-over-chords layout
+- Traditional chord sheet format (chords above lyrics)
+- Nashville numbers below chords in smaller font
+- Support for musical symbols if needed
+- High-quality rendering suitable for printing
+- Optimized layout to fit on 1-2 pages
+
+### TR-7: Data Model Updates
 - Extend DynamoDB schema to store:
   - Parsed song metadata (name, artist, composer)
   - Musical analysis (tempo, time signature)
   - Detailed chord progression with timing
+  - Lyrics with word-level timestamps
+  - Lyrics-chord alignment data
   - Confidence scores for quality metrics
 
 ---
@@ -170,19 +205,21 @@ Transform the current basic chord detection into a professional-grade music tran
 ## Non-Functional Requirements
 
 ### Performance
-- NFR-1: Chord detection completes within 2-3 minutes for 5-minute song (accuracy prioritized over speed)
-- NFR-2: Metadata extraction completes within 10 seconds
-- NFR-3: PDF generation completes within 15 seconds
-- NFR-4: Total end-to-end processing under 3.5 minutes (acceptable for high accuracy)
+- NFR-1: Chord detection completes within 2-3 minutes for 5-minute song
+- NFR-2: Lyrics extraction completes within 1-2 minutes for 5-minute song
+- NFR-3: Metadata extraction completes within 10 seconds
+- NFR-4: PDF generation completes within 15 seconds
+- NFR-5: Total end-to-end processing under 5 minutes
 
 ### Quality
-- NFR-5: Chord detection accuracy minimum 95% (prioritized)
-- NFR-6: Metadata parsing accuracy minimum 95%
-- NFR-7: PDF rendering quality suitable for 300 DPI printing
+- NFR-6: Chord detection accuracy minimum 85%
+- NFR-7: Lyrics transcription accuracy minimum 85% for clear vocals
+- NFR-8: Metadata parsing accuracy minimum 95%
+- NFR-9: PDF rendering quality suitable for 300 DPI printing
 
 ### Scalability
-- NFR-8: System handles songs up to 10 minutes duration
-- NFR-9: Concurrent processing of multiple jobs without degradation
+- NFR-10: System handles songs up to 10 minutes duration
+- NFR-11: Concurrent processing of multiple jobs without degradation
 
 ---
 
@@ -194,21 +231,24 @@ Transform the current basic chord detection into a professional-grade music tran
 - Optional: MusicBrainz API, Spotify API
 
 ### Libraries/Tools
+- Lyrics extraction: Whisper (OpenAI) - open source, highly accurate
+- Vocal separation: Demucs (already in pipeline)
 - Enhanced chord detection: Essentia, librosa with better models
-- Music notation: VexFlow, abcjs, or similar
-- Beat tracking: librosa, madmom
-- PDF generation: Advanced library supporting music notation
+- Lyrics-chord alignment: Custom algorithm based on timestamps
+- PDF generation: jsPDF with custom chord sheet layout
 
 ---
 
 ## Success Metrics
 
-1. **Chord Coverage**: 95%+ of actual chord changes detected (PRIMARY METRIC)
-2. **Chord Accuracy**: 95%+ correct chord identification
-3. **Metadata Accuracy**: 95%+ correct song/artist identification
-4. **User Satisfaction**: Professional-quality output suitable for performance use
-5. **Processing Time**: Complete analysis in under 3.5 minutes (acceptable for quality)
-6. **PDF Quality**: Readable at standard sheet music size (8.5x11")
+1. **Chord Coverage**: 85%+ of actual chord changes detected
+2. **Chord Accuracy**: 85%+ correct chord identification
+3. **Lyrics Accuracy**: 85%+ correct transcription for clear vocals
+4. **Lyrics-Chord Alignment**: 90%+ chords positioned correctly over lyrics
+5. **Metadata Accuracy**: 95%+ correct song/artist identification
+6. **User Satisfaction**: Professional-quality output suitable for performance use
+7. **Processing Time**: Complete analysis in under 5 minutes
+8. **PDF Quality**: Readable and printable chord sheet format
 
 ---
 
@@ -216,7 +256,6 @@ Transform the current basic chord detection into a professional-grade music tran
 
 - Melody transcription
 - Rhythm notation (note durations)
-- Lyrics with chord placement above words
 - Multiple instrument parts
 - Audio playback with chord highlighting
 - Interactive chord sheet editor

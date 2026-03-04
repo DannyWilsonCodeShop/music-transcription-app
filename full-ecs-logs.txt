@@ -1,0 +1,7 @@
+2026-02-28T21:13:53.493000+00:00 ecs/chord-detector/d9c64efd5239450091f6325967eee123 [2026-02-28 21:13:53] [INFO]   JOB_ID: bbf1fdf7-1657-464a-a463-a244c1fa99e7
+2026-02-28T21:13:53.493000+00:00 ecs/chord-detector/d9c64efd5239450091f6325967eee123 [2026-02-28 21:13:53] [INFO]   KEY: uploads/bbf1fdf7-1657-464a-a463-a244c1fa99e7/04 CUFF IT.m4a
+2026-02-28T21:13:53.548000+00:00 ecs/chord-detector/d9c64efd5239450091f6325967eee123 [2026-02-28 21:13:53] [INFO] Step 2: Downloading audio from s3://music-transcription-audio-test-090130568474/uploads/bbf1fdf7-1657-464a-a463-a244c1fa99e7/04 CUFF IT.m4a
+2026-02-28T21:13:53.810000+00:00 ecs/chord-detector/d9c64efd5239450091f6325967eee123 [2026-02-28 21:13:53] [INFO]   File path: /tmp/bbf1fdf7-1657-464a-a463-a244c1fa99e7-audio.mp3
+2026-02-28T21:14:31.097000+00:00 ecs/chord-detector/d9c64efd5239450091f6325967eee123 Loading audio: /tmp/bbf1fdf7-1657-464a-a463-a244c1fa99e7-audio.mp3
+2026-02-28T21:14:35.155000+00:00 ecs/chord-detector/d9c64efd5239450091f6325967eee123 [2026-02-28 21:14:35] [INFO] 🎤 Extracting lyrics from: /tmp/bbf1fdf7-1657-464a-a463-a244c1fa99e7-audio.mp3
+2026-02-28T21:14:35.193000+00:00 ecs/chord-detector/d9c64efd5239450091f6325967eee123 [2026-02-28 21:14:35] [INFO]   Payload: {'jobId': 'bbf1fdf7-1657-464a-a463-a244c1fa99e7'}

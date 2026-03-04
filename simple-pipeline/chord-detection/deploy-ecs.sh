@@ -33,8 +33,8 @@ echo "✅ ECR Repository: $ECR_URI"
 
 # 2. Build and push Docker image
 echo ""
-echo "🐳 Building Docker image..."
-docker build -t $REPO_NAME:latest .
+echo "🐳 Building Docker image for linux/amd64..."
+docker buildx build --platform linux/amd64 -t $REPO_NAME:latest .
 
 echo "🔐 Logging into ECR..."
 aws ecr get-login-password --region $REGION --profile $AWS_PROFILE | \

@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getJobStatus, TranscriptionJob } from './services/transcriptionService';
 import { DownbeatConfirmation } from './components/DownbeatConfirmation';
+import { AnalysisOptionsModal, AnalysisOptions } from './components/AnalysisOptionsModal';
+import LeadSheetDisplay from './components/LeadSheetDisplay';
+import { BassNNSDisplay } from './components/BassNNSDisplay';
 import axios from 'axios';
 
-const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com';
+const API_ENDPOINT = 'https://l43ftjo75d.execute-api.us-east-1.amazonaws.com/dev';
 const UPLOAD_API_ENDPOINT = 'https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com';
 
 function App() {
@@ -18,26 +21,103 @@ function App() {
   const [showDownbeatConfirmation, setShowDownbeatConfirmation] = useState(false);
   const [downbeatData, setDownbeatData] = useState<any>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [processingStartTime, setProcessingStartTime] = useState<number | null>(null);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [showDebugMode, setShowDebugMode] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions | null>(null);
+
+  // Timer effect - updates every second while processing
+  useEffect(() => {
+    if (!processingStartTime || job?.status === 'COMPLETED' || job?.status === 'FAILED') {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - processingStartTime) / 1000));
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [processingStartTime, job?.status]);
 
   useEffect(() => {
-    if (!jobId) return;
+    if (!jobId) {
+      console.log('Polling effect: No jobId, skipping');
+      return;
+    }
+    
+    console.log('Starting polling for jobId:', jobId);
+    let consecutiveErrors = 0;
+    const MAX_ERRORS = 5;
+    const POLL_TIMEOUT = 10 * 60 * 1000; // 10 minutes
+    const startTime = Date.now();
+    
     const pollInterval = setInterval(async () => {
-      const status = await getJobStatus(jobId);
-      if (status) {
-        setJob(status);
-        if (status.status === 'COMPLETED') {
-          clearInterval(pollInterval);
-          setIsUploading(false);
-          if (status.pdfUrl) {
-            setPdfUrl(status.pdfUrl);
+      const elapsed = Date.now() - startTime;
+      console.log(`Polling attempt for ${jobId} (elapsed: ${Math.floor(elapsed/1000)}s)`);
+      
+      // Check if we've exceeded the timeout
+      if (elapsed > POLL_TIMEOUT) {
+        clearInterval(pollInterval);
+        setError('Processing timeout. The job may still be running. Please refresh to check status.');
+        console.error('Polling timeout exceeded');
+        return;
+      }
+      
+      try {
+        console.log('Calling getJobStatus...');
+        const status = await getJobStatus(jobId);
+        console.log('Poll result:', { 
+          hasStatus: !!status, 
+          status: status?.status, 
+          progress: status?.progress,
+          jobId, 
+          consecutiveErrors 
+        });
+        
+        if (status) {
+          consecutiveErrors = 0; // Reset error counter on success
+          setJob(status);
+          console.log('Job status updated:', status.status, status.progress, status.statusMessage);
+          
+          if (status.status === 'COMPLETED') {
+            console.log('Job completed!');
+            clearInterval(pollInterval);
+            setIsUploading(false);
+            if (status.pdfUrl) {
+              setPdfUrl(status.pdfUrl);
+            }
+          } else if (status.status === 'FAILED') {
+            console.error('Job failed:', status.errorMessage);
+            clearInterval(pollInterval);
+            setIsUploading(false);
+            setError(status.errorMessage || 'Processing failed');
           }
-        } else if (status.status === 'FAILED') {
+        } else {
+          // getJobStatus returned null (network error or 404)
+          consecutiveErrors++;
+          console.warn(`Failed to get job status (${consecutiveErrors}/${MAX_ERRORS}) - returned null`);
+          
+          if (consecutiveErrors >= MAX_ERRORS) {
+            clearInterval(pollInterval);
+            setError('Lost connection to server. The job may still be running. Please refresh to check status.');
+          }
+        }
+      } catch (error) {
+        consecutiveErrors++;
+        console.error(`Error polling job status (${consecutiveErrors}/${MAX_ERRORS}):`, error);
+        
+        if (consecutiveErrors >= MAX_ERRORS) {
           clearInterval(pollInterval);
-          setIsUploading(false);
+          setError('Connection error. The job may still be running. Please refresh to check status.');
         }
       }
     }, 2000);
-    return () => clearInterval(pollInterval);
+    
+    return () => {
+      console.log('Cleaning up polling interval for jobId:', jobId);
+      clearInterval(pollInterval);
+    };
   }, [jobId]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -66,6 +146,7 @@ function App() {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       setFile(selectedFile);
+      setShowAnalysisModal(true); // Show modal after file selection
     }
   };
 
@@ -95,7 +176,7 @@ function App() {
   };
 
   const pollForDownbeatResults = async (jobId: string): Promise<any> => {
-    const maxAttempts = 60; // 60 seconds
+    const maxAttempts = 180; // 180 seconds (3 minutes)
     const pollInterval = 1000; // 1 second
     
     for (let i = 0; i < maxAttempts; i++) {
@@ -121,23 +202,46 @@ function App() {
     throw new Error('Downbeat detection timed out');
   };
 
-  const handleUpload = async () => {
+  const handleAnalysisConfirm = (options: AnalysisOptions) => {
+    setAnalysisOptions(options);
+    setShowAnalysisModal(false);
+    // Automatically start upload after options are selected
+    handleUpload(options);
+  };
+
+  const handleAnalysisCancel = () => {
+    setShowAnalysisModal(false);
+    setFile(null); // Clear file selection if user cancels
+  };
+
+  const handleUpload = async (options?: AnalysisOptions) => {
     if (!file) return;
+    
+    const uploadOptions = options || analysisOptions;
+    if (!uploadOptions) {
+      console.error('No analysis options provided');
+      return;
+    }
     
     setIsUploading(true);
     setError(null);
     setJob(null);
     setPdfUrl(null);
     setUploadProgress(0);
+    setProcessingStartTime(Date.now());
+    setElapsedTime(0);
     
     try {
       console.log('Requesting upload URL for:', file.name, file.type);
       
-      // Request upload URL
+      // Request upload URL with analysis options
       const response = await axios.post(`${UPLOAD_API_ENDPOINT}/upload`, {
         filename: file.name,
         contentType: file.type || 'audio/mpeg',
-        userId: 'guest'
+        userId: 'guest',
+        analysisOptions: uploadOptions // Include analysis options
+      }, {
+        timeout: 120000 // 2 minutes timeout for upload URL request
       });
 
       console.log('Upload URL response:', response.data);
@@ -187,8 +291,8 @@ function App() {
       console.log('Upload complete!');
       setUploadProgress(100);
       
-      // Skip downbeat detection for now - using simple pipeline
-      console.log('Skipping downbeat detection, using simple pipeline');
+      // Keep isUploading true so progress bar continues to show during processing
+      console.log('Starting chord detection...');
       
     } catch (error: any) {
       console.error('Upload failed:', error);
@@ -208,6 +312,14 @@ function App() {
       justifyContent: 'center',
       padding: '20px'
     }}>
+      {/* Analysis Options Modal */}
+      <AnalysisOptionsModal
+        isOpen={showAnalysisModal}
+        onClose={handleAnalysisCancel}
+        onConfirm={handleAnalysisConfirm}
+        filename={file?.name || ''}
+      />
+
       <div style={{ width: '100%', maxWidth: '800px' }}>
         
         {/* Header */}
@@ -243,7 +355,7 @@ function App() {
         </div>
 
         {/* File Upload Area */}
-        {!jobId && (
+        {!jobId && !showAnalysisModal && (
           <div
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
@@ -449,8 +561,8 @@ function App() {
           </div>
         )}
 
-        {/* Processing Progress */}
-        {isUploading && job && uploadProgress === 100 && (
+        {/* Processing Progress - Show whenever we have a jobId and upload is complete, until job is done */}
+        {jobId && uploadProgress === 100 && (!job || (job.status !== 'COMPLETED' && job.status !== 'FAILED')) && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
@@ -462,14 +574,14 @@ function App() {
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
               <span style={{ color: 'rgba(255, 255, 255, 0.9)', fontWeight: '500' }}>
-                {job.status === 'PROCESSING' ? 'Analyzing audio...' : 'Processing...'}
+                {job?.statusMessage || 'Initializing processing...'}
               </span>
               <span style={{ 
                 color: '#a78bfa', 
                 fontWeight: '600',
                 textShadow: '0 0 10px rgba(167, 139, 250, 0.5)'
               }}>
-                {job.progress || 0}%
+                {job?.progress || 0}%
               </span>
             </div>
             <div style={{
@@ -484,19 +596,47 @@ function App() {
                 height: '100%',
                 background: 'linear-gradient(90deg, #9333ea 0%, #6366f1 50%, #8b5cf6 100%)',
                 borderRadius: '999px',
-                width: `${job.progress || 0}%`,
+                width: `${job?.progress || 0}%`,
                 transition: 'width 0.5s ease',
                 boxShadow: '0 0 10px rgba(147, 51, 234, 0.5)'
               }}/>
             </div>
-            <p style={{ 
+            <div style={{ 
               marginTop: '12px', 
-              fontSize: '14px', 
-              color: 'rgba(255, 255, 255, 0.6)',
-              textAlign: 'center'
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center'
             }}>
-              Enhanced chord detection with 84 templates and bass-weighted key detection
-            </p>
+              <p style={{ 
+                fontSize: '14px', 
+                color: 'rgba(255, 255, 255, 0.6)',
+              }}>
+                {job?.statusMessage || 'Waiting for job to start...'}
+              </p>
+              <div style={{
+                fontSize: '16px',
+                fontWeight: '600',
+                color: '#00ffff',
+                textShadow: '0 0 10px rgba(0, 255, 255, 0.5)',
+                fontFamily: 'monospace',
+                padding: '4px 12px',
+                background: 'rgba(0, 255, 255, 0.1)',
+                borderRadius: '8px',
+                border: '1px solid rgba(0, 255, 255, 0.3)'
+              }}>
+                ⏱️ {Math.floor(elapsedTime / 60)}:{String(elapsedTime % 60).padStart(2, '0')}
+              </div>
+            </div>
+            {!job && (
+              <div style={{ 
+                marginTop: '12px',
+                color: 'rgba(255, 255, 255, 0.5)', 
+                fontSize: '12px',
+                fontFamily: 'monospace'
+              }}>
+                Job ID: {jobId}
+              </div>
+            )}
           </div>
         )}
 
@@ -518,6 +658,8 @@ function App() {
                 setError(null);
                 setFile(null);
                 setJobId(null);
+                setProcessingStartTime(null);
+                setElapsedTime(0);
               }}
               style={{
                 padding: '10px 20px',
@@ -554,6 +696,8 @@ function App() {
                 setError(null);
                 setIsUploading(false);
                 setFile(null);
+                setProcessingStartTime(null);
+                setElapsedTime(0);
               }}
               style={{
                 padding: '10px 20px',
@@ -571,7 +715,7 @@ function App() {
         )}
 
         {/* Results */}
-        {job?.status === 'COMPLETED' && job.chordsData && (
+        {job?.status === 'COMPLETED' && (job.chordsData || job.bassData) && (
           <div style={{
             marginTop: '24px',
             padding: '24px',
@@ -592,6 +736,8 @@ function App() {
                 setShowDownbeatConfirmation(false);
                 setDownbeatData(null);
                 setAudioUrl(null);
+                setProcessingStartTime(null);
+                setElapsedTime(0);
               }}
               style={{
                 marginBottom: '24px',
@@ -619,7 +765,8 @@ function App() {
               ← Process Another File
             </button>
             
-            {/* Song Metadata */}
+            {/* Song Metadata - only show if chordsData exists */}
+            {job.chordsData && (
             <div style={{
               marginBottom: '24px',
               padding: '20px',
@@ -666,11 +813,105 @@ function App() {
                     {Math.floor(job.chordsData.duration / 60)}:{String(Math.floor(job.chordsData.duration % 60)).padStart(2, '0')}
                   </div>
                 </div>
+                {elapsedTime > 0 && (
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Processing Time</div>
+                    <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
+                      {Math.floor(elapsedTime / 60)}:{String(elapsedTime % 60).padStart(2, '0')}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+            )}
 
-            {/* Section-Based Chord Sheet */}
-            {job.chordsData.chords && job.chordsData.chords.length > 0 ? (
+            {/* Lyrics Section */}
+            {job.chordsData && job.chordsData.lyrics && job.chordsData.lyrics.text && (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                  🎤 Lyrics
+                </h3>
+                <div style={{
+                  fontSize: '14px',
+                  lineHeight: '1.8',
+                  color: '#1f2937',
+                  whiteSpace: 'pre-wrap',
+                  fontFamily: 'Georgia, serif'
+                }}>
+                  {job.chordsData.lyrics.text}
+                </div>
+                <div style={{
+                  marginTop: '12px',
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  fontStyle: 'italic'
+                }}>
+                  Language: {job.chordsData.lyrics.language || 'unknown'} • 
+                  Words: {job.chordsData.lyrics.words?.length || 0}
+                </div>
+              </div>
+            )}
+
+            {/* Bass NNS Display (if bassData exists) */}
+            {job.bassData && (
+              <div style={{ marginBottom: '24px' }}>
+                <BassNNSDisplay 
+                  bassData={job.bassData}
+                  pdfUrl={pdfUrl || undefined}
+                />
+              </div>
+            )}
+
+            {/* Lead Sheet Display (if leadSheet data exists) or Chord-Only Display */}
+            {job.chordsData?.leadSheet ? (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  marginBottom: '16px'
+                }}>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', margin: 0 }}>
+                    🎼 Lead Sheet
+                  </h3>
+                  <button
+                    onClick={() => setShowDebugMode(!showDebugMode)}
+                    style={{
+                      padding: '6px 12px',
+                      fontSize: '12px',
+                      backgroundColor: showDebugMode ? '#9333ea' : '#e5e7eb',
+                      color: showDebugMode ? 'white' : '#6b7280',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    {showDebugMode ? '🐛 Debug ON' : '🐛 Debug OFF'}
+                  </button>
+                </div>
+                <LeadSheetDisplay 
+                  leadSheet={job.chordsData.leadSheet}
+                  showMeasureNumbers={true}
+                  showTimestamps={showDebugMode}
+                />
+              </div>
+            ) : (
+              /* Fallback to chord-only display if no lead sheet */
+              job.chordsData?.chords && job.chordsData.chords.length > 0 ? (
               <div style={{
                 marginBottom: '24px',
                 padding: '20px',
@@ -901,6 +1142,7 @@ function App() {
                   })}
                 </p>
               </div>
+            )
             )}
             
             {pdfUrl && (

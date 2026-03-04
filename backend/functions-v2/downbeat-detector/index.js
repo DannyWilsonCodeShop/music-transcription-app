@@ -23,6 +23,19 @@ exports.handler = async (event) => {
   console.log('Downbeat Detection Lambda triggered');
   console.log('Event:', JSON.stringify(event, null, 2));
 
+  // Handle OPTIONS preflight request
+  if (event.requestContext && event.requestContext.http && event.requestContext.http.method === 'OPTIONS') {
+    return {
+      statusCode: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+        'Access-Control-Allow-Headers': '*',
+      },
+      body: '',
+    };
+  }
+
   try {
     // Parse request body
     const body = typeof event.body === 'string' ? JSON.parse(event.body) : event.body;
