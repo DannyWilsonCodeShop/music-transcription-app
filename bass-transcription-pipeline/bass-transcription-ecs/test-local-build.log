@@ -1,0 +1,118 @@
+=========================================
+Testing Bass Transcription Docker Build
+=========================================
+
+📦 Preparing build context...
+Build directory: /var/folders/70/q1qvsyfd3fb0d0dgnvp63gtm0000gn/T/tmp.drsTnSoShx
+Copying application files...
+Copying simple-pipeline directory...
+
+🐳 Building Docker image...
+#0 building with "desktop-linux" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 676B done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.9-slim
+#2 ...
+
+#3 [auth] library/python:pull token for registry-1.docker.io
+#3 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.9-slim
+#2 DONE 0.6s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [ 1/11] FROM docker.io/library/python:3.9-slim@sha256:2d97f6910b16bd338d3060f261f53f144965f755599aab1acda1e13cf1731b1b
+#5 resolve docker.io/library/python:3.9-slim@sha256:2d97f6910b16bd338d3060f261f53f144965f755599aab1acda1e13cf1731b1b 0.0s done
+#5 DONE 0.0s
+
+#6 [internal] load build context
+#6 transferring context: 7.93MB 0.1s done
+#6 DONE 0.1s
+
+#7 [ 4/11] COPY requirements.txt .
+#7 CACHED
+
+#8 [ 2/11] WORKDIR /app
+#8 CACHED
+
+#9 [ 3/11] RUN apt-get update && apt-get install -y     build-essential     libsndfile1     ffmpeg     && rm -rf /var/lib/apt/lists/*
+#9 CACHED
+
+#10 [ 5/11] RUN pip install --no-cache-dir -r requirements.txt
+#10 CACHED
+
+#11 [ 6/11] COPY app.py .
+#11 DONE 0.0s
+
+#12 [ 7/11] COPY bass_note_transcription.py .
+#12 DONE 0.0s
+
+#13 [ 8/11] COPY stem_transcription.py .
+#13 DONE 0.0s
+
+#14 [ 9/11] COPY song_metadata_lyrics.py .
+#14 DONE 0.0s
+
+#15 [10/11] COPY test_imports.py .
+#15 DONE 0.0s
+
+#16 [11/11] COPY simple-pipeline ./simple-pipeline
+#16 DONE 0.0s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 0.4s done
+#17 exporting manifest sha256:cf4202d59749f7a498be415b4c077d930bf2c6fa334e26d348b9c8f8fe6aa59d
+#17 exporting manifest sha256:cf4202d59749f7a498be415b4c077d930bf2c6fa334e26d348b9c8f8fe6aa59d done
+#17 exporting config sha256:6c2a65e44bc2c859197162d3f46c499ec07acb5a5e633371cc91bcd63f9d7b8d done
+#17 exporting attestation manifest sha256:f1c395ee81d10bec30befb634e4c1ced21759614cad9fa8729fd010818b0c21f 0.0s done
+#17 exporting manifest list sha256:a7e009535c2ff4585a960eac28f49b844ea76a6a714eec302432e964c623ff1f done
+#17 naming to docker.io/library/bass-transcription-test:latest done
+#17 unpacking to docker.io/library/bass-transcription-test:latest 0.1s done
+#17 DONE 0.5s
+
+=========================================
+✅ Image built successfully!
+=========================================
+
+🧪 Testing imports in container...
+
+WARNING:root:Coremltools is not installed. If you plan to use a CoreML Saved Model, reinstall basic-pitch with `pip install 'basic-pitch[coreml]'`
+WARNING:root:onnxruntime is not installed. If you plan to use an ONNX Model, reinstall basic-pitch with `pip install 'basic-pitch[onnx]'`
+Testing v3.0 dependency imports...
+--------------------------------------------------
+✓ mutagen imported successfully (version: 1.47.0)
+✓ requests imported successfully (version: 2.31.0)
+✓ beautifulsoup4 imported successfully (version: 4.12.0)
+✓ lxml imported successfully (version: 4.9.3)
+✓ lyricsgenius imported successfully (version: 3.0.1)
+
+Testing existing dependencies...
+--------------------------------------------------
+✓ boto3 imported successfully
+✓ librosa imported successfully (version: 0.11.0)
+✓ soundfile imported successfully
+✓ numpy imported successfully (version: 1.26.4)
+✓ torch imported successfully (version: 2.8.0+cpu)
+✓ tensorflow imported successfully (version: 2.15.0)
+✓ basic_pitch imported successfully
+
+==================================================
+SUCCESS: All dependencies imported successfully!
+No version conflicts detected.
+
+=========================================
+✅ All tests passed!
+=========================================
+
+Image: bass-transcription-test:latest
+
+To run the container with environment variables:
+  docker run --rm --env-file .env bass-transcription-test:latest
+

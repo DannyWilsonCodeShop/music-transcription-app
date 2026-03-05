@@ -4,12 +4,12 @@
   "executionRoleArn": "arn:aws:iam::090130568474:role/chordscout-v2-dev-ECSTaskExecutionRole-tKJbfiovNGLj",
   "networkMode": "awsvpc",
   "requiresCompatibilities": ["FARGATE"],
-  "cpu": "1024",
-  "memory": "4096",
+  "cpu": "4096",
+  "memory": "16384",
   "containerDefinitions": [
     {
       "name": "bass-transcription",
-      "image": "090130568474.dkr.ecr.us-east-1.amazonaws.com/bass-transcription:latest",
+      "image": "090130568474.dkr.ecr.us-east-1.amazonaws.com/bass-transcription:v3.0-phase2",
       "essential": true,
       "environment": [
         {
@@ -23,6 +23,26 @@
         {
           "name": "PDF_GENERATOR_FUNCTION",
           "value": "bass-nns-pdf-generator-dev"
+        },
+        {
+          "name": "GENIUS_ACCESS_TOKEN",
+          "value": "PLACEHOLDER_SET_IN_SECRETS_MANAGER"
+        },
+        {
+          "name": "ENABLE_LYRICS",
+          "value": "false"
+        },
+        {
+          "name": "ENABLE_MULTI_STEM",
+          "value": "true"
+        },
+        {
+          "name": "DEFAULT_TRANSCRIPTION_MODE",
+          "value": "bass-only"
+        },
+        {
+          "name": "CONFIRMATION_TIMEOUT",
+          "value": "300"
         }
       ],
       "logConfiguration": {

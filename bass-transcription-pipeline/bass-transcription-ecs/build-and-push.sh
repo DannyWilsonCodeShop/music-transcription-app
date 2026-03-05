@@ -13,11 +13,15 @@ ACCOUNT_ID="090130568474"
 ECR_REPO="bass-transcription"
 IMAGE_NAME="${ACCOUNT_ID}.dkr.ecr.${REGION}.amazonaws.com/${ECR_REPO}"
 
+# Allow custom tag via command line argument (default: latest)
+TAG="${1:-latest}"
+
 echo "========================================="
 echo "Building Bass Transcription ECS Image"
 echo "========================================="
 echo ""
 echo "ECR Repository: $IMAGE_NAME"
+echo "Tag: $TAG"
 echo ""
 
 # Create ECR repository if it doesn't exist
@@ -33,6 +37,9 @@ echo "Build directory: $BUILD_DIR"
 # Copy files
 cp app.py $BUILD_DIR/
 cp bass_note_transcription.py $BUILD_DIR/
+cp stem_transcription.py $BUILD_DIR/
+cp song_metadata_lyrics.py $BUILD_DIR/
+cp test_imports.py $BUILD_DIR/
 cp requirements.txt $BUILD_DIR/
 cp Dockerfile $BUILD_DIR/
 
@@ -56,15 +63,26 @@ aws ecr get-login-password --region $REGION | docker login --username AWS --pass
 # Tag and push
 echo ""
 echo "📤 Pushing image to ECR..."
-docker tag $ECR_REPO:latest $IMAGE_NAME:latest
-docker push $IMAGE_NAME:latest
+docker tag $ECR_REPO:latest $IMAGE_NAME:$TAG
+docker push $IMAGE_NAME:$TAG
+
+# Also tag and push as 'latest' if a specific tag was provided
+if [ "$TAG" != "latest" ]; then
+  echo ""
+  echo "📤 Also tagging and pushing as 'latest'..."
+  docker tag $ECR_REPO:latest $IMAGE_NAME:latest
+  docker push $IMAGE_NAME:latest
+fi
 
 echo ""
 echo "========================================="
 echo "✅ Image pushed successfully!"
 echo "========================================="
 echo ""
-echo "Image: $IMAGE_NAME:latest"
+echo "Image: $IMAGE_NAME:$TAG"
+if [ "$TAG" != "latest" ]; then
+  echo "Also tagged as: $IMAGE_NAME:latest"
+fi
 echo ""
 echo "To update ECS task definition, run:"
 echo "  aws ecs update-service \\"

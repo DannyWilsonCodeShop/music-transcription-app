@@ -1,6 +1,6 @@
 """
-Bass Transcription ECS Task
-Dedicated pipeline for bass note transcription with Nashville Number System
+Bass Transcription ECS Task - v3.0
+Multi-stem transcription pipeline with song identification, lyrics, and user confirmations
 """
 
 import os
@@ -12,9 +12,12 @@ import sys
 import time
 import traceback
 from datetime import datetime
+from decimal import Decimal
 
-# Import bass transcription module
+# Import new modules (Task 2.1)
 from bass_note_transcription import detect_bass_notes
+from stem_transcription import transcribe_stems, extract_stem_audio
+from song_metadata_lyrics import get_song_metadata_and_lyrics
 
 # Demucs for stem separation
 try:
@@ -35,6 +38,16 @@ lambda_client = boto3.client('lambda')
 # Environment variables
 JOBS_TABLE = os.environ.get('DYNAMODB_JOBS_TABLE', 'ChordScout-Jobs-V2-dev')
 PDF_GENERATOR_FUNCTION = os.environ.get('PDF_GENERATOR_FUNCTION', 'bass-nns-pdf-generator-dev')
+AUDIO_BUCKET = os.environ.get('AUDIO_BUCKET', 'chordscout-audio-dev')
+
+# Feature flags (Task 2.9)
+ENABLE_MULTI_STEM = os.environ.get('ENABLE_MULTI_STEM', 'false').lower() == 'true'
+ENABLE_LYRICS = os.environ.get('ENABLE_LYRICS', 'false').lower() == 'true'
+ENABLE_SONG_ID = os.environ.get('ENABLE_SONG_ID', 'true').lower() == 'true'
+DEFAULT_TRANSCRIPTION_MODE = os.environ.get('DEFAULT_TRANSCRIPTION_MODE', 'bass-only')
+CONFIRMATION_TIMEOUT = int(os.environ.get('CONFIRMATION_TIMEOUT', '300'))  # 5 minutes
+GENIUS_ACCESS_TOKEN = os.environ.get('GENIUS_ACCESS_TOKEN', '')
+
 
 def log(message, level="INFO"):
     """Enhanced logging with timestamps"""
@@ -44,9 +57,11 @@ def log(message, level="INFO"):
 
 
 def main():
-    """Main entry point for bass transcription ECS task"""
+    """Main entry point for v3.0 bass transcription ECS task"""
+    global ENABLE_MULTI_STEM, ENABLE_LYRICS, ENABLE_SONG_ID
+    
     log("=" * 80)
-    log("BASS TRANSCRIPTION PIPELINE")
+    log("BASS TRANSCRIPTION PIPELINE v3.0")
     log("=" * 80)
     
     # Get parameters from environment
@@ -59,45 +74,104 @@ def main():
     log(f"  BUCKET: {bucket}")
     log(f"  KEY: {key}")
     log(f"  JOBS_TABLE: {JOBS_TABLE}")
+    log(f"  ENABLE_MULTI_STEM: {ENABLE_MULTI_STEM}")
+    log(f"  ENABLE_LYRICS: {ENABLE_LYRICS}")
+    log(f"  ENABLE_SONG_ID: {ENABLE_SONG_ID}")
     
     if not all([job_id, bucket, key]):
         log("ERROR: Missing required environment variables", "ERROR")
         raise ValueError("Missing required environment variables")
     
+    processing_start_time = time.time()
+    
     try:
-        # Update status
-        update_job_status(job_id, 'PROCESSING', 30, "Downloading audio file...")
-        
-        # Download audio
-        log("Step 1: Downloading audio from S3...")
+        # Stage 1: Download audio
+        update_job_status(job_id, 'PROCESSING', 10, "Downloading audio file...")
+        log("Stage 1: Downloading audio from S3...")
         audio_path = f"/tmp/{job_id}-audio.m4a"
         s3.download_file(bucket, key, audio_path)
         file_size = os.path.getsize(audio_path)
         log(f"✓ Audio downloaded ({file_size / 1024 / 1024:.2f} MB)")
         
-        # Separate stems and extract bass
-        update_job_status(job_id, 'PROCESSING', 40, "Extracting bass stem...")
-        log("Step 2: Extracting bass stem...")
-        bass_audio, sr = extract_bass_stem(audio_path)
-        log(f"✓ Bass stem extracted ({len(bass_audio) / sr:.2f}s)")
-        
-        # Detect tempo and beats
-        update_job_status(job_id, 'PROCESSING', 50, "Detecting tempo and beats...")
-        log("Step 3: Detecting tempo and beats...")
-        tempo, beats = librosa.beat.beat_track(y=bass_audio, sr=sr)
+        # Stage 2: Tempo and beat detection
+        update_job_status(job_id, 'PROCESSING', 20, "Analyzing tempo and beats...")
+        log("Stage 2: Detecting tempo and beats...")
+        full_audio, sr = librosa.load(audio_path, sr=22050)
+        tempo, beats = librosa.beat.beat_track(y=full_audio, sr=sr)
         tempo_value = float(tempo) if isinstance(tempo, (int, float)) else float(tempo[0])
         time_signature = "4/4"  # Default
         log(f"✓ Tempo: {tempo_value:.1f} BPM, Time signature: {time_signature}")
         
-        # Detect downbeat
-        update_job_status(job_id, 'PROCESSING', 60, "Detecting downbeat...")
-        log("Step 4: Detecting downbeat...")
-        first_downbeat = detect_downbeat(bass_audio, sr, tempo_value, beats)
+        # Stage 3: Downbeat detection
+        update_job_status(job_id, 'PROCESSING', 30, "Detecting downbeat...")
+        log("Stage 3: Detecting downbeat...")
+        first_downbeat = detect_downbeat(full_audio, sr, tempo_value, beats)
         log(f"✓ Downbeat: {first_downbeat:.3f}s")
         
-        # Transcribe bass notes
-        update_job_status(job_id, 'PROCESSING', 70, "Transcribing bass notes...")
-        log("Step 5: Transcribing bass notes to NNS...")
+        # Stage 4: Song identification (Task 2.2)
+        song_metadata = None
+        if ENABLE_SONG_ID:
+            update_job_status(job_id, 'PROCESSING', 35, "Identifying song...")
+            log("Stage 4: Identifying song...")
+            song_id_start = time.time()
+            try:
+                from song_metadata_lyrics import _identify_song
+                song_metadata = _identify_song(audio_path, None)
+                log(f"✓ Song: {song_metadata.get('artist', 'Unknown')} - {song_metadata.get('title', 'Unknown')}")
+                log(f"  Source: {song_metadata.get('source', 'unknown')}")
+                update_job_with_metadata(job_id, song_metadata)
+            except Exception as e:
+                log(f"Song identification failed: {e}", "WARNING")
+                song_metadata = {'artist': '', 'title': '', 'source': 'unknown'}
+            song_id_time = time.time() - song_id_start
+        else:
+            song_metadata = {'artist': '', 'title': '', 'source': 'disabled'}
+            song_id_time = 0
+        
+        # Stage 5: Stem separation (Task 2.3)
+        stems_data = None
+        stem_sep_time = 0
+        if ENABLE_MULTI_STEM:
+            update_job_status(job_id, 'PROCESSING_STEMS', 40, "Separating audio stems...")
+            log("Stage 5: Separating stems with Demucs...")
+            stem_sep_start = time.time()
+            try:
+                stems_sources = separate_stems(audio_path)
+                upload_stems_to_s3(stems_sources, job_id, bucket, sr)
+                stems_data = stems_sources
+                log("✓ Stems separated and uploaded to S3")
+            except Exception as e:
+                log(f"Stem separation failed: {e}", "ERROR")
+                log("Falling back to bass-only mode", "WARNING")
+                ENABLE_MULTI_STEM = False
+            stem_sep_time = time.time() - stem_sep_start
+        
+        # Stage 6: Transcription mode selection (Task 2.4)
+        transcription_mode = DEFAULT_TRANSCRIPTION_MODE
+        if ENABLE_MULTI_STEM and stems_data is not None:
+            update_job_status(job_id, 'PENDING_MODE_SELECTION', 45)
+            log("Stage 6: Waiting for transcription mode selection...")
+            transcription_mode = wait_for_mode_selection(job_id, timeout=CONFIRMATION_TIMEOUT)
+            log(f"✓ Transcription mode: {transcription_mode}")
+        else:
+            transcription_mode = 'bass-only'
+            update_job_field(job_id, 'transcriptionMode', transcription_mode)
+        
+        # Stage 7: Extract bass stem
+        update_job_status(job_id, 'PROCESSING', 50, "Extracting bass stem...")
+        log("Stage 7: Extracting bass stem...")
+        if stems_data is not None:
+            bass_audio = extract_stem_audio(stems_data, 'bass', sr, 'mdx_extra')
+        else:
+            bass_audio, sr = extract_bass_stem(audio_path)
+        log(f"✓ Bass stem extracted ({len(bass_audio) / sr:.2f}s)")
+        
+        # Stage 8: Multi-stem transcription (Task 2.5)
+        update_job_status(job_id, 'TRANSCRIBING_STEMS', 55, "Transcribing stems...")
+        log("Stage 8: Transcribing stems...")
+        transcription_start = time.time()
+        
+        # Always transcribe bass with 8th note quantization
         bass_data = detect_bass_notes(
             bass_audio,
             sr,
@@ -105,23 +179,146 @@ def main():
             time_signature,
             first_downbeat
         )
-        log(f"✓ Transcribed {bass_data['totalNotes']} notes in {bass_data['totalMeasures']} measures")
+        log(f"✓ Bass: {bass_data['totalNotes']} notes in {bass_data['totalMeasures']} measures")
         log(f"  Key: {bass_data['key']} {bass_data['mode']} (Relative major: {bass_data['relativeMajor']})")
         
-        # Update job with bass data
-        update_job_status(job_id, 'PROCESSING', 85, "Saving bass transcription...")
-        log("Step 6: Updating job with bass data...")
-        update_job_with_bass_data(job_id, bass_data)
-        log("✓ Job updated")
+        # Transcribe additional stems based on mode
+        stem_transcription_data = {}
+        if ENABLE_MULTI_STEM and stems_data is not None and transcription_mode != 'bass-only':
+            stems_to_transcribe = []
+            if transcription_mode in ['bass+piano', 'all']:
+                stems_to_transcribe.append('piano')
+            if transcription_mode in ['bass+guitar', 'all']:
+                stems_to_transcribe.append('guitar')
+            
+            if stems_to_transcribe:
+                log(f"  Transcribing additional stems: {stems_to_transcribe}")
+                try:
+                    stem_results = transcribe_stems(
+                        stems_data,
+                        sr,
+                        tempo_value,
+                        time_signature,
+                        first_downbeat,
+                        {
+                            'key': bass_data['key'],
+                            'mode': bass_data['mode'],
+                            'relativeMajor': bass_data['relativeMajor']
+                        },
+                        output_mode='notes',
+                        stems_to_process=stems_to_transcribe,
+                        model_type='mdx_extra'
+                    )
+                    
+                    for stem_name, stem_result in stem_results.items():
+                        if stem_result.get('available') and 'notes_data' in stem_result:
+                            notes_data = stem_result['notes_data']
+                            stem_transcription_data[stem_name] = {
+                                'notes': notes_data['notes'],
+                                'totalNotes': notes_data['totalNotes'],
+                                's3Key': f"audio/{job_id}/stems/{stem_name}.wav"
+                            }
+                            log(f"✓ {stem_name.capitalize()}: {notes_data['totalNotes']} notes")
+                except Exception as e:
+                    log(f"Additional stem transcription failed: {e}", "ERROR")
         
-        # Trigger PDF generation
-        update_job_status(job_id, 'PROCESSING', 90, "Generating NNS chart...")
-        log("Step 7: Triggering PDF generation...")
+        transcription_time = time.time() - transcription_start
+        
+        # Stage 9: Lyrics fetching (Task 2.6)
+        lyrics_data = None
+        lyrics_time = 0
+        if ENABLE_LYRICS and song_metadata and song_metadata.get('title'):
+            update_job_status(job_id, 'FETCHING_LYRICS', 70, "Fetching lyrics...")
+            log("Stage 9: Fetching lyrics...")
+            lyrics_start = time.time()
+            try:
+                lyrics_result = get_song_metadata_and_lyrics(
+                    audio_path,
+                    tempo_value,
+                    time_signature,
+                    bass_data['totalMeasures'],
+                    first_downbeat,
+                    user_provided=song_metadata
+                )
+                
+                if lyrics_result.get('lyrics_available'):
+                    lyrics_data = {
+                        'available': True,
+                        'source': 'genius',
+                        'sections': lyrics_result.get('measure_lyrics', [])
+                    }
+                    log(f"✓ Lyrics fetched: {lyrics_result.get('line_count', 0)} lines")
+                else:
+                    lyrics_data = {
+                        'available': False,
+                        'reason': lyrics_result.get('reason', 'Not found')
+                    }
+                    log(f"Lyrics not available: {lyrics_data['reason']}", "WARNING")
+            except Exception as e:
+                log(f"Lyrics fetch failed: {e}", "WARNING")
+                lyrics_data = {'available': False, 'reason': str(e)}
+            lyrics_time = time.time() - lyrics_start
+        else:
+            lyrics_data = {'available': False, 'reason': 'Disabled or no song metadata'}
+        
+        # Stage 10: Key detection and confirmation (Task 2.7)
+        detected_key = f"{bass_data['key']} {bass_data['mode']}"
+        confirmed_key = detected_key
+        
+        if ENABLE_MULTI_STEM:
+            update_job_status(job_id, 'PENDING_KEY_CONFIRMATION', 75)
+            log("Stage 10: Waiting for key confirmation...")
+            update_job_field(job_id, 'detectedKey', detected_key)
+            update_job_field(job_id, 'keyConfidence', bass_data.get('confidence', 0.8))
+            
+            confirmed_key = wait_for_key_confirmation(job_id, detected_key, timeout=CONFIRMATION_TIMEOUT)
+            log(f"✓ Confirmed key: {confirmed_key}")
+        else:
+            update_job_field(job_id, 'detectedKey', detected_key)
+            update_job_field(job_id, 'confirmedKey', confirmed_key)
+        
+        # Stage 11: Update job with all transcription data (Task 2.9)
+        update_job_status(job_id, 'PROCESSING', 85, "Saving transcription data...")
+        log("Stage 11: Updating job with transcription data...")
+        
+        update_data = {
+            'bassData': bass_data,
+            'transcriptionMode': transcription_mode,
+            'detectedKey': detected_key,
+            'confirmedKey': confirmed_key,
+            'keyConfidence': bass_data.get('confidence', 0.8)
+        }
+        
+        if song_metadata:
+            update_data['songMetadata'] = song_metadata
+        
+        if lyrics_data:
+            update_data['lyrics'] = lyrics_data
+        
+        if stem_transcription_data:
+            update_data['stemData'] = stem_transcription_data
+        
+        # Add processing metrics (Task 2.9)
+        total_time = time.time() - processing_start_time
+        update_data['processingMetrics'] = {
+            'songIdentificationTime': song_id_time,
+            'stemSeparationTime': stem_sep_time,
+            'transcriptionTime': transcription_time,
+            'lyricsFetchTime': lyrics_time,
+            'totalProcessingTime': total_time
+        }
+        
+        update_job_with_all_data(job_id, update_data)
+        log("✓ Job updated with all data")
+        
+        # Stage 12: Trigger PDF generation
+        update_job_status(job_id, 'GENERATING_PDF', 90, "Generating NNS chart...")
+        log("Stage 12: Triggering PDF generation...")
         trigger_pdf_generation(job_id)
         log("✓ PDF generation triggered")
         
         log("=" * 80)
-        log("BASS TRANSCRIPTION COMPLETED SUCCESSFULLY")
+        log(f"TRANSCRIPTION COMPLETED SUCCESSFULLY ({total_time:.1f}s)")
         log("=" * 80)
         
     except Exception as e:
@@ -131,8 +328,111 @@ def main():
         raise
 
 
+def separate_stems(audio_path: str):
+    """Separate audio into stems using Demucs (Task 2.3)"""
+    if not DEMUCS_AVAILABLE:
+        raise Exception("Demucs not available")
+    
+    log("  Loading Demucs model...")
+    model = get_model('mdx_extra')
+    
+    log("  Loading audio...")
+    wav, sr = torchaudio.load(audio_path)
+    
+    # Ensure stereo
+    if wav.shape[0] == 1:
+        wav = wav.repeat(2, 1)
+    
+    # Resample if needed
+    if sr != model.samplerate:
+        resampler = torchaudio.transforms.Resample(sr, model.samplerate)
+        wav = resampler(wav)
+        sr = model.samplerate
+    
+    log("  Separating stems...")
+    with torch.no_grad():
+        sources = apply_model(model, wav[None], device='cpu')[0]
+    
+    log(f"  ✓ Separated into {sources.shape[0]} stems")
+    return sources
+
+
+def upload_stems_to_s3(sources, job_id: str, bucket: str, sr: int):
+    """Upload separated stems to S3 (Task 2.3)"""
+    import soundfile as sf
+    
+    stem_names = ['drums', 'bass', 'other', 'vocals']
+    if sources.shape[0] > 4:
+        stem_names.extend(['guitar', 'piano'])
+    
+    for i, stem_name in enumerate(stem_names[:sources.shape[0]]):
+        try:
+            # Convert to mono
+            if isinstance(sources, torch.Tensor):
+                stem_mono = torch.mean(sources[i], dim=0).numpy()
+            else:
+                stem_mono = np.mean(sources[i], axis=0)
+            
+            # Save to temp file
+            temp_path = f"/tmp/{job_id}-{stem_name}.wav"
+            sf.write(temp_path, stem_mono, sr)
+            
+            # Upload to S3
+            s3_key = f"audio/{job_id}/stems/{stem_name}.wav"
+            s3.upload_file(temp_path, bucket, s3_key)
+            
+            # Clean up
+            os.remove(temp_path)
+            
+            log(f"  ✓ Uploaded {stem_name}.wav to S3")
+        except Exception as e:
+            log(f"  Failed to upload {stem_name}: {e}", "WARNING")
+
+
+def wait_for_mode_selection(job_id: str, timeout: int = 300) -> str:
+    """
+    Wait for user to select transcription mode (Task 2.4)
+    Polls DynamoDB every 2 seconds for user selection
+    Defaults to bass-only on timeout
+    """
+    start_time = time.time()
+    poll_interval = 2
+    
+    while time.time() - start_time < timeout:
+        job = get_job_from_dynamodb(job_id)
+        if job.get('transcriptionMode'):
+            return job['transcriptionMode']
+        time.sleep(poll_interval)
+    
+    # Timeout: default to bass-only
+    log(f"Mode selection timeout ({timeout}s), defaulting to bass-only", "WARNING")
+    update_job_field(job_id, 'transcriptionMode', DEFAULT_TRANSCRIPTION_MODE)
+    return DEFAULT_TRANSCRIPTION_MODE
+
+
+def wait_for_key_confirmation(job_id: str, detected_key: str, timeout: int = 300) -> str:
+    """
+    Wait for user to confirm or correct the detected key (Task 2.7)
+    Polls DynamoDB every 2 seconds
+    Defaults to detected key on timeout
+    """
+    start_time = time.time()
+    poll_interval = 2
+    
+    while time.time() - start_time < timeout:
+        job = get_job_from_dynamodb(job_id)
+        if job.get('confirmedKey'):
+            return job['confirmedKey']
+        time.sleep(poll_interval)
+    
+    # Timeout: use detected key
+    log(f"Key confirmation timeout ({timeout}s), using detected key", "WARNING")
+    update_job_field(job_id, 'confirmedKey', detected_key)
+    return detected_key
+
+
 def extract_bass_stem(audio_path: str) -> tuple:
-    """Extract bass stem using Demucs"""
+    """Extract bass stem using Demucs (fallback method)"""
     if not DEMUCS_AVAILABLE:
         log("Demucs not available, using full mix", "WARNING")
         return librosa.load(audio_path, sr=22050)
@@ -198,6 +498,13 @@ def detect_downbeat(audio: np.ndarray, sr: int, tempo: float, beats: np.ndarray)
         return float(beat_times[0]) if len(beat_times) > 0 else 0.0
 
 
+def get_job_from_dynamodb(job_id: str) -> dict:
+    """Get job record from DynamoDB"""
+    table = dynamodb.Table(JOBS_TABLE)
+    response = table.get_item(Key={'jobId': job_id})
+    return response.get('Item', {})
+
+
 def update_job_status(job_id: str, status: str, progress: int, message: str = None):
     """Update job status in DynamoDB"""
     table = dynamodb.Table(JOBS_TABLE)
@@ -222,10 +529,64 @@ def update_job_status(job_id: str, status: str, progress: int, message: str = No
     )
 
 
+def update_job_field(job_id: str, field_name: str, value):
+    """Update a single field in DynamoDB"""
+    table = dynamodb.Table(JOBS_TABLE)
+    
+    value_converted = convert_floats_to_decimal(value)
+    
+    table.update_item(
+        Key={'jobId': job_id},
+        UpdateExpression=f'SET {field_name} = :value, updatedAt = :updated',
+        ExpressionAttributeValues={
+            ':value': value_converted,
+            ':updated': datetime.utcnow().isoformat()
+        }
+    )
+
+
+def update_job_with_metadata(job_id: str, metadata: dict):
+    """Update job with song metadata (Task 2.2)"""
+    table = dynamodb.Table(JOBS_TABLE)
+    
+    metadata_decimal = convert_floats_to_decimal(metadata)
+    
+    table.update_item(
+        Key={'jobId': job_id},
+        UpdateExpression='SET songMetadata = :metadata, updatedAt = :updated',
+        ExpressionAttributeValues={
+            ':metadata': metadata_decimal,
+            ':updated': datetime.utcnow().isoformat()
+        }
+    )
+
+
+def update_job_with_all_data(job_id: str, data: dict):
+    """Update job with all transcription data (Task 2.9)"""
+    table = dynamodb.Table(JOBS_TABLE)
+    
+    # Convert to DynamoDB format
+    data_decimal = convert_floats_to_decimal(data)
+    
+    # Build update expression
+    update_parts = []
+    expr_values = {':updated': datetime.utcnow().isoformat()}
+    
+    for key, value in data_decimal.items():
+        update_parts.append(f'{key} = :{key}')
+        expr_values[f':{key}'] = value
+    
+    update_expr = 'SET ' + ', '.join(update_parts) + ', updatedAt = :updated'
+    
+    table.update_item(
+        Key={'jobId': job_id},
+        UpdateExpression=update_expr,
+        ExpressionAttributeValues=expr_values
+    )
+
+
 def convert_floats_to_decimal(obj):
     """Convert floats to Decimal for DynamoDB"""
-    from decimal import Decimal
-    
     if isinstance(obj, list):
         return [convert_floats_to_decimal(item) for item in obj]
     elif isinstance(obj, dict):
@@ -243,26 +604,6 @@ def convert_floats_to_decimal(obj):
         return int(obj)
     else:
         return obj
-
-
-def update_job_with_bass_data(job_id: str, bass_data: dict):
-    """Update job with bass transcription data"""
-    table = dynamodb.Table(JOBS_TABLE)
-    
-    # Convert to DynamoDB format
-    bass_data_decimal = convert_floats_to_decimal(bass_data)
-    
-    table.update_item(
-        Key={'jobId': job_id},
-        UpdateExpression='SET bassData = :data, #status = :status, progress = :progress, updatedAt = :updated',
-        ExpressionAttributeNames={'#status': 'status'},
-        ExpressionAttributeValues={
-            ':data': bass_data_decimal,
-            ':status': 'BASS_TRANSCRIBED',
-            ':progress': 80,
-            ':updated': datetime.utcnow().isoformat()
-        }
-    )
 
 
 def trigger_pdf_generation(job_id: str):

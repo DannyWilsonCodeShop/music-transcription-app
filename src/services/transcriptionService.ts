@@ -5,17 +5,67 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
 // Import lead sheet types from LeadSheetDisplay component
 import type { AlignedLeadSheet } from '../components/LeadSheetDisplay';
 
+export interface StemTranscription {
+  notes: Array<{
+    pitch: number;
+    start: number;
+    end: number;
+    velocity: number;
+    nns: string;
+    measure: number;
+  }>;
+  totalNotes: number;
+}
+
 export interface TranscriptionJob {
   id: string;
   filename?: string;
   title: string;
-  status: 'PENDING' | 'UPLOADING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+  status: 'PENDING' | 'UPLOADING' | 'PROCESSING' | 
+          'PENDING_DOWNBEAT_CONFIRMATION' |
+          'PROCESSING_STEMS' |              // NEW
+          'PENDING_MODE_SELECTION' |        // NEW
+          'TRANSCRIBING_STEMS' |            // NEW
+          'FETCHING_LYRICS' |               // NEW
+          'PENDING_KEY_CONFIRMATION' |      // NEW
+          'GENERATING_PDF' |
+          'COMPLETED' | 'FAILED';
   currentStep?: string;
   progress?: number;
   statusMessage?: string;
   createdAt: string;
   updatedAt?: string;
   completedAt?: string;
+  
+  // NEW v3.0 fields
+  transcriptionMode?: 'bass-only' | 'bass+piano' | 'bass+guitar' | 'all';
+  detectedKey?: string;
+  confirmedKey?: string;
+  keyConfidence?: number;
+  
+  songMetadata?: {
+    title: string;
+    artist: string;
+    album?: string;
+    year?: number;
+  };
+  
+  lyrics?: {
+    available: boolean;
+    sections: Array<{
+      type: string;
+      lines: string[];
+      startMeasure: number;
+      endMeasure: number;
+    }>;
+  };
+  
+  stemData?: {
+    piano?: StemTranscription;
+    guitar?: StemTranscription;
+  };
+  
+  // Existing v2.0 fields
   chordsData?: {
     key: string;
     mode: string;
@@ -39,6 +89,8 @@ export interface TranscriptionJob {
       measureStart?: number;
       measureEnd?: number;
       patternCount?: number;
+      startTime?: number;  // Alternative field name
+      endTime?: number;    // Alternative field name
     }>;
     patternAnalysis?: Array<{
       patternNumber: number;
@@ -50,6 +102,11 @@ export interface TranscriptionJob {
     }>;
     leadSheet?: AlignedLeadSheet;
     model?: string;
+    lyrics?: {  // Old format lyrics in chordsData
+      text?: string;
+      language?: string;
+      words?: any[];
+    };
   };
   bassData?: any;  // Bass transcription data
   pdfUrl?: string;
@@ -175,11 +232,77 @@ function getStepDescription(status: string): string {
       return 'Uploading file...';
     case 'PROCESSING':
       return 'Analyzing audio with enhanced chord detection...';
+    case 'PENDING_DOWNBEAT_CONFIRMATION':
+      return 'Waiting for downbeat confirmation...';
+    case 'PROCESSING_STEMS':
+      return 'Separating audio stems...';
+    case 'PENDING_MODE_SELECTION':
+      return 'Waiting for transcription mode selection...';
+    case 'TRANSCRIBING_STEMS':
+      return 'Transcribing instruments...';
+    case 'FETCHING_LYRICS':
+      return 'Fetching lyrics...';
+    case 'PENDING_KEY_CONFIRMATION':
+      return 'Waiting for key confirmation...';
+    case 'GENERATING_PDF':
+      return 'Generating PDF...';
     case 'COMPLETED':
       return 'Complete!';
     case 'FAILED':
       return 'Failed';
     default:
       return 'Processing...';
+  }
+}
+
+/**
+ * Confirm transcription mode selection
+ */
+export async function confirmTranscriptionMode(
+  jobId: string,
+  mode: 'bass-only' | 'bass+piano' | 'bass+guitar' | 'all'
+): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/confirm-mode`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ transcriptionMode: mode })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to confirm transcription mode');
+    }
+    
+    console.log('Transcription mode confirmed:', mode);
+  } catch (error) {
+    console.error('Error confirming transcription mode:', error);
+    throw new Error('Failed to confirm transcription mode. Please try again.');
+  }
+}
+
+/**
+ * Confirm or correct detected key
+ */
+export async function confirmKey(
+  jobId: string,
+  key: string
+): Promise<void> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/jobs/${jobId}/confirm-key`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmedKey: key })
+    });
+    
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to confirm key');
+    }
+    
+    console.log('Key confirmed:', key);
+  } catch (error) {
+    console.error('Error confirming key:', error);
+    throw new Error('Failed to confirm key. Please try again.');
   }
 }

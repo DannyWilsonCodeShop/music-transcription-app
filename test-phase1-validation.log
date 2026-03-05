@@ -1,0 +1,133 @@
+=========================================
+BASS TRANSCRIPTION PIPELINE E2E TEST
+=========================================
+
+Test file: public/04 That_s What I Like.m4a
+Upload API: https://hfv1glzbxi.execute-api.us-east-1.amazonaws.com
+Jobs table: ChordScout-Jobs-V2-dev
+
+✓ Test file found
+
+=========================================
+STEP 1: Request Upload URL
+=========================================
+Upload response:
+{
+  "jobId": "02902e1e-c2ae-456b-909b-ee671ac22169",
+  "uploadUrl": "https://music-transcription-audio-test-090130568474.s3.amazonaws.com/uploads/02902e1e-c2ae-456b-909b-ee671ac22169/04%20That_s%20What%20I%20Like.m4a?AWSAccessKeyId=ASIARJ7BTKUNONXFPAEY&Signature=36M5%2BtQSEkRLXZGWLD6V9O3ht18%3D&content-type=audio%2Fx-m4a&x-amz-security-token=IQoJb3JpZ2luX2VjEPj%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FwEaCXVzLWVhc3QtMSJGMEQCIAxCIlEZPqQCgH2lkOacBRyCiVbpU%2Fd7EUJe19TMd4d1AiApIJOVonz9TGnmEFUED841a%2BoRIyK%2F0gUbDZ%2Fpj9BS3yqcAwjB%2F%2F%2F%2F%2F%2F%2F%2F%2F%2F8BEAAaDDA5MDEzMDU2ODQ3NCIM56q%2F8hw8Jj7dFNqEKvAC7fn2c3WP5TmAK0cgNF4hNiRvnxafrf6QR7wFZJHGrUbAzYLVUxD22%2BUtEei4JClplL5pLChFodBKy15H8n3qhrgjvfyKGA2jVguzTOBpuAPV6awjUeTgPxt%2FqbvwBqNF%2Fp0mNejCcIuDyY%2BjxKT%2FwmUHtNhD0dWIH0DbWdD4y9OU%2BpU9RsT8G9QW%2Bb9GPMdjiwuTdfPA8R36zhzVWvQED3gqElSTZVB2j2T%2BKz%2BMS5kpXUXKO63aOsgz86hTU1cdTcY2QfXKlWnbLKzPIA0A0q%2B2pQVF3%2F4JX5W%2FeUpIWldHwiWRSNhRk77YbuN4fUDkeLsR6dnfQqgLO7lyRyxyiz%2BwzIf%2FuWLoxQAQrnbyo%2Bpos5Jac1zLkcI5CstpIblb71L%2Fc%2B9AlUPrQe%2FjuNYm5YKqJRvxNIdJWEkL%2BJu3Bfw48aarfnfxl%2Bpuk2jOvfvzTA4DoLyAJiLzvHAq5QTNtTPjPXrNg0qYc7rblaTEKEow5YGjzQY6ngGNds4GP%2FkqzS90rHV4ULJkvhUHTikCE0vqVbxyx%2Blvjjzbh0ICC8fzKy1viQiEjIGuvRQrEDkLixpxwL5H4idAIaYatMu%2F%2FymqwA08fCVSnLG9Ah2vwil2awShQpRTzJFl8%2Fumc3AvJ2IFjfoWjwm1gNRaPPqE%2BMAZeI3DB90YtYvtcIJ38Xm3gTsW7t3S6uUMArckAI7olr6PHfTwNw%3D%3D&Expires=1772670709",
+  "s3Key": "uploads/02902e1e-c2ae-456b-909b-ee671ac22169/04 That_s What I Like.m4a"
+}
+
+✓ Job ID: 02902e1e-c2ae-456b-909b-ee671ac22169
+✓ Upload URL obtained
+
+=========================================
+STEP 2: Upload File to S3
+=========================================
+✓ File uploaded successfully (HTTP 200)
+
+=========================================
+STEP 3: Wait for S3 Event Trigger
+=========================================
+Waiting 5 seconds for S3 event notification...
+✓ S3 event should have triggered process Lambda
+
+=========================================
+STEP 4: Monitor Job Status
+=========================================
+Polling job status every 10 seconds (max 600 seconds)...
+
+[18:31:58] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:32:09] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:32:19] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:32:30] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:32:41] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:32:51] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:33:02] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:33:12] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:33:23] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:33:33] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:33:44] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:33:55] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:34:05] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:34:16] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:34:26] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:34:37] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:34:48] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:34:58] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:35:09] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:35:20] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:35:30] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:35:41] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:35:52] Status: PROCESSING | Progress: 10% | Warming up analysis container (this takes a few minutes)...
+[18:36:03] Status: PROCESSING | Progress: 20% | Analyzing tempo and beats...
+[18:36:13] Status: PROCESSING | Progress: 20% | Analyzing tempo and beats...
+[18:36:24] Status: PROCESSING | Progress: 50% | Extracting bass stem...
+[18:36:35] Status: TRANSCRIBING_STEMS | Progress: 55% | Transcribing stems...
+[18:36:46] Status: COMPLETED | Progress: 100% | Complete! Your bass NNS chart is ready.
+
+✓ Job completed successfully!
+
+=========================================
+STEP 5: Verify Bass Transcription Data
+=========================================
+Bass data found!
+
+Key: F minor (Relative major: Ab)
+Tempo: 135.99917763157896 BPM
+Time Signature: 4/4
+Total Notes: 303
+Total Measures: 111
+Key Confidence: 69.5898303966833400%
+
+Validating expected values for 'That's What I Like'...
+⚠️  WARNING: Expected key Bb, got F
+✓ Mode is correct (minor)
+⚠️  WARNING: Expected relative major Db, got Ab
+✓ Tempo is in expected range (~134 BPM)
+
+=========================================
+STEP 6: Verify Measure Data
+=========================================
+Found 111 measures
+
+First 4 measures:
+  Measure 1: | - - - - | (- - - -)
+  Measure 2: | - - - - | (- - - -)
+  Measure 3: | - - - - | (- - - -)
+  Measure 4: | - 5 - - | (- D♯1 - -)
+
+=========================================
+STEP 7: Verify PDF Generation
+=========================================
+✓ PDF URL: https://chordscout-pdfs-dev-090130568474.s3.amazonaws.com/pdfs/02902e1e-c2ae-456b-909b-ee671ac22169-bass-nns.pdf
+
+Testing PDF accessibility...
+✓ PDF is accessible (HTTP 200)
+
+=========================================
+STEP 8: Check ECS Task Logs
+=========================================
+Checking for ECS task logs...
+✓ Found ECS log stream: ecs/bass-transcription/9cefb75912be47ab88abf9a6b22e9ed8
+None
+
+Last 10 log entries:
+
+An error occurred (ResourceNotFoundException) when calling the GetLogEvents operation: The specified log stream does not exist.
+
+=========================================
+TEST SUMMARY
+=========================================
+
+✅ All tests passed!
+
+Job ID: 02902e1e-c2ae-456b-909b-ee671ac22169
+Status: COMPLETED
+Bass transcription: 303 notes in 111 measures
+Key: F minor (Relative: Ab)
+PDF: https://chordscout-pdfs-dev-090130568474.s3.amazonaws.com/pdfs/02902e1e-c2ae-456b-909b-ee671ac22169-bass-nns.pdf
+
+=========================================
+END-TO-END TEST COMPLETE
+=========================================

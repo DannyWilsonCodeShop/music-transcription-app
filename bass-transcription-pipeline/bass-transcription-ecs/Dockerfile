@@ -16,6 +16,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY app.py .
 COPY bass_note_transcription.py .
+COPY stem_transcription.py .
+COPY song_metadata_lyrics.py .
+COPY test_imports.py .
 
 # Copy simple-pipeline for downbeat detection (reuse existing code)
 COPY simple-pipeline ./simple-pipeline

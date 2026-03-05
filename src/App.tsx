@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getJobStatus, TranscriptionJob } from './services/transcriptionService';
 import { DownbeatConfirmation } from './components/DownbeatConfirmation';
+import { TranscriptionModeSelector } from './components/TranscriptionModeSelector';
+import { KeyConfirmation } from './components/KeyConfirmation';
 import { AnalysisOptionsModal, AnalysisOptions } from './components/AnalysisOptionsModal';
 import LeadSheetDisplay from './components/LeadSheetDisplay';
 import { BassNNSDisplay } from './components/BassNNSDisplay';
@@ -26,6 +28,10 @@ function App() {
   const [showDebugMode, setShowDebugMode] = useState(false);
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [analysisOptions, setAnalysisOptions] = useState<AnalysisOptions | null>(null);
+  
+  // NEW v3.0 modal states
+  const [showModeSelector, setShowModeSelector] = useState(false);
+  const [showKeyConfirmation, setShowKeyConfirmation] = useState(false);
 
   // Timer effect - updates every second while processing
   useEffect(() => {
@@ -79,6 +85,18 @@ function App() {
           consecutiveErrors = 0; // Reset error counter on success
           setJob(status);
           console.log('Job status updated:', status.status, status.progress, status.statusMessage);
+          
+          // NEW v3.0: Show mode selector when status is PENDING_MODE_SELECTION
+          if (status.status === 'PENDING_MODE_SELECTION' && !showModeSelector) {
+            console.log('Showing transcription mode selector');
+            setShowModeSelector(true);
+          }
+          
+          // NEW v3.0: Show key confirmation when status is PENDING_KEY_CONFIRMATION
+          if (status.status === 'PENDING_KEY_CONFIRMATION' && !showKeyConfirmation) {
+            console.log('Showing key confirmation modal');
+            setShowKeyConfirmation(true);
+          }
           
           if (status.status === 'COMPLETED') {
             console.log('Job completed!');
@@ -173,6 +191,30 @@ function App() {
     setShowDownbeatConfirmation(false);
     // Continue with auto-detected downbeat
     console.log('User cancelled downbeat confirmation, using auto-detected value');
+  };
+
+  // NEW v3.0: Handle transcription mode selection
+  const handleModeSelected = (mode: string) => {
+    console.log('Transcription mode selected:', mode);
+    setShowModeSelector(false);
+    // Continue polling to track transcription progress
+  };
+
+  const handleModeSelectorCancel = () => {
+    console.log('User cancelled mode selection, will use default (bass-only)');
+    setShowModeSelector(false);
+  };
+
+  // NEW v3.0: Handle key confirmation
+  const handleKeyConfirmed = (key: string) => {
+    console.log('Key confirmed:', key);
+    setShowKeyConfirmation(false);
+    // Continue polling to track final processing
+  };
+
+  const handleKeyConfirmationCancel = () => {
+    console.log('User cancelled key confirmation, will use detected key');
+    setShowKeyConfirmation(false);
   };
 
   const pollForDownbeatResults = async (jobId: string): Promise<any> => {
@@ -778,12 +820,28 @@ function App() {
                 fontSize: '24px', 
                 fontWeight: '700', 
                 color: '#166534', 
-                marginBottom: '16px',
+                marginBottom: '8px',
                 borderBottom: '2px solid #d1fae5',
                 paddingBottom: '12px'
               }}>
-                {job.filename || job.title}
+                {job.songMetadata?.title || job.filename || job.title}
               </h2>
+              {/* NEW v3.0: Display artist and album if available */}
+              {job.songMetadata && (job.songMetadata.artist || job.songMetadata.album) && (
+                <div style={{ marginBottom: '16px', color: '#6b7280' }}>
+                  {job.songMetadata.artist && (
+                    <div style={{ fontSize: '16px', fontWeight: '500' }}>
+                      🎤 {job.songMetadata.artist}
+                    </div>
+                  )}
+                  {job.songMetadata.album && (
+                    <div style={{ fontSize: '14px', marginTop: '4px' }}>
+                      💿 {job.songMetadata.album}
+                      {job.songMetadata.year && ` (${job.songMetadata.year})`}
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
@@ -792,7 +850,7 @@ function App() {
                 <div>
                   <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Key</div>
                   <div style={{ fontSize: '20px', fontWeight: '600', color: '#166534' }}>
-                    {job.chordsData.key}
+                    {job.confirmedKey || job.detectedKey || job.chordsData.key}
                   </div>
                 </div>
                 <div>
@@ -813,6 +871,15 @@ function App() {
                     {Math.floor(job.chordsData.duration / 60)}:{String(Math.floor(job.chordsData.duration % 60)).padStart(2, '0')}
                   </div>
                 </div>
+                {/* NEW v3.0: Display transcription mode if available */}
+                {job.transcriptionMode && (
+                  <div>
+                    <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Transcription Mode</div>
+                    <div style={{ fontSize: '16px', fontWeight: '600', color: '#166534' }}>
+                      {job.transcriptionMode}
+                    </div>
+                  </div>
+                )}
                 {elapsedTime > 0 && (
                   <div>
                     <div style={{ fontSize: '12px', color: '#6b7280', marginBottom: '4px' }}>Processing Time</div>
@@ -825,8 +892,9 @@ function App() {
             </div>
             )}
 
-            {/* Lyrics Section */}
-            {job.chordsData && job.chordsData.lyrics && job.chordsData.lyrics.text && (
+            {/* Lyrics Section - NEW v3.0: Support both old and new formats */}
+            {((job.chordsData && job.chordsData.lyrics && job.chordsData.lyrics.text) || 
+              (job.lyrics && job.lyrics.available)) && (
               <div style={{
                 marginBottom: '24px',
                 padding: '20px',
@@ -837,24 +905,67 @@ function App() {
                 <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
                   🎤 Lyrics
                 </h3>
-                <div style={{
-                  fontSize: '14px',
-                  lineHeight: '1.8',
-                  color: '#1f2937',
-                  whiteSpace: 'pre-wrap',
-                  fontFamily: 'Georgia, serif'
-                }}>
-                  {job.chordsData.lyrics.text}
-                </div>
-                <div style={{
-                  marginTop: '12px',
-                  fontSize: '12px',
-                  color: '#6b7280',
-                  fontStyle: 'italic'
-                }}>
-                  Language: {job.chordsData.lyrics.language || 'unknown'} • 
-                  Words: {job.chordsData.lyrics.words?.length || 0}
-                </div>
+                
+                {/* NEW v3.0: Display lyrics with sections */}
+                {job.lyrics && job.lyrics.available && job.lyrics.sections && job.lyrics.sections.length > 0 ? (
+                  <div>
+                    {job.lyrics.sections.map((section, idx) => (
+                      <div key={idx} style={{ marginBottom: '24px' }}>
+                        <div style={{
+                          fontSize: '14px',
+                          fontWeight: '600',
+                          color: '#9333ea',
+                          textTransform: 'uppercase',
+                          marginBottom: '8px',
+                          letterSpacing: '0.5px'
+                        }}>
+                          {section.type}
+                          {section.startMeasure && section.endMeasure && (
+                            <span style={{ fontSize: '12px', color: '#6b7280', marginLeft: '8px' }}>
+                              (Measures {section.startMeasure}-{section.endMeasure})
+                            </span>
+                          )}
+                        </div>
+                        <div style={{
+                          fontSize: '14px',
+                          lineHeight: '1.8',
+                          color: '#1f2937',
+                          fontFamily: 'Georgia, serif',
+                          paddingLeft: '12px',
+                          borderLeft: '3px solid #e5e7eb'
+                        }}>
+                          {section.lines.map((line, lineIdx) => (
+                            <div key={lineIdx}>{line}</div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  /* Fallback to old format */
+                  job.chordsData?.lyrics?.text && (
+                    <>
+                      <div style={{
+                        fontSize: '14px',
+                        lineHeight: '1.8',
+                        color: '#1f2937',
+                        whiteSpace: 'pre-wrap',
+                        fontFamily: 'Georgia, serif'
+                      }}>
+                        {job.chordsData.lyrics.text}
+                      </div>
+                      <div style={{
+                        marginTop: '12px',
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        fontStyle: 'italic'
+                      }}>
+                        Language: {job.chordsData.lyrics.language || 'unknown'} • 
+                        Words: {job.chordsData.lyrics.words?.length || 0}
+                      </div>
+                    </>
+                  )
+                )}
               </div>
             )}
 
@@ -866,6 +977,119 @@ function App() {
                   pdfUrl={pdfUrl || undefined}
                   songTitle={job.filename}
                 />
+              </div>
+            )}
+
+            {/* NEW v3.0: Multi-Stem Transcription Display */}
+            {job.stemData && (job.stemData.piano || job.stemData.guitar) && (
+              <div style={{
+                marginBottom: '24px',
+                padding: '20px',
+                backgroundColor: 'white',
+                borderRadius: '12px',
+                border: '1px solid #d1fae5'
+              }}>
+                <h3 style={{ fontSize: '18px', fontWeight: '600', color: '#166534', marginBottom: '16px' }}>
+                  🎹 Multi-Stem Transcription
+                </h3>
+                
+                {/* Piano Transcription */}
+                {job.stemData.piano && (
+                  <div style={{ marginBottom: '20px' }}>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#8b5cf6',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <span>🎹 Piano</span>
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        color: '#6b7280',
+                        backgroundColor: '#f3f4f6',
+                        padding: '2px 8px',
+                        borderRadius: '4px'
+                      }}>
+                        {job.stemData.piano.totalNotes} notes
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      color: '#6b7280',
+                      fontFamily: 'monospace',
+                      backgroundColor: '#f9fafb',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      maxHeight: '200px',
+                      overflowY: 'auto'
+                    }}>
+                      {job.stemData.piano.notes.slice(0, 20).map((note, idx) => (
+                        <div key={idx} style={{ marginBottom: '4px' }}>
+                          Measure {note.measure}: {note.nns || `MIDI ${note.pitch}`} 
+                          ({note.start.toFixed(2)}s - {note.end.toFixed(2)}s)
+                        </div>
+                      ))}
+                      {job.stemData.piano.notes.length > 20 && (
+                        <div style={{ color: '#9ca3af', marginTop: '8px' }}>
+                          ... and {job.stemData.piano.notes.length - 20} more notes
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Guitar Transcription */}
+                {job.stemData.guitar && (
+                  <div>
+                    <div style={{
+                      fontSize: '16px',
+                      fontWeight: '600',
+                      color: '#ec4899',
+                      marginBottom: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}>
+                      <span>🎸 Guitar</span>
+                      <span style={{
+                        fontSize: '12px',
+                        fontWeight: '500',
+                        color: '#6b7280',
+                        backgroundColor: '#f3f4f6',
+                        padding: '2px 8px',
+                        borderRadius: '4px'
+                      }}>
+                        {job.stemData.guitar.totalNotes} notes
+                      </span>
+                    </div>
+                    <div style={{
+                      fontSize: '14px',
+                      color: '#6b7280',
+                      fontFamily: 'monospace',
+                      backgroundColor: '#f9fafb',
+                      padding: '12px',
+                      borderRadius: '8px',
+                      maxHeight: '200px',
+                      overflowY: 'auto'
+                    }}>
+                      {job.stemData.guitar.notes.slice(0, 20).map((note, idx) => (
+                        <div key={idx} style={{ marginBottom: '4px' }}>
+                          Measure {note.measure}: {note.nns || `MIDI ${note.pitch}`} 
+                          ({note.start.toFixed(2)}s - {note.end.toFixed(2)}s)
+                        </div>
+                      ))}
+                      {job.stemData.guitar.notes.length > 20 && (
+                        <div style={{ color: '#9ca3af', marginTop: '8px' }}>
+                          ... and {job.stemData.guitar.notes.length - 20} more notes
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -1195,6 +1419,26 @@ function App() {
           beatTimes={downbeatData.beatTimes}
           onConfirm={handleDownbeatConfirm}
           onCancel={handleDownbeatCancel}
+        />
+      )}
+
+      {/* NEW v3.0: Transcription Mode Selector Modal */}
+      {showModeSelector && jobId && (
+        <TranscriptionModeSelector
+          jobId={jobId}
+          onModeSelected={handleModeSelected}
+          onCancel={handleModeSelectorCancel}
+        />
+      )}
+
+      {/* NEW v3.0: Key Confirmation Modal */}
+      {showKeyConfirmation && jobId && job?.detectedKey && (
+        <KeyConfirmation
+          jobId={jobId}
+          detectedKey={job.detectedKey}
+          keyConfidence={job.keyConfidence || 0}
+          onKeyConfirmed={handleKeyConfirmed}
+          onCancel={handleKeyConfirmationCancel}
         />
       )}
     </div>

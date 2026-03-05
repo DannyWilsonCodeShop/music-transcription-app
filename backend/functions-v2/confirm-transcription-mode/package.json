@@ -1,0 +1,19 @@
+{
+  "name": "confirm-transcription-mode",
+  "version": "1.0.0",
+  "description": "Lambda function to confirm transcription mode selection for ChordScout v3.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "lambda",
+    "chordscout",
+    "transcription"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1000.0"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "confirm-key",
+  "version": "1.0.0",
+  "description": "Lambda function to confirm musical key selection for ChordScout v3.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "lambda",
+    "chordscout",
+    "key-detection"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.1000.0"
+  }
+}
