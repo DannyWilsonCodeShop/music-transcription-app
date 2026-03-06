@@ -660,22 +660,22 @@ The tasks are organized into 7 phases following the 4-phase migration strategy f
     - **Dependencies**: 15.4
     - **Requirements**: 2.1, 2.2, 2.3, 2.4, 2.5, 2.6, 2.7, 5.1-5.8
 
-- [ ] 16. Enable lyrics and key confirmation (Phase 3)
-  - [ ] 16.1 Add GENIUS_ACCESS_TOKEN to Secrets Manager
+- [x] 16. Enable lyrics and key confirmation (Phase 3)
+  - [x] 16.1 Add GENIUS_ACCESS_TOKEN to Secrets Manager
     - Create secret in AWS Secrets Manager
     - Grant ECS task role access to secret
     - Test secret retrieval in ECS task
     - **Complexity**: Small
     - **Requirements**: 10.1, 10.5
   
-  - [ ] 16.2 Update environment variables for Phase 3
+  - [x] 16.2 Update environment variables for Phase 3
     - Set ENABLE_LYRICS=true
     - Verify GENIUS_ACCESS_TOKEN is accessible
     - **Complexity**: Small
     - **Dependencies**: 16.1
     - **Requirements**: 4.7
   
-  - [ ] 16.3 Deploy updated ECS task
+  - [x] 16.3 Deploy updated ECS task
     - Build and push Docker image (v3.0-phase3)
     - Update ECS task definition
     - Deploy to development environment
@@ -683,7 +683,7 @@ The tasks are organized into 7 phases following the 4-phase migration strategy f
     - **Dependencies**: 16.2
     - **Requirements**: 10.3
   
-  - [ ] 16.4 Validate Phase 3 deployment
+  - [x] 16.4 Validate Phase 3 deployment
     - Test song identification
     - Verify lyrics fetching from Genius
     - Test key detection and confirmation

@@ -9,7 +9,7 @@
   "containerDefinitions": [
     {
       "name": "bass-transcription",
-      "image": "090130568474.dkr.ecr.us-east-1.amazonaws.com/bass-transcription:v3.0-phase2",
+      "image": "090130568474.dkr.ecr.us-east-1.amazonaws.com/bass-transcription:v3.0-phase2-m4a-fix",
       "essential": true,
       "environment": [
         {

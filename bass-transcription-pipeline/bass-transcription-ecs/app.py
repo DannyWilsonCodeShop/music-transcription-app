@@ -147,15 +147,17 @@ def main():
             stem_sep_time = time.time() - stem_sep_start
         
         # Stage 6: Transcription mode selection (Task 2.4)
-        transcription_mode = DEFAULT_TRANSCRIPTION_MODE
         if ENABLE_MULTI_STEM and stems_data is not None:
+            # Always ask for mode selection when multi-stem is enabled
             update_job_status(job_id, 'PENDING_MODE_SELECTION', 45)
             log("Stage 6: Waiting for transcription mode selection...")
             transcription_mode = wait_for_mode_selection(job_id, timeout=CONFIRMATION_TIMEOUT)
             log(f"✓ Transcription mode: {transcription_mode}")
         else:
+            # Fall back to bass-only if multi-stem is disabled or stems failed
             transcription_mode = 'bass-only'
             update_job_field(job_id, 'transcriptionMode', transcription_mode)
+            log(f"✓ Transcription mode: {transcription_mode} (multi-stem disabled)")
         
         # Stage 7: Extract bass stem
         update_job_status(job_id, 'PROCESSING', 50, "Extracting bass stem...")
@@ -337,17 +339,27 @@ def separate_stems(audio_path: str):
     model = get_model('mdx_extra')
     
     log("  Loading audio...")
-    wav, sr = torchaudio.load(audio_path)
+    # Use librosa to load M4A files, then convert to torch tensor
+    audio_np, sr_orig = librosa.load(audio_path, sr=None, mono=False)
     
-    # Ensure stereo
-    if wav.shape[0] == 1:
-        wav = wav.repeat(2, 1)
+    # Convert to torch tensor
+    if audio_np.ndim == 1:
+        # Mono - convert to stereo
+        wav = torch.from_numpy(audio_np).unsqueeze(0).repeat(2, 1).float()
+    else:
+        # Already stereo or multi-channel
+        wav = torch.from_numpy(audio_np).float()
+        if wav.shape[0] == 1:
+            wav = wav.repeat(2, 1)
     
     # Resample if needed
-    if sr != model.samplerate:
-        resampler = torchaudio.transforms.Resample(sr, model.samplerate)
+    if sr_orig != model.samplerate:
+        log(f"  Resampling from {sr_orig}Hz to {model.samplerate}Hz...")
+        resampler = torchaudio.transforms.Resample(sr_orig, model.samplerate)
         wav = resampler(wav)
         sr = model.samplerate
+    else:
+        sr = sr_orig
     
     log("  Separating stems...")
     with torch.no_grad():
@@ -406,8 +418,8 @@ def wait_for_mode_selection(job_id: str, timeout: int = 300) -> str:
     
     # Timeout: default to bass-only
     log(f"Mode selection timeout ({timeout}s), defaulting to bass-only", "WARNING")
-    update_job_field(job_id, 'transcriptionMode', DEFAULT_TRANSCRIPTION_MODE)
-    return DEFAULT_TRANSCRIPTION_MODE
+    update_job_field(job_id, 'transcriptionMode', 'bass-only')
+    return 'bass-only'
 
 
 def wait_for_key_confirmation(job_id: str, detected_key: str, timeout: int = 300) -> str:
@@ -442,17 +454,26 @@ def extract_bass_stem(audio_path: str) -> tuple:
         model = get_model('mdx_extra')
         
         log("  Loading audio...")
-        wav, sr = torchaudio.load(audio_path)
+        # Use librosa to load M4A files, then convert to torch tensor
+        audio_np, sr_orig = librosa.load(audio_path, sr=None, mono=False)
         
-        # Ensure stereo
-        if wav.shape[0] == 1:
-            wav = wav.repeat(2, 1)
+        # Convert to torch tensor
+        if audio_np.ndim == 1:
+            # Mono - convert to stereo
+            wav = torch.from_numpy(audio_np).unsqueeze(0).repeat(2, 1).float()
+        else:
+            # Already stereo or multi-channel
+            wav = torch.from_numpy(audio_np).float()
+            if wav.shape[0] == 1:
+                wav = wav.repeat(2, 1)
         
         # Resample if needed
-        if sr != model.samplerate:
-            resampler = torchaudio.transforms.Resample(sr, model.samplerate)
+        if sr_orig != model.samplerate:
+            resampler = torchaudio.transforms.Resample(sr_orig, model.samplerate)
             wav = resampler(wav)
             sr = model.samplerate
+        else:
+            sr = sr_orig
         
         log("  Separating stems...")
         with torch.no_grad():
